@@ -17,7 +17,6 @@ $(function() {
 			reject(textStatus);
 		});
 	});
-	var SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
 	var $main = $('#main');
 
 	var handlebarsTemplates = {}
@@ -60,43 +59,30 @@ $(function() {
 		});
 	}
 
-	function attemptToAuthorize(gapi, clientId) {
-		return Q.Promise(function(resolve, reject) {
-			gapi.auth.authorize({client_id: clientId, scope: SCOPES, immediate: false}, function(authResult) {
-				if (authResult.error) {
-					reject(authResult);
-				} else {
-					gapi.client.load('gmail', 'v1', function() {
-						resolve(gapi);
-					});
-				}
-			});
-		});
-	}
-
-	function saveThreads(gapi) {
-		return Q.Promise(function(resolve, reject) {
-			gapi.client.gmail.users.threads.list({
-				'userId': 'me',
-				'labelIds': ['INBOX']
-			}).execute(function(resp) {
-				resolve(resp);
-			});
-		}).then(function(resp) {
-			return resp.threads.map(function(item) {
-				return Q.promise(function(resolve, reject) {
-					gapi.client.gmail.users.threads.get({
-						userId: 'me',
-						id: item.id
-					}).execute(function(resp) {
-						$.post('/api/threads', resp.result).done(function() {
-							resolve();
-						})
+	function saveThreads(fnAuthorizationGetter) {
+		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly').then(function(gapi) {
+			return Q.Promise(function(resolve, reject) {
+				gapi.client.gmail.users.threads.list({
+					'userId': 'me',
+					'labelIds': ['INBOX']
+				}).execute(resolve);
+			}).then(function(resp) {
+				return resp.threads.map(function(item) {
+					return Q.promise(function(resolve, reject) {
+						gapi.client.gmail.users.threads.get({
+							userId: 'me',
+							id: item.id
+						}).execute(function(resp) {
+							$.post(
+								'/api/threads',
+								resp.result
+							).done(resolve).fail(reject);
+						});
 					});
 				});
+			}).then(function(arrOfPromises) {
+				return Q.all(arrOfPromises);
 			});
-		}).then(function(arrOfPromises) {
-			return Q.all(arrOfPromises);
 		});
 	}
 
@@ -112,15 +98,75 @@ $(function() {
 			})
 		})
 	}
+
 	showThreads();
 
-	Q.all([
+	function getAuthorizationGetter(gapi, clientId) {
+		var alreadyPromisedScopes = {};
+		return function(scope) {
+			if (!alreadyPromisedScopes[scope]) {
+				alreadyPromisedScopes[scope] = Q.Promise(function(resolve, reject) {
+					gapi.auth.authorize({client_id: clientId, scope: scope, immediate: true}, function(authResult) {
+						if (authResult.error) {
+							reject(authResult);
+						} else {
+							gapi.client.load('gmail', 'v1', function() {
+								resolve(gapi);
+							});
+						}
+					});
+				});
+			}
+			return alreadyPromisedScopes[scope];
+		}
+	}
+
+	var promisedFnAuthorizationGetter = Q.all([
 		waitForGapiToLoad(), promisedClientId
 	]).spread(function(gapi, clientId) {
-		return attemptToAuthorize(gapi, clientId);
-	}).then(function(gapi) {
-		return saveThreads(gapi);
+		return getAuthorizationGetter(gapi, clientId);
+	});
+
+	promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
+		return saveThreads(fnAuthorizationGetter);
 	}).then(function() {
 		showThreads();
 	}).done();
+
+	$('#main').on('click', 'button.delete', function(eventObject) {
+		var btnDelete = eventObject.currentTarget;
+		var $divThread = $(btnDelete).parents('.thread[data-thread-id]');
+		var threadId = $divThread.data('threadId');
+		promisedFnAuthorizationGetter.then(function requestDeletePermission(fnAuthorizationGetter) {
+			return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.modify');
+		}).then(function trashOnGmail(gapi) {
+			return Q.Promise(function(resolve, reject) {
+				console.log('Calling Gmail API thread.trash', threadId);
+				gapi.client.gmail.users.threads.trash({
+					userId: 'me',
+					id: threadId
+				}).execute(function (resp) {
+					console.log('Gmail API thread.trash responded with', resp);
+					if (resp.id === threadId) {
+						resolve(resolve); //Successfully deleted from gmail.
+					} else {
+						//delete not successful.
+						if (resp.code === 403) {
+							//TODO: Insufficient permissions.
+						}
+						reject(resp);
+					}
+				});
+			});
+		}).then(function deleteOnLocalCache() {
+			return Q.Promise(function(resolve, reject) {
+				$.ajax({
+					url: '/api/threads/' + threadId,
+					type: 'DELETE'
+				}).done(resolve).fail(reject);
+			});
+		}).then(function deleteFromUI() {
+			$divThread.remove();
+		}).done();
+	});
 });

@@ -123,8 +123,14 @@ function headersInMessage(headerName, message) {
 	});
 }
 
+/**
+ * @return the message object, or null if no message satisfies the predicate.
+ */
 function mostRecentMessageSatisfying(threadData, fnMessagePredicate) {
 	const satisfyingMessages = threadData.messages.filter(fnMessagePredicate);
+	if (satisfyingMessages.length === 0) {
+		return null;
+	}
 	return _.maxBy(satisfyingMessages, function(message) {
 		return parseInt(message.internalDate);
 	});
@@ -137,11 +143,14 @@ function mostRecentSubjectInThread(threadData) {
 	return headersInMessage('Subject', newestMessageWithSubject)[0].value;
 }
 
+/**
+ * @return the message object, or null if no messages have snippets.
+ */
 function mostRecentSnippetInThread(threadData) {
 	const newestMessageWithSnippet = mostRecentMessageSatisfying(threadData, function(message) {
 		return message.snippet;
 	});
-	return newestMessageWithSnippet.snippet;
+	return newestMessageWithSnippet ? newestMessageWithSnippet.snippet : null;
 }
 
 function peopleInThread(threadData, fnFilter) {
@@ -275,6 +284,27 @@ ensureDirectoryExists('data/threads').then(function() {
 						return -thread.lastUpdated;
 					}));
 				}).done();
+			}
+		});
+	});
+
+	app.delete(/^\/api\/threads\/([a-z0-9]+)$/, function(req, res) {
+		const threadId = req.params[0];
+		logger.info(util.format("Receive request to delete thread %s.", threadId));
+		const pathToDelete = 'data/threads/' + threadId;
+		nodeFs.unlink(pathToDelete, function(err) {
+			if (err) {
+				if (err.code === 'ENOENT') {
+					//Files is already deleted; that's okay, delete is idempotent.
+					res.sendStatus(200);
+				} else {
+					logger.error(util.format("Error deleting %s. Code: %s. Stack: %s",
+						pathToDelete, err.code, err.stack));
+					res.sendStatus(500);
+				}
+			} else {
+				logger.info(util.format("Deleted file %s", pathToDelete));
+				res.sendStatus(200);
 			}
 		});
 	});

@@ -56,14 +56,14 @@ html(lang="en")
 				.row
 					.col-xs-10
 						strong
-							//a(href="https://mail.google.com/mail/u/0/#inbox/{{threadId}}")
-							a(href="https://mail.google.com/mail/u/0/h/?th={{threadId}}&v=c&f=1")
-								|{{subject}}
+							//a(href="https://mail.google.com/mail/u/0/h/?th={{threadId}}&v=c&f=1")
+							a(href="https://mail.google.com/mail/u/0/#inbox/{{threadId}}")
+								| {{subject}}
 							
 						p {{snippet}}
 					.col-xs-2
-						button.btn.btn-xs.btn-success Done
-						button.btn.btn-xs.btn-danger Delete
+						button.btn.btn-xs.btn-success.disabled(title="Not Implemented Yet!") Done
+						button.btn.btn-xs.btn-danger.delete Delete
 						br
-						button.btn.btn-xs.btn-warning Later
-						button.btn.btn-xs.btn-primary Label
+						button.btn.btn-xs.btn-warning.disabled(title="Not Implemented Yet!") Later
+						button.btn.btn-xs.btn-primary.disabled(title="Not Implemented Yet!") Label
