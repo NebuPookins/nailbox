@@ -24,7 +24,7 @@ The software is in an extremely early beta.
 * Install nodejs on your guest machine by running:
   * `curl -sL https://deb.nodesource.com/setup_5.x | sudo -E bash -`
   * `sudo apt-get install -y nodejs`
-  * `npm config set bin-links false`
+  * If your host machine is running Windows, disable symlinks in npm by running `npm config set bin-links false` in your guest machine.
 * Change into the nailbox directory by running `cd /home/vagrant/nailbox` on your guest machine.
 * Install all of Nailbox's dependencies by running `npm install` on your guest machine.
 * Start the server by running `node main.js` on your guest machine.
