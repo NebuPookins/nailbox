@@ -1,0 +1,8 @@
+# Ignore files automatically created by Vagrant.
+/.vagrant/
+
+# Ignore data files created by Nailbox
+/data/
+
+# Ignore files managed by npm
+/node_modules/
