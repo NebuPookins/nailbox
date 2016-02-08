@@ -26,6 +26,8 @@ The software is in an extremely early beta.
   * `sudo apt-get install -y nodejs`
   * Optional: `sudo apt-get install -y build-essential`
   * `npm config set bin-links false`
-* Start the server by running `node main.js` on your guest machine
+* Change into the nailbox directory by running `cd /home/vagrant/nailbox` on your guest machine.
+* Install all of Nailbox's dependencies by running `npm install` on your guest machine.
+* Start the server by running `node main.js` on your guest machine.
 * Open http://localhost:3000 in your webbrowser on your host machine (or
   whatever port you chose if you changed the setting in the vagrant file).
