@@ -39,7 +39,7 @@ html(lang="en")
 					.modal-content
 						.modal-header
 							button.close(type="button" data-dismiss="modal" aria-label="Close")
-								span(aria-hidden="true")&times;
+								span(aria-hidden="true") &times;
 							h4.modal-title Modal title
 							strong Senders&nbsp;
 							span.senders
@@ -109,8 +109,14 @@ html(lang="en")
 							span.glyphicon.glyphicon-time
 						button.btn.btn-xs.btn-primary.disabled(title="Label: Not Implemented Yet!")
 							span.glyphicon.glyphicon-list
-						a.btn.btn-xs.btn-default(title="View on Gmail" href="https://mail.google.com/mail/u/0/#inbox/{{threadId}}" target="_blank")
+						a.btn.btn-xs.btn-default.view-on-gmail(title="View on Gmail" href="https://mail.google.com/mail/u/0/#inbox/{{threadId}}" target="_blank")
 							span.glyphicon.glyphicon-option-horizontal
+		script#handlebar-deleted-messages(type='text/x-handlebars-template')
+			.panel.panel-danger
+				.panel-heading
+					.panel-title {{num}} deleted {{pluralize num "message" "messages"}}
+				.panel-body
+					| This thread contains {{num}} deleted {{pluralize num "message" "messages"}}. You can view them at <a href="https://mail.google.com/mail/u/0/#trash/{{threadId}}" target="_blank">https://mail.google.com/mail/u/0/#trash/{{threadId}}</a>.
 		script#handlebar-message(type='text/x-handlebars-template')
 			.message.panel.panel-default
 				.panel-heading
