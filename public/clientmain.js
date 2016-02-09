@@ -225,6 +225,18 @@ $(function() {
 		$laterPicker.modal('show');
 		return false;
 	});
+	$threadViewer.find('button.later').on('click', function() {
+		var threadId = $threadViewer.data('threadId');
+		if (threadId) {
+			$threadViewer.modal('hide');
+			$laterPicker.find('.modal-title').text('TODO');
+			$laterPicker.data('threadId', threadId);
+			$laterPicker.modal('show');
+		} else {
+			console.log("Tried to do `later` from threadViewer, but there's no thread id.");
+		}
+		return false;
+	});
 	$laterPicker.on('click', '.button', function(eventObject) {
 		var threadId = $laterPicker.data('threadId');
 		if (!threadId) {
