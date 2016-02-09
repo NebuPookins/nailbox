@@ -188,15 +188,43 @@ function readThreadFromFile(threadId) {
 	});
 }
 
-function getBestBodyFromMessage(message) {
-	switch (message.payload.mimeType) {
+/**
+ * @param messagePart If you have a message, then `message.payload` is probably
+ * the messagePart that you want to pass in. More generally, a messagePart is
+ * a hash that contains the fields `mimeType`, `body` and `parts`.
+ * @param threadId [string] used for reporting error messages.
+ * @return [string] the body of the e-mail.
+ */
+function getBestBodyFromMessage(messagePart, threadId) {
+	switch (messagePart.mimeType) {
 		case 'text/html':
-			return mimelib.decodeBase64(message.payload.body.data);
+			return mimelib.decodeBase64(messagePart.body.data);
 		case 'multipart/alternative':
-			const biggestPart = _.maxBy(message.payload.parts, part => parseInt(part.body.size));
+			const biggestPart = _.maxBy(messagePart.parts, part => parseInt(part.body.size));
 			return mimelib.decodeBase64(biggestPart.body.data);
+		case 'multipart/mixed':
+			//I think this means there's attachments.
+			const nonAttachments = messagePart.parts.filter(function(part) {
+				if (part.mimeType == 'multipart/alternative') {
+					return true;
+				}
+				if (part.mimeType == 'text/plain') {
+					return true;
+				}
+				if (part.mimeType == 'text/html') {
+					return true;
+				}
+				//TODO: What other mimetypes do we want to keep?
+				return false;
+			});
+			if (nonAttachments.length == 1) {
+				return getBestBodyFromMessage(nonAttachments[0], threadId);
+			} else {
+				logger.error(util.format("Don't know how to decide between mimeTypes %s in thread %s.", nonAttachments.map(p => p.mimeType), threadId));
+			}
+			return null;
 		default:
-			logger.error(util.format("Don't know how to handle mimeType %s in thread %s.", message.payload.mimeType, message.threadId));
+			logger.error(util.format("Don't know how to handle mimeType %s in thread %s.", messagePart.mimeType, threadId));
 			return null;
 	}
 }
@@ -207,36 +235,65 @@ function getBestBodyFromMessage(message) {
 	const goodEncoded = mimelib.encodeBase64(goodEncoded);
 	assert.equal(
 		getBestBodyFromMessage({
-			payload: {
-				mimeType: 'text/html',
-				body: {
-					size: 1,
-					data: goodEncoded
-				}
+			mimeType: 'text/html',
+			body: {
+				size: 1,
+				data: goodEncoded
 			}
-		}),
+		}, ''),
 		goodEncoded,
 		"If the message is in plain text/html, just return its body."
 		)
 	assert.equal(
 		getBestBodyFromMessage({
-			payload: {
-				mimeType: 'multipart/alternative',
-				parts: [
-					{
-						body: {
-							size: 10,
-							data: goodEncoded
+			mimeType: 'multipart/mixed',
+			parts: [
+				{
+					mimeType: 'multipart/alternative',
+					parts: [
+						{
+							mimeType: 'text/plain',
+							body: {
+								size: 10,
+								data: badEncoded
+							}
+						}, {
+							mimeType: 'text/html',
+							body: {
+								size: 100,
+								data: goodEncoded
+							}
 						}
-					}, {
-						body: {
-							size: 1,
-							data: badEncoded
-						}
+					]
+				}, {
+					mimeType: 'image/jpeg',
+					body: {
+						size: 1000,
+						data: badEncoded
 					}
-				]
-			}
-		}),
+				}
+			]
+		}, ''),
+		goodEncoded,
+		"Don't take the attachment, even if it's the biggest item in there."
+	);
+	assert.equal(
+		getBestBodyFromMessage({
+			mimeType: 'multipart/alternative',
+			parts: [
+				{
+					body: {
+						size: 10,
+						data: goodEncoded
+					}
+				}, {
+					body: {
+						size: 1,
+						data: badEncoded
+					}
+				}
+			]
+		}, ''),
 		goodEncoded,
 		"If there are multiple alternatives, picks the larger message, all other factors equal."
 	);
@@ -375,7 +432,7 @@ ensureDirectoryExists('data/threads').then(function() {
 	});
 
 	function loadRelevantDataFromMessage(objMessage) {
-		const originalBody = getBestBodyFromMessage(objMessage);
+		const originalBody = getBestBodyFromMessage(objMessage.payload, objMessage.threadId);
 		const sanitizedBody = sanitizeHtml(originalBody, {
 			transformTags: {
 				'body': 'div',
