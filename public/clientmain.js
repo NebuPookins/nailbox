@@ -21,6 +21,7 @@ $(function() {
 
 	var handlebarsTemplates = {}
 	handlebarsTemplates.thread = Handlebars.compile($('#handlebar-thread').html());
+	handlebarsTemplates.message = Handlebars.compile($('#handlebar-message').html());
 	Handlebars.registerHelper('nMore', function(total, amountToSubtract) {
 		if (typeof amountToSubtract !== 'number') {
 			amountToSubtract = 1;
@@ -168,5 +169,34 @@ $(function() {
 		}).then(function deleteFromUI() {
 			$divThread.remove();
 		}).done();
+		return false;
 	});
+	var $threadViewer = $('#thread-viewer');
+	$('#main').on('click', 'div.thread', function(eventObject) {
+		var $threadDiv = $(eventObject.currentTarget);
+		var threadId = $threadDiv.data('threadId');
+		var $threads = $threadViewer.find('.threads')
+		$threadViewer.data('threadId', threadId);
+		$threadViewer.find('.modal-title').text($threadDiv.find('.subject').text());
+		$threadViewer.find('.senders').text($threadDiv.find('.senders').attr('title') || '');
+		$threadViewer.find('.receivers').text($threadDiv.find('.receivers').attr('title') || '');
+		$threads.text($threadDiv.find('.snippet').text());
+		$threadViewer.find('.loading-img').show();
+		$threadViewer.modal('show');
+		$.get('/api/threads/' + threadId +'/messages').done(function(threadData, textStatus, jqXHR) {
+			if ($threadViewer.data('threadId') !== threadId) {
+				//The user closed the modal and opened a new thread; this ajax result is stale.
+				return;
+			}
+			$threadViewer.find('.loading-img').hide();
+			$threads.empty();
+			threadData.forEach(function(message) {
+				console.log('original', message.body.original, 'sanitized', message.body.sanitized);
+				$threads.append(handlebarsTemplates.message(message));
+			});
+		}).fail(function(jqXHR, textStatus, errorThrown) {
+			console.log('Error getting thread data', arguments);
+		});
+	});
+	
 });
