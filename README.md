@@ -2,6 +2,8 @@
 
 The world's second best e-mail client. (Inspired by Mailbox)
 
+![Screencast from 2016-Feb-08](http://i.imgur.com/SMVtrpD.gif =955x471)
+
 ## Can I use this right now?
 
 The software is in an extremely early beta.
