@@ -186,6 +186,16 @@ $(function() {
 		} else {
 			console.log("Tried to delete from threadViewer, but there's no thread id.");
 		}
+		return false;
+	});
+	$threadViewer.find('button.view-on-gmail').on('click', function() {
+		var threadId = $threadViewer.data('threadId');
+		if (threadId) {
+			window.open('https://mail.google.com/mail/u/0/#inbox/' + threadId,'_blank');
+		} else {
+			console.log("Tried to view-on-gmail from threadViewer, but there's no thread id.");
+		}
+		return false;
 	});
 	
 	$('#main').on('click', 'div.thread', function(eventObject) {
