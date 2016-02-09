@@ -139,6 +139,13 @@ $(function() {
 		showThreads();
 	}).done();
 
+	function deleteThreadFromUI(threadId) {
+		var $uiElemToDelete = $main.find('.thread[data-thread-id="'+threadId+'"]');
+		$uiElemToDelete.hide(400, function () {
+			$uiElemToDelete.remove();
+		});
+	}
+
 	function deleteThread(threadId) {
 		return promisedFnAuthorizationGetter.then(function requestDeletePermission(fnAuthorizationGetter) {
 			return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.modify');
@@ -168,17 +175,15 @@ $(function() {
 					type: 'DELETE'
 				}).done(resolve).fail(reject);
 			});
-		}).then(function deleteFromUI() {
-			var $uiElemToDelete = $main.find('.thread[data-thread-id="'+threadId+'"]');
-			$uiElemToDelete.hide(400, function () {
-				$uiElemToDelete.remove();
-			});
+		}).then(function() {
+			deleteThreadFromUI(threadId);
 		});
 	}
 
 	var $threadViewer = $('#thread-viewer');
 
-	$('#main').on('click', 'button.delete', function(eventObject) {
+
+	$main.on('click', 'button.delete', function(eventObject) {
 		var btnDelete = eventObject.currentTarget;
 		var $divThread = $(btnDelete).parents('.thread[data-thread-id]');
 		var threadId = $divThread.data('threadId');
@@ -196,7 +201,7 @@ $(function() {
 		}
 		return false;
 	});
-	$('#main').on('click', 'a.view-on-gmail', function(eventObject) {
+	$main.on('click', 'a.view-on-gmail', function(eventObject) {
 		//Prevent bubbling, but otherwise do nothing since it's a link.
 		eventObject.stopPropagation()
 		return true;
@@ -210,8 +215,79 @@ $(function() {
 		}
 		return false;
 	});
+	var $laterPicker = $('#later-picker');
+	$main.on('click', 'button.later', function(eventObject) {
+		var btnLater = eventObject.currentTarget;
+		var $divThread = $(btnLater).parents('.thread[data-thread-id]');
+		var threadId = $divThread.data('threadId');
+		$laterPicker.find('.modal-title').text($divThread.find('.subject').text());
+		$laterPicker.data('threadId', threadId);
+		$laterPicker.modal('show');
+		return false;
+	});
+	$laterPicker.on('click', '.button', function(eventObject) {
+		var threadId = $laterPicker.data('threadId');
+		if (!threadId) {
+			console.log('Tried to hide thread from laterPicker, but no threadId found.');
+			return;
+		}
+		var btnClicked = eventObject.currentTarget;
+		var todaysEvening = moment().hour(18).startOf('hour');
+		var tomorrowsEvening = moment(todaysEvening).add(1, 'day');
+		var hideUntil = null;
+		switch ($(btnClicked).data('value')) {
+			case 'hours':
+				hideUntil = moment().add(3, 'hours');
+				break;
+			case 'evening':
+				if (moment().add(3, 'hours').isBefore(todaysEvening)) {
+					hideUntil = todaysEvening;
+				} else {
+					hideUntil = tomorrowsEvening;
+				}
+				break;
+			case 'tomorrow':
+				hideUntil = moment().hour(7).startOf('hour').add(1, 'day');
+				break;
+			case 'weekend':
+				hideUntil = moment().day(6).hour(7).startOf('hour');
+				if (hideUntil.isBefore(moment())) {
+					hideUntil.add(1, 'week');
+				}
+				break;
+			case 'monday':
+				hideUntil = moment().day(1).hour(7).startOf('hour');
+				if (hideUntil.isBefore(moment())) {
+					hideUntil.add(1, 'week');
+				}
+				break;
+			case 'month':
+				hideUntil = moment().add(1, 'month').hour(7).startOf('hour');
+				break;
+			case 'someday':
+				hideUntil = moment().add(6, 'month').hour(7).startOf('hour');
+				break;
+			case 'custom':
+				//TODO
+			default:
+				console.log("Forgot to implement", $(btnClicked).data('value'));
+				return;
+		}
+		console.log("Hiding thread", threadId, "until", hideUntil.fromNow(), hideUntil.format());
+		$.ajax({
+			url: '/api/threads/' + threadId + '/hideUntil',
+			data: { hideUntil: hideUntil.valueOf() },
+			method: 'PUT'
+		}).done(function() {
+			$laterPicker.modal('hide');
+			deleteThreadFromUI(threadId);
+		}).fail(function() {
+			console.log("Failure while setting threads.", arguments);
+		});
+		return false;
+	});
 	
-	$('#main').on('click', 'div.thread', function(eventObject) {
+	$main.on('click', 'div.thread', function(eventObject) {
 		var $threadDiv = $(eventObject.currentTarget);
 		var threadId = $threadDiv.data('threadId');
 		var $threads = $threadViewer.find('.threads')
