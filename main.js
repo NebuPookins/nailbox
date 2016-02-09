@@ -2,6 +2,7 @@ const DEFAULT_CONFIG = {
 	port: 3000
 };
 const PATH_TO_CONFIG = 'data/config.json';
+const PATH_TO_HIDE_UNTILS = 'data/hideUntils.json';
 
 const util = require('util');
 const express = require('express');
@@ -42,13 +43,13 @@ function readConfigWithDefault(config, strFieldName) {
 	}
 }
 
-function saveConfig(config) {
+function saveJsonToFile(json, path) {
 	return q.Promise(function(resolve, reject) {
-		nodeFs.writeFile(PATH_TO_CONFIG, JSON.stringify(config), function(err) {
+		nodeFs.writeFile(path, JSON.stringify(json), function(err) {
 			if (err) {
 				reject(err);
 			} else {
-				resolve(config);
+				resolve(json);
 			}
 		});
 	});
@@ -308,15 +309,12 @@ function getBestBodyFromMessage(messagePart, threadId) {
 	);
 })();
 
-logger.info("Checking directory structure...");
-ensureDirectoryExists('data/threads').then(function() {
-	return logger.info("Directory structure looks fine.");
-}).then(function() {
+function readJsonFromOptionalFile(path) {
 	return q.Promise(function(resolve, reject) {
-		nodeFs.readFile(PATH_TO_CONFIG, function(err, strFileContents) {
+		nodeFs.readFile(path, function(err, strFileContents) {
 			if (err) {
 				if (err.code === 'ENOENT') {
-					logger.info(util.format("No config file found at %s, using default settings.", PATH_TO_CONFIG));
+					logger.info(util.format("No file found at %s, using empty json by default.", path));
 					resolve({});
 				} else {
 					reject(err);
@@ -326,7 +324,17 @@ ensureDirectoryExists('data/threads').then(function() {
 			}
 		});
 	});
-}).then(function(config) {
+}
+
+logger.info("Checking directory structure...");
+ensureDirectoryExists('data/threads').then(function() {
+	return logger.info("Directory structure looks fine.");
+}).then(function() {
+	return q.all([
+		readJsonFromOptionalFile(PATH_TO_CONFIG),
+		readJsonFromOptionalFile(PATH_TO_HIDE_UNTILS)
+	]);
+}).spread(function(config, hideUntils) {
 	const app = express();
 	app.set('views', path.join(__dirname, 'views'));
 	app.set('view engine', 'jade');
@@ -355,7 +363,7 @@ ensureDirectoryExists('data/threads').then(function() {
 	app.post('/setup', function(req, res) {
 		logger.info(util.format("Updating client ID to '%s'.", req.body.clientId));
 		config.clientId = req.body.clientId;
-		saveConfig(config).then(function() {
+		saveJsonToFile(config, PATH_TO_CONFIG).then(function() {
 			res.redirect('/setup');
 		}, function(err) {
 			logger.error(util.format("Failed to save config file: %s", util.inspect(err)));
@@ -412,7 +420,13 @@ ensureDirectoryExists('data/threads').then(function() {
 						return null;
 					});
 				})).then(function (files) {
-					files = files.filter(file => file !== null);
+					var now = Date.now();
+					files = files
+						.filter(file => file !== null)
+						.filter(function hideMessagesForLater(file) {
+							var hideUntil = hideUntils[file.threadId];
+							return (!hideUntil) || (hideUntil < now);
+						});
 					res.status(200);
 					res.type('json');
 					res.send(_.sortBy(files, function(thread) {
@@ -441,6 +455,19 @@ ensureDirectoryExists('data/threads').then(function() {
 				logger.info(util.format("Deleted file %s", pathToDelete));
 				res.sendStatus(200);
 			}
+		});
+	});
+
+	app.put(/^\/api\/threads\/([a-z0-9]+)\/hideUntil$/, function(req, res) {
+		const threadId = req.params[0];
+		const hideUntil = req.body.hideUntil;
+		logger.info(util.format("Hiding thread %s until %d", threadId, hideUntil));
+		hideUntils[threadId] = hideUntil;
+		saveJsonToFile(hideUntils, PATH_TO_HIDE_UNTILS).then(function() {
+			res.sendStatus(200);
+		}, function(err) {
+			logger.error(util.format("Failed to save hideUntils: %j", err));
+			res.sendStatus(500);
 		});
 	});
 

@@ -28,6 +28,34 @@ html(lang="en")
 			@-moz-keyframes spin { 100% { -moz-transform: rotate(360deg); } }
 			@-webkit-keyframes spin { 100% { -webkit-transform: rotate(360deg); } }
 			@keyframes spin { 100% { -webkit-transform: rotate(360deg); transform:rotate(360deg); } }
+			#later-picker .row .button {
+				text-align: center;
+				height: 100px;
+				background: #f9f9f9;
+				border: solid 1px #fff;
+				padding: 10px;
+			}
+			#later-picker .row .button:hover {
+				background: #563d7c;
+				color: #fff;
+			}
+			#later-picker .row .button .glyphicon {
+				font-size: 48px;
+			}
+			#later-picker .row .button .later-label {
+				font-size: 18px;
+			}
+			.noselect {
+				-webkit-touch-callout: none; /* iOS Safari */
+				-webkit-user-select: none;   /* Chrome/Safari/Opera */
+				-khtml-user-select: none;    /* Konqueror */
+				-moz-user-select: none;      /* Firefox */
+				-ms-user-select: none;       /* IE/Edge */
+				user-select: none;           /* non-prefixed version, currently not supported by any browser */
+			}
+			.thread:hover {
+				background: #ff8
+			}
 	body
 		.container
 			#status.jumbotron
@@ -58,13 +86,56 @@ html(lang="en")
 								span.glyphicon.glyphicon-ok
 							button.btn.btn-xs.btn-danger.delete(title="Delete")
 								span.glyphicon.glyphicon-remove
-							button.btn.btn-xs.btn-warning.disabled(title="Later: Not Implemented Yet!")
+							button.btn.btn-xs.btn-warning.later(title="Later")
 								span.glyphicon.glyphicon-time
 							button.btn.btn-xs.btn-primary.disabled(title="Label: Not Implemented Yet!")
 								span.glyphicon.glyphicon-list
 							button.btn.btn-xs.btn-default.view-on-gmail(title="View on Gmail")
 								span.glyphicon.glyphicon-option-horizontal
 							button.btn.btn-default(type="button" data-dismiss="modal") Close
+		#later-picker.modal.fade(tabindex="-1" role="dialog")
+			.modal-dialog
+				.modal-content
+					.modal-header
+						h4.modal-title Subject Line Here
+					.modal-body
+						.row
+							.col-xs-4
+								.button(data-value="hours")
+									.glyphicon.glyphicon-time
+									.later-label.noselect Couple of Hours
+							.col-xs-4
+								.button(data-value="evening")
+									.glyphicon.glyphicon-lamp
+									.later-label.noselect Coming Evening
+							.col-xs-4
+								.button(data-value="tomorrow")
+									.glyphicon.glyphicon-bed
+									.later-label.noselect Tomorrow
+						.row
+							.col-xs-4
+								.button(data-value="weekend")
+									.glyphicon.glyphicon-sunglasses
+									.later-label.noselect This Weekend
+							.col-xs-4
+								.button(data-value="monday")
+									.glyphicon.glyphicon-briefcase
+									.later-label.noselect Next Monday
+							.col-xs-4
+								.button(data-value="month")
+									.glyphicon.glyphicon-calendar
+									.later-label.noselect In a Month
+						.row
+							.col-xs-4
+								.button(data-value="someday")
+									.glyphicon.glyphicon-cloud
+									.later-label.noselect Someday
+							.col-xs-4
+								| &nbsp;
+							.col-xs-4
+								.button(data-value="custom")
+									.glyphicon.glyphicon-pencil
+									.later-label.noselect Pick a Date
 		script(type='text/javascript' src='https://apis.google.com/js/client.js?onload=checkAuth')
 		script(type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js')
 		script(type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/js/bootstrap.min.js")
@@ -105,7 +176,7 @@ html(lang="en")
 							span.glyphicon.glyphicon-ok
 						button.btn.btn-xs.btn-danger.delete(title="Delete")
 							span.glyphicon.glyphicon-remove
-						button.btn.btn-xs.btn-warning.disabled(title="Later: Not Implemented Yet!")
+						button.btn.btn-xs.btn-warning.later(title="Later")
 							span.glyphicon.glyphicon-time
 						button.btn.btn-xs.btn-primary.disabled(title="Label: Not Implemented Yet!")
 							span.glyphicon.glyphicon-list
