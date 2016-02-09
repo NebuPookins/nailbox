@@ -17,11 +17,14 @@
   "dependencies": {
     "body-parser": "^1.14.2",
     "express": "^4.13.4",
+    "html-entities": "^1.2.0",
     "jade": "^1.11.0",
     "lodash": "^4.2.1",
+    "mimelib": "^0.2.19",
     "nebulog": "^0.2.1",
     "node-fs": "^0.1.7",
-    "q": "^1.4.1"
+    "q": "^1.4.1",
+    "sanitize-html": "^1.11.3"
   },
   "devDependencies": {
     "grunt": "^0.4.5",

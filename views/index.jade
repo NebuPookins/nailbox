@@ -5,8 +5,8 @@ html(lang="en")
 		meta(http-equiv="X-UA-Compatible" content="IE=edge")
 		meta(name="viewport" content="width=device-width, initial-scale=1")
 		title Nailbox
-		link(rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous")
-		link(rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous")
+		link(rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap.min.css")
+		link(rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap-theme.min.css")
 		style(type="text/css").
 			.thread {
 				border-bottom: solid 1px black;
@@ -20,15 +20,44 @@ html(lang="en")
 				bottom:0;
 				left:0;
 			}
+			.spin {
+				-webkit-animation:spin 4s linear infinite;
+				-moz-animation:spin 4s linear infinite;
+				animation:spin 4s linear infinite;
+			}
+			@-moz-keyframes spin { 100% { -moz-transform: rotate(360deg); } }
+			@-webkit-keyframes spin { 100% { -webkit-transform: rotate(360deg); } }
+			@keyframes spin { 100% { -webkit-transform: rotate(360deg); transform:rotate(360deg); } }
 	body
 		.container
 			#status.jumbotron
 				h1 Welcome to Nailbox!
 				p Waiting for JavaScript engine to initialize...
 			#main
+			#thread-viewer.modal.fade(tabindex="-1" role="dialog")
+				.modal-dialog.modal-lg(role="document")
+					.modal-content
+						.modal-header
+							button.close(type="button" data-dismiss="modal" aria-label="Close")
+								span(aria-hidden="true")&times;
+							h4.modal-title Modal title
+							strong Senders&nbsp;
+							span.senders
+								| Sender 1
+								| Sender 2
+							strong Receivers&nbsp;
+							span.receivers
+								| Receiver 1
+								| Receiver 2
+						.modal-body
+							.loading-img
+								img.spin.img-responsive.center-block(src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Vector_Loading.svg/1024px-Vector_Loading.svg.png" width="100px" height="100px")
+							.threads
+						.modal-footer
+							button.btn.btn-default(type="button" data-dismiss="modal") Close
 		script(type='text/javascript' src='https://apis.google.com/js/client.js?onload=checkAuth')
 		script(type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js')
-			script(src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous")
+		script(type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/js/bootstrap.min.js")
 		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.0.5/handlebars.js')
 		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.2.1/lodash.js')
 		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.11.2/moment.js')
@@ -39,31 +68,58 @@ html(lang="en")
 				.row
 					.col-xs-10
 						strong From&nbsp;
-						span(title="{{#each senders}} {{this.name}} {{/each}}")
+						span.senders(title="{{#each senders}} {{this.name}} {{/each}}")
 							| {{senders.0.name}}
 							| {{#if senders.1.name}}
 							| (and {{nMore senders.length}} more)
 							| {{/if}}
 						| {{#if receivers.0.name}}
 						strong To&nbsp;
-						span(title="{{#each receivers}} {{this.name}} {{/each}}")
+						span.receivers(title="{{#each receivers}} {{this.name}} {{/each}}")
 							| {{receivers.0.name}}
 							| {{#if receivers.1.name}}
 							| (and {{nMore receivers.length}} more)
 							| {{/if}}
 						| {{/if}}
-					.col-xs-2 {{prettyTimestamp lastUpdated}}
+					.col-xs-2
+						| {{messageIds.length}}
+						span.glyphicon.glyphicon-envelope
+						| &nbsp;
+						| {{prettyTimestamp lastUpdated}}
 				.row
 					.col-xs-10
-						strong
-							//a(href="https://mail.google.com/mail/u/0/h/?th={{threadId}}&v=c&f=1")
-							a(href="https://mail.google.com/mail/u/0/#inbox/{{threadId}}")
-								| {{subject}}
-							
-						p {{snippet}}
+						strong.subject {{subject}}
+						p.snippet {{snippet}}
 					.col-xs-2
-						button.btn.btn-xs.btn-success.disabled(title="Not Implemented Yet!") Done
-						button.btn.btn-xs.btn-danger.delete Delete
-						br
-						button.btn.btn-xs.btn-warning.disabled(title="Not Implemented Yet!") Later
-						button.btn.btn-xs.btn-primary.disabled(title="Not Implemented Yet!") Label
+						button.btn.btn-xs.btn-success.disabled(title="Done: Not Implemented Yet!") 
+							span.glyphicon.glyphicon-ok
+						button.btn.btn-xs.btn-danger.delete(title="Delete")
+							span.glyphicon.glyphicon-remove
+						button.btn.btn-xs.btn-warning.disabled(title="Later: Not Implemented Yet!")
+							span.glyphicon.glyphicon-time
+						button.btn.btn-xs.btn-primary.disabled(title="Label: Not Implemented Yet!")
+							span.glyphicon.glyphicon-list
+						a.btn.btn-xs.btn-default(title="View on Gmail" href="https://mail.google.com/mail/u/0/#inbox/{{threadId}}")
+							span.glyphicon.glyphicon-option-horizontal
+		script#handlebar-message(type='text/x-handlebars-template')
+			.message.panel.panel-default
+				.panel-heading
+					.panel-title
+						.row
+							.col-xs-10
+								strong From
+								| {{#each from}}
+								| {{name}}
+								| {{/each}}
+								| {{#if to.0.name}}
+								strong To
+								| {{#each to}}
+								| {{name}}
+								| {{/each}}
+								| {{/if}}
+							.col-xs-2
+								| {{prettyTimestamp date}}
+				.panel-body
+					.row
+						.col-xs-12
+							| {{& body.sanitized}}

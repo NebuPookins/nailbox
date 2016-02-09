@@ -12,6 +12,10 @@ const nodeFs = require('node-fs');
 const q = require('q');
 const assert = require('assert');
 const _ = require('lodash');
+const mimelib = require("mimelib");
+const sanitizeHtml = require('sanitize-html');
+const Entities = require('html-entities').AllHtmlEntities;
+const entities = new Entities();
 
 /**
  * Returns a promise. If the promise resolves successfully, then as a side
@@ -74,8 +78,7 @@ function parseEmailToString(str) {
 	});
 	return retVal;
 }
-(function() {
-	logger.debug("Testing parseEmailToString...");
+(function test_parseEmailToString() {
 	assert.deepEqual(parseEmailToString('"Alfred Alpha" <aa@gmail.com>'), [{name:'"Alfred Alpha"', email:'aa@gmail.com'}]);
 	assert.deepEqual(parseEmailToString('Alfred Alpha <aa@gmail.com>'), [{name: "Alfred Alpha", email: 'aa@gmail.com'}]);
 	assert.deepEqual(parseEmailToString(
@@ -118,9 +121,8 @@ function threadLastUpdated(threadData) {
  * name.
  */
 function headersInMessage(headerName, message) {
-	return message.payload.headers.filter(function(header) {
-		return header.name === headerName;
-	});
+	return message.payload.headers
+		.filter(header => header.name === headerName);
 }
 
 /**
@@ -131,9 +133,7 @@ function mostRecentMessageSatisfying(threadData, fnMessagePredicate) {
 	if (satisfyingMessages.length === 0) {
 		return null;
 	}
-	return _.maxBy(satisfyingMessages, function(message) {
-		return parseInt(message.internalDate);
-	});
+	return _.maxBy(satisfyingMessages, message => parseInt(message.internalDate));
 }
 
 function mostRecentSubjectInThread(threadData) {
@@ -155,21 +155,92 @@ function mostRecentSnippetInThread(threadData) {
 
 function peopleInThread(threadData, fnFilter) {
 	const recipients = threadData.messages.map(function(message) {
-		return message.payload.headers
-			.filter(fnFilter)
-			.map(function(header) {
-				var retVal = parseEmailToString(header.value);
-				return retVal;
-			}).reduce(function(a, b) {
-				return a.concat(b); //Flatten the array of arrays.
-			});
-	}).reduce(function(a, b) {
-			return a.concat(b); //Flatten the array of arrays.
-	});
-	return _.uniqBy(recipients, function(recipient) {
-		return recipient.email;
+		return emailAddressesInMessage(message, fnFilter);
+	}).reduce((a, b) => a.concat(b)); //Flatten the array of arrays.
+	return _.uniqBy(recipients, recipient => recipient.email);
+}
+
+/**
+ * @param fnHeaderFilter Identifies the headers containing the e-mail addresses
+ * you're interested in. E.g. (header => header.name === 'To')
+ * @return an array that looks like:
+ * [
+ *   { name: 'Alfred Alpha', email: 'aa@gmail.com'},
+ *   { name: '"Beta, Betty"', email: 'bb@gmail.com'}
+ * ]
+ */
+function emailAddressesInMessage(message, fnHeaderFilter) {
+	return message.payload.headers
+		.filter(fnHeaderFilter)
+		.map(header => parseEmailToString(header.value))
+		.reduce((a, b) => a.concat(b)); //Flatten the array of arrays.
+}
+
+function readThreadFromFile(threadId) {
+	return q.Promise(function(resolve, reject) {
+		nodeFs.readFile('data/threads/' + threadId, function(err, strFileContents) {
+			if (err) {
+				reject(err);
+			} else {
+				resolve(JSON.parse(strFileContents));
+			}
+		});
 	});
 }
+
+function getBestBodyFromMessage(message) {
+	switch (message.payload.mimeType) {
+		case 'text/html':
+			return mimelib.decodeBase64(message.payload.body.data);
+		case 'multipart/alternative':
+			const biggestPart = _.maxBy(message.payload.parts, part => parseInt(part.body.size));
+			return mimelib.decodeBase64(biggestPart.body.data);
+		default:
+			logger.error(util.format("Don't know how to handle mimeType %s in thread %s.", message.payload.mimeType, message.threadId));
+			return null;
+	}
+}
+(function test_getBestBodyFromMessage() {
+	const badDecoded = "bad";
+	const goodDecoded = "good";
+	const badEncoded = mimelib.encodeBase64(badDecoded);
+	const goodEncoded = mimelib.encodeBase64(goodEncoded);
+	assert.equal(
+		getBestBodyFromMessage({
+			payload: {
+				mimeType: 'text/html',
+				body: {
+					size: 1,
+					data: goodEncoded
+				}
+			}
+		}),
+		goodEncoded,
+		"If the message is in plain text/html, just return its body."
+		)
+	assert.equal(
+		getBestBodyFromMessage({
+			payload: {
+				mimeType: 'multipart/alternative',
+				parts: [
+					{
+						body: {
+							size: 10,
+							data: goodEncoded
+						}
+					}, {
+						body: {
+							size: 1,
+							data: badEncoded
+						}
+					}
+				]
+			}
+		}),
+		goodEncoded,
+		"If there are multiple alternatives, picks the larger message, all other factors equal."
+	);
+})();
 
 logger.info("Checking directory structure...");
 ensureDirectoryExists('data/threads').then(function() {
@@ -259,23 +330,17 @@ ensureDirectoryExists('data/threads').then(function() {
 			} else {
 				var jsonResponse = {};
 				q.all(filenames.map(function(filename) {
-					return q.Promise(function(resolve, reject) {
-						nodeFs.readFile('data/threads/' + filename, function(err, strFileContents) {
-							if (err) {
-								reject(err);
-							} else {
-								const threadData = JSON.parse(strFileContents);
-								const relevantData = {
-									threadId: threadData.id,
-									senders: sendersInThread(threadData),
-									receivers: recipientsInThread(threadData),
-									lastUpdated: threadLastUpdated(threadData),
-									subject: mostRecentSubjectInThread(threadData),
-									snippet: mostRecentSnippetInThread(threadData)
-								};
-								resolve(relevantData);
-							}
-						});
+					return readThreadFromFile(filename).then(function(threadData) {
+						const maybeMostRecentSnippetInThread = mostRecentSnippetInThread(threadData);
+						return {
+							threadId: threadData.id,
+							senders: sendersInThread(threadData),
+							receivers: recipientsInThread(threadData),
+							lastUpdated: threadLastUpdated(threadData),
+							subject: mostRecentSubjectInThread(threadData),
+							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
+							messageIds: threadData.messages.map(message => message.id)
+						};
 					});
 				})).then(function (files) {
 					res.status(200);
@@ -307,6 +372,69 @@ ensureDirectoryExists('data/threads').then(function() {
 				res.sendStatus(200);
 			}
 		});
+	});
+
+	function loadRelevantDataFromMessage(objMessage) {
+		const originalBody = getBestBodyFromMessage(objMessage);
+		const sanitizedBody = sanitizeHtml(originalBody, {
+			transformTags: {
+				'body': 'div'
+			},
+			allowedTags: [
+				"a", "b", "blockquote", "br", "caption", "code", "div", "em",
+				"h1", "h2", "h3", "h4", "h5", "h6",
+				"hr", "i", "img", "li", "nl", "ol", "p", "pre", 'span', "strike", "strong",
+				"table", "tbody", "td", "th", "thead", "tr", "ul"],
+			allowedAttributes: {
+				a: [ 'href', 'name', 'style', 'target' ],
+				div: ['style'],
+				img: [ 'alt', 'border', 'height', 'src', 'width' ],
+				span: ['style'],
+				table: ['align', 'style'],
+				td: ['align', 'background', 'colspan', 'height', 'style', 'valign', 'width'],
+			},
+			nonTextTags: [ 'style', 'script', 'textarea', 'title' ]
+		});
+		return {
+			from: emailAddressesInMessage(
+				objMessage, header => header.name === 'From'),
+			to: emailAddressesInMessage(
+				objMessage, header => header.name === 'To'),
+			date: parseInt(objMessage.internalDate),
+			body: {
+				original: originalBody,
+				sanitized: sanitizedBody
+			}
+		}
+	}
+
+	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, function(req, res) {
+		const threadId = req.params[0];
+		readThreadFromFile(threadId).then(function(threadData) {
+			res.status(200).send(threadData.messages.map(loadRelevantDataFromMessage));
+		}, function(err) {
+			logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
+			res.sendStatus(500);
+		}).done();
+	});
+
+	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)$/, function(req, res) {
+		const threadId = req.params[0];
+		const messageId = req.params[1];
+		readThreadFromFile(threadId).then(function(threadData) {
+			const matchingMessage = threadData.messages.find(function(message) {
+				return message.id === messageId;
+			});
+			if (matchingMessage) {
+				res.status(200).send(loadRelevantDataFromMessage(matchingMessage));
+			} else {
+				res.sendStatus(404);
+			}
+			
+		}, function(err) {
+			logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
+			res.sendStatus(500);
+		}).done();
 	});
 
 	app.use(function(req, res) {
