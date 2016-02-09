@@ -54,6 +54,16 @@ html(lang="en")
 								img.spin.img-responsive.center-block(src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Vector_Loading.svg/1024px-Vector_Loading.svg.png" width="100px" height="100px")
 							.threads
 						.modal-footer
+							button.btn.btn-xs.btn-success.disabled(title="Done: Not Implemented Yet!") 
+								span.glyphicon.glyphicon-ok
+							button.btn.btn-xs.btn-danger.delete(title="Delete")
+								span.glyphicon.glyphicon-remove
+							button.btn.btn-xs.btn-warning.disabled(title="Later: Not Implemented Yet!")
+								span.glyphicon.glyphicon-time
+							button.btn.btn-xs.btn-primary.disabled(title="Label: Not Implemented Yet!")
+								span.glyphicon.glyphicon-list
+							button.btn.btn-xs.btn-default(title="View on Gmail")
+								span.glyphicon.glyphicon-option-horizontal
 							button.btn.btn-default(type="button" data-dismiss="modal") Close
 		script(type='text/javascript' src='https://apis.google.com/js/client.js?onload=checkAuth')
 		script(type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js')

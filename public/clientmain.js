@@ -134,11 +134,8 @@ $(function() {
 		showThreads();
 	}).done();
 
-	$('#main').on('click', 'button.delete', function(eventObject) {
-		var btnDelete = eventObject.currentTarget;
-		var $divThread = $(btnDelete).parents('.thread[data-thread-id]');
-		var threadId = $divThread.data('threadId');
-		promisedFnAuthorizationGetter.then(function requestDeletePermission(fnAuthorizationGetter) {
+	function deleteThread(threadId) {
+		return promisedFnAuthorizationGetter.then(function requestDeletePermission(fnAuthorizationGetter) {
 			return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.modify');
 		}).then(function trashOnGmail(gapi) {
 			return Q.Promise(function(resolve, reject) {
@@ -167,11 +164,30 @@ $(function() {
 				}).done(resolve).fail(reject);
 			});
 		}).then(function deleteFromUI() {
-			$divThread.remove();
-		}).done();
+			$main.find('.thread[data-thread-id="'+threadId+'"]').remove();
+		});
+	}
+
+	var $threadViewer = $('#thread-viewer');
+
+	$('#main').on('click', 'button.delete', function(eventObject) {
+		var btnDelete = eventObject.currentTarget;
+		var $divThread = $(btnDelete).parents('.thread[data-thread-id]');
+		var threadId = $divThread.data('threadId');
+		deleteThread(threadId).done();
 		return false;
 	});
-	var $threadViewer = $('#thread-viewer');
+	$threadViewer.find('button.delete').on('click', function() {
+		var threadId = $threadViewer.data('threadId');
+		if (threadId) {
+			deleteThread(threadId).then(function() {
+				$threadViewer.modal('hide');
+			}).done();
+		} else {
+			console.log("Tried to delete from threadViewer, but there's no thread id.");
+		}
+	});
+	
 	$('#main').on('click', 'div.thread', function(eventObject) {
 		var $threadDiv = $(eventObject.currentTarget);
 		var threadId = $threadDiv.data('threadId');
@@ -191,7 +207,6 @@ $(function() {
 			$threadViewer.find('.loading-img').hide();
 			$threads.empty();
 			threadData.forEach(function(message) {
-				console.log('original', message.body.original, 'sanitized', message.body.sanitized);
 				$threads.append(handlebarsTemplates.message(message));
 			});
 		}).fail(function(jqXHR, textStatus, errorThrown) {
