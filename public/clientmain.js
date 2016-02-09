@@ -22,6 +22,7 @@ $(function() {
 	var handlebarsTemplates = {}
 	handlebarsTemplates.thread = Handlebars.compile($('#handlebar-thread').html());
 	handlebarsTemplates.message = Handlebars.compile($('#handlebar-message').html());
+	handlebarsTemplates.deletedMessages = Handlebars.compile($('#handlebar-deleted-messages').html());
 	Handlebars.registerHelper('nMore', function(total, amountToSubtract) {
 		if (typeof amountToSubtract !== 'number') {
 			amountToSubtract = 1;
@@ -41,6 +42,10 @@ $(function() {
 		} else {
 			return momentToFormat.format('YYYY-MMM-DD');
 		}
+	});
+
+	Handlebars.registerHelper('pluralize', function(number, singular, plural) {
+		return number === 1 ? single : plural;
 	});
 
 	/**
@@ -191,6 +196,11 @@ $(function() {
 		}
 		return false;
 	});
+	$('#main').on('click', 'a.view-on-gmail', function(eventObject) {
+		//Prevent bubbling, but otherwise do nothing since it's a link.
+		eventObject.stopPropagation()
+		return true;
+	});
 	$threadViewer.find('button.view-on-gmail').on('click', function() {
 		var threadId = $threadViewer.data('threadId');
 		if (threadId) {
@@ -219,7 +229,16 @@ $(function() {
 			}
 			$threadViewer.find('.loading-img').hide();
 			$threads.empty();
-			threadData.forEach(function(message) {
+			var nonDeletedMessages = threadData.filter(function(message) {
+				return !message.deleted;
+			})
+			if (threadData.length > nonDeletedMessages.length) {
+				$threads.append(handlebarsTemplates.deletedMessages({
+					num: threadData.length - nonDeletedMessages.length,
+					threadId: threadId
+				}));
+			}
+			nonDeletedMessages.forEach(function(message) {
 				$threads.append(handlebarsTemplates.message(message));
 			});
 		}).fail(function(jqXHR, textStatus, errorThrown) {

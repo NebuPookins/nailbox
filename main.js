@@ -243,7 +243,7 @@ function getBestBodyFromMessage(messagePart, threadId) {
 		}, ''),
 		goodEncoded,
 		"If the message is in plain text/html, just return its body."
-		)
+		);
 	assert.equal(
 		getBestBodyFromMessage({
 			mimeType: 'multipart/mixed',
@@ -464,6 +464,7 @@ ensureDirectoryExists('data/threads').then(function() {
 			nonTextTags: [ 'style', 'script', 'textarea', 'title' ]
 		});
 		return {
+			deleted: objMessage.labelIds.indexOf('TRASH') !== -1,
 			from: emailAddressesInMessage(
 				objMessage, header => header.name === 'From'),
 			to: emailAddressesInMessage(
