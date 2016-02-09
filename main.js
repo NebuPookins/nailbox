@@ -378,20 +378,31 @@ ensureDirectoryExists('data/threads').then(function() {
 		const originalBody = getBestBodyFromMessage(objMessage);
 		const sanitizedBody = sanitizeHtml(originalBody, {
 			transformTags: {
-				'body': 'div'
+				'body': 'div',
+				'a': function(tagName, attribs) {
+					//All links in messages should open in a new tab.
+					if (attribs.href) {
+						attribs.target = '_blank';
+					}
+					return {
+						tagName: 'a',
+						attribs: attribs
+					};
+				}
 			},
 			allowedTags: [
-				"a", "b", "blockquote", "br", "caption", "code", "div", "em",
+				"a", "b", "blockquote", "br", "caption", "center", "code", "div", "em",
 				"h1", "h2", "h3", "h4", "h5", "h6",
 				"hr", "i", "img", "li", "nl", "ol", "p", "pre", 'span', "strike", "strong",
 				"table", "tbody", "td", "th", "thead", "tr", "ul"],
 			allowedAttributes: {
 				a: [ 'href', 'name', 'style', 'target' ],
 				div: ['style'],
-				img: [ 'alt', 'border', 'height', 'src', 'width' ],
+				img: [ 'alt', 'border', 'height', 'src', 'style', 'width' ],
+				p: ['style'],
 				span: ['style'],
-				table: ['align', 'style'],
-				td: ['align', 'background', 'colspan', 'height', 'style', 'valign', 'width'],
+				table: ['align', 'bgcolor', 'border', 'cellpadding', 'cellspacing', 'style', 'width'],
+				td: ['align', 'background', 'bgcolor', 'colspan', 'height', 'style', 'valign', 'width'],
 			},
 			nonTextTags: [ 'style', 'script', 'textarea', 'title' ]
 		});
