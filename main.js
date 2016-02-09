@@ -180,9 +180,18 @@ function readThreadFromFile(threadId) {
 	return q.Promise(function(resolve, reject) {
 		nodeFs.readFile('data/threads/' + threadId, function(err, strFileContents) {
 			if (err) {
-				reject(err);
+				return reject(err);
 			} else {
-				resolve(JSON.parse(strFileContents));
+				var jsonFileContents;
+				try {
+					jsonFileContents = JSON.parse(strFileContents);
+				} catch (e) {
+					if (e instanceof SyntaxError) {
+						logger.warn(util.format("Failed to parse JSON from %s", threadId));
+					}
+					return reject(e);
+				}
+				return resolve(jsonFileContents);
 			}
 		});
 	});
@@ -398,8 +407,12 @@ ensureDirectoryExists('data/threads').then(function() {
 							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
 							messageIds: threadData.messages.map(message => message.id)
 						};
+					}, function(e) {
+						//If you couldn't read certain thread files, just keep proceeding.
+						return null;
 					});
 				})).then(function (files) {
+					files = files.filter(file => file !== null);
 					res.status(200);
 					res.type('json');
 					res.send(_.sortBy(files, function(thread) {
@@ -474,7 +487,7 @@ ensureDirectoryExists('data/threads').then(function() {
 				original: originalBody,
 				sanitized: sanitizedBody
 			}
-		}
+		};
 	}
 
 	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, function(req, res) {
