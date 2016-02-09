@@ -164,7 +164,10 @@ $(function() {
 				}).done(resolve).fail(reject);
 			});
 		}).then(function deleteFromUI() {
-			$main.find('.thread[data-thread-id="'+threadId+'"]').remove();
+			var $uiElemToDelete = $main.find('.thread[data-thread-id="'+threadId+'"]');
+			$uiElemToDelete.hide(400, function () {
+				$uiElemToDelete.remove();
+			});
 		});
 	}
 
