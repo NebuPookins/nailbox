@@ -146,6 +146,15 @@ $(function() {
 		});
 	}
 
+	function deleteOnLocalCache(threadId) {
+			return Q.Promise(function(resolve, reject) {
+				$.ajax({
+					url: '/api/threads/' + threadId,
+					type: 'DELETE'
+				}).done(resolve).fail(reject);
+			});
+		}
+
 	function deleteThread(threadId) {
 		return promisedFnAuthorizationGetter.then(function requestDeletePermission(fnAuthorizationGetter) {
 			return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.modify');
@@ -168,13 +177,38 @@ $(function() {
 					}
 				});
 			});
-		}).then(function deleteOnLocalCache() {
+		}).then(function() {
+			return deleteOnLocalCache(threadId);
+		}).then(function() {
+			deleteThreadFromUI(threadId);
+		});
+	}
+
+	function archiveThread(threadId) {
+		return promisedFnAuthorizationGetter.then(function requestDeletePermission(fnAuthorizationGetter) {
+			return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.modify');
+		}).then(function trashOnGmail(gapi) {
 			return Q.Promise(function(resolve, reject) {
-				$.ajax({
-					url: '/api/threads/' + threadId,
-					type: 'DELETE'
-				}).done(resolve).fail(reject);
+				console.log('Calling Gmail API threads.modify (archiving)', threadId);
+				gapi.client.gmail.users.threads.modify({
+					userId: 'me',
+					id: threadId,
+					removeLabelIds: ['INBOX']
+				}).execute(function (resp) {
+					console.log('Gmail API thread.modify (archiving) responded with', resp);
+					if (resp.id === threadId) {
+						resolve(resolve); //Successfully deleted from gmail.
+					} else {
+						//delete not successful.
+						if (resp.code === 403) {
+							//TODO: Insufficient permissions.
+						}
+						reject(resp);
+					}
+				});
 			});
+		}).then(function() {
+			return deleteOnLocalCache(threadId);
 		}).then(function() {
 			deleteThreadFromUI(threadId);
 		});
@@ -212,6 +246,24 @@ $(function() {
 			window.open('https://mail.google.com/mail/u/0/#inbox/' + threadId,'_blank');
 		} else {
 			console.log("Tried to view-on-gmail from threadViewer, but there's no thread id.");
+		}
+		return false;
+	});
+	$main.on('click', 'button.archive-thread', function(eventObject) {
+		var btnDelete = eventObject.currentTarget;
+		var $divThread = $(btnDelete).parents('.thread[data-thread-id]');
+		var threadId = $divThread.data('threadId');
+		archiveThread(threadId).done();
+		return false;
+	});
+	$threadViewer.find('button.archive-thread').on('click', function() {
+		var threadId = $threadViewer.data('threadId');
+		if (threadId) {
+			archiveThread(threadId).then(function() {
+				$threadViewer.modal('hide');
+			}).done();
+		} else {
+			console.log("Tried to archive from threadViewer, but there's no thread id.");
 		}
 		return false;
 	});
