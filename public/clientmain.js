@@ -285,7 +285,7 @@ $(function() {
 				console.log("Forgot to implement", $(btnClicked).data('value'));
 				return;
 		}
-		console.log("Hiding thread", threadId, "until", hideUntil.fromNow(), hideUntil.format());
+		console.log("Hiding thread", threadId, "until", hideUntil.fromNow(), hideUntil.format(), hideUntil.valueOf());
 		$.ajax({
 			url: '/api/threads/' + threadId + '/hideUntil',
 			data: { hideUntil: hideUntil.valueOf() },
