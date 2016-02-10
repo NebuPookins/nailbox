@@ -56,6 +56,16 @@ html(lang="en")
 			.thread:hover {
 				background: #ff8
 			}
+			.message-body {
+				overflow-x: auto;
+			}
+			@media (min-width: 1041px) {
+				#thread-viewer .modal-dialog {
+					width: 949px;
+				}
+			}
+
+
 	body
 		.container
 			#status.jumbotron
@@ -208,5 +218,5 @@ html(lang="en")
 								| {{prettyTimestamp date}}
 				.panel-body
 					.row
-						.col-xs-12
+						.col-xs-12.message-body
 							| {{& body.sanitized}}

@@ -499,7 +499,7 @@ ensureDirectoryExists('data/threads').then(function() {
 				p: ['style'],
 				span: ['style'],
 				table: ['align', 'bgcolor', 'border', 'cellpadding', 'cellspacing', 'style', 'width'],
-				td: ['align', 'background', 'bgcolor', 'colspan', 'height', 'style', 'valign', 'width'],
+				td: ['align', 'background', 'bgcolor', 'colspan', 'height', 'rowspan', 'style', 'valign', 'width'],
 			},
 			nonTextTags: [ 'style', 'script', 'textarea', 'title' ]
 		});
