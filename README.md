@@ -4,6 +4,12 @@ The world's second best e-mail client. (Inspired by Mailbox)
 
 ![Screencast from 2016-Feb-08](http://i.imgur.com/SMVtrpD.gif =955x471)
 
+## What makes it so great?
+
+![Screenshot showing "Later" button](http://i.imgur.com/vZyYYP0.png)
+
+Mailbox-style "Show me this e-mail later"
+
 ## Can I use this right now?
 
 The software is in an extremely early beta.
