@@ -64,8 +64,6 @@ html(lang="en")
 					width: 949px;
 				}
 			}
-
-
 	body
 		.container
 			#status.jumbotron
@@ -98,7 +96,7 @@ html(lang="en")
 								span.glyphicon.glyphicon-remove
 							button.btn.btn-xs.btn-warning.later(title="Later")
 								span.glyphicon.glyphicon-time
-							button.btn.btn-xs.btn-primary.disabled(title="Label: Not Implemented Yet!")
+							button.btn.btn-xs.btn-primary.label-thread(title="Label")
 								span.glyphicon.glyphicon-list
 							button.btn.btn-xs.btn-default.view-on-gmail(title="View on Gmail")
 								span.glyphicon.glyphicon-option-horizontal
@@ -146,6 +144,17 @@ html(lang="en")
 								.button(data-value="custom")
 									.glyphicon.glyphicon-pencil
 									.later-label.noselect Pick a Date
+		#label-picker.modal.fade(tabindex="-1" role="dialog")
+			.modal-dialog
+				.modal-content
+					.modal-header
+						h4.modal-title Subject Line Here
+					.modal-body
+						ul.label-list
+							li Inbox
+							li Spam
+							li Trash
+							li Unread
 		script(type='text/javascript' src='https://apis.google.com/js/client.js?onload=checkAuth')
 		script(type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js')
 		script(type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/js/bootstrap.min.js")
@@ -180,6 +189,10 @@ html(lang="en")
 				.row
 					.col-xs-10
 						strong.subject {{subject}}
+						span
+							| {{#each mainDisplayedLabelIds}}
+							span.badge {{labelIdToName this}}
+							| {{/each}}
 						p.snippet {{snippet}}
 					.col-xs-2
 						button.btn.btn-xs.btn-success.archive-thread(title="Done")
@@ -188,7 +201,7 @@ html(lang="en")
 							span.glyphicon.glyphicon-remove
 						button.btn.btn-xs.btn-warning.later(title="Later")
 							span.glyphicon.glyphicon-time
-						button.btn.btn-xs.btn-primary.disabled(title="Label: Not Implemented Yet!")
+						button.btn.btn-xs.btn-primary.label-thread(title="Label")
 							span.glyphicon.glyphicon-list
 						a.btn.btn-xs.btn-default.view-on-gmail(title="View on Gmail" href="https://mail.google.com/mail/u/0/#inbox/{{threadId}}" target="_blank")
 							span.glyphicon.glyphicon-option-horizontal
@@ -197,7 +210,9 @@ html(lang="en")
 				.panel-heading
 					.panel-title {{num}} deleted {{pluralize num "message" "messages"}}
 				.panel-body
-					| This thread contains {{num}} deleted {{pluralize num "message" "messages"}}. You can view them at <a href="https://mail.google.com/mail/u/0/#trash/{{threadId}}" target="_blank">https://mail.google.com/mail/u/0/#trash/{{threadId}}</a>.
+					| This thread contains {{num}} deleted {{pluralize num "message" "messages"}}.
+					| You can view {{pluralize num "it" "them"}} at
+					| <a href="https://mail.google.com/mail/u/0/#trash/{{threadId}}" target="_blank">https://mail.google.com/mail/u/0/#trash/{{threadId}}</a>.
 		script#handlebar-message(type='text/x-handlebars-template')
 			.message.panel.panel-default
 				.panel-heading
@@ -220,3 +235,8 @@ html(lang="en")
 					.row
 						.col-xs-12.message-body
 							| {{& body.sanitized}}
+		script#handlebar-label-selection(type='text/x-handlebars-template')
+			| <button class="btn {{#if isSystem}}btn-warning{{else}}{{/if}}" {{#if isSystem}}{{else}}style="background-image: linear-gradient(to bottom,hsl({{hue}},84%,40%),hsl({{hue}},84%,38%) 100%); border-color: hsl({{hue}},85%,26%); color:#fff; text-shadow: 0 -1px 0 rgba(0,0,0,.2);"{{/if}}" data-label-id="{{id}}")>
+			| {{labelIdToName id}}
+			| </button>
+

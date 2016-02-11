@@ -415,7 +415,10 @@ ensureDirectoryExists('data/threads').then(function() {
 							lastUpdated: threadLastUpdated(threadData),
 							subject: mostRecentSubjectInThread(threadData),
 							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
-							messageIds: threadData.messages.map(message => message.id)
+							messageIds: threadData.messages.map(message => message.id),
+							labelIds: _.uniq(threadData.messages
+								.map(message => message.labelIds)
+								.reduce((a, b) => a.concat(b))) //Flatten the array of arrays.
 						};
 					}, function(e) {
 						//If you couldn't read certain thread files, just keep proceeding.
@@ -522,10 +525,16 @@ ensureDirectoryExists('data/threads').then(function() {
 	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, function(req, res) {
 		const threadId = req.params[0];
 		readThreadFromFile(threadId).then(function(threadData) {
-			res.status(200).send(threadData.messages.map(loadRelevantDataFromMessage));
+			res.status(200).send({
+				messages: threadData.messages.map(loadRelevantDataFromMessage)
+			});
 		}, function(err) {
-			logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
-			res.sendStatus(500);
+			if (err.code === 'ENOENT') {
+				res.sendStatus(404);
+			} else {
+				logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
+				res.sendStatus(500);
+			}
 		}).done();
 	});
 
