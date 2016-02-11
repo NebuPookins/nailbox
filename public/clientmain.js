@@ -23,6 +23,7 @@ $(function() {
 	handlebarsTemplates.thread = Handlebars.compile($('#handlebar-thread').html());
 	handlebarsTemplates.message = Handlebars.compile($('#handlebar-message').html());
 	handlebarsTemplates.deletedMessages = Handlebars.compile($('#handlebar-deleted-messages').html());
+	handlebarsTemplates.labelSelection = Handlebars.compile($('#handlebar-label-selection').html());
 	Handlebars.registerHelper('nMore', function(total, amountToSubtract) {
 		if (typeof amountToSubtract !== 'number') {
 			amountToSubtract = 1;
@@ -45,8 +46,42 @@ $(function() {
 	});
 
 	Handlebars.registerHelper('pluralize', function(number, singular, plural) {
-		return number === 1 ? single : plural;
+		return number === 1 ? singular : plural;
 	});
+
+	Handlebars.registerHelper('labelIdToName', function(labelId) {
+		/*
+		 * If the promise isn't ready yet, just immediately return an empty string.
+		 * We want to show the e-mails right away, even if it means we don't know
+		 * the labels yet.
+		 */
+		var promiseSnapshot = promisedLabels.inspect();
+		if (promiseSnapshot.state === 'fulfilled') {
+			var labelObj = promiseSnapshot.value.find(function(label) { return label.id === labelId; });
+			/*
+			 * For whatever reason, the system labels that begin with "CATEGORY_"
+			 * (e.g. "CATEGORY_SOCIAL") don't have a pleasant display name.
+			 */
+			var match = /^CATEGORY_([A-Z]+)$/.exec(labelObj.id);
+			if (labelObj.type === 'system' && match !== null) {
+				return match[1].charAt(0).toUpperCase() + match[1].substr(1).toLowerCase();
+			}
+			return promiseSnapshot.value.find(function(label) { return label.id === labelId; }).name;
+		} else {
+			return '';
+		}
+	});
+
+	String.prototype.hashCode = function() {
+		var hash = 0, i, chr, len;
+		if (this.length === 0) return hash;
+		for (i = 0, len = this.length; i < len; i++) {
+			chr   = this.charCodeAt(i);
+			hash  = ((hash << 5) - hash) + chr;
+			hash |= 0; // Convert to 32bit integer
+		}
+		return hash;
+	};
 
 	/**
 	 * Waits for the global variable `gapi`, representing the Google API, to
@@ -100,12 +135,36 @@ $(function() {
 			$('#status').hide();
 			$main.text('');
 			threads.forEach(function(thread) {
-				$main.append(handlebarsTemplates.thread(thread));
+				var filteredThread = thread;
+				filteredThread.mainDisplayedLabelIds = thread.labelIds.filter(function(labelId) {
+					switch (labelId) {
+						/*
+						 * Every e-mail we display is in the INBOX.
+						 */
+						case 'INBOX': return false;
+						/*
+						 * Controversial design choice: We think inbox zero is facilitated
+						 * if we get rid of the distracting concept of a read e-mail vs an
+						 * unread e-mail.
+						 */
+						case 'UNREAD': return false;
+						case 'SENT': return false;
+						case 'TRASH': return false;
+						default: return true;
+					}
+				})
+				var $thread = $(handlebarsTemplates.thread(filteredThread));
+				$thread.data('labelIds', thread.labelIds);
+				$main.append($thread);
 			})
 		})
 	}
 
 	showThreads();
+	setInterval(function() {
+		console.log('Refreshing threads.');
+		showThreads();
+	}, moment.duration(5, 'minutes').as('milliseconds'));
 
 	function getAuthorizationGetter(gapi, clientId) {
 		var alreadyPromisedScopes = {};
@@ -131,6 +190,28 @@ $(function() {
 		waitForGapiToLoad(), promisedClientId
 	]).spread(function(gapi, clientId) {
 		return getAuthorizationGetter(gapi, clientId);
+	});
+
+	var promisedLabels = promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
+		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly');
+	}).then(function(gapi) {
+		return Q.Promise(function(resolve, reject) {
+			gapi.client.gmail.users.labels.list({
+				userId: 'me'
+			}).execute(function(resp) {
+				if (_.isArray(resp.labels)) {
+					resolve(_.sortBy(resp.labels, function(label) {
+						/*
+						 * Show all the system labels before the user labels, then sort
+						 * within each category by name.
+						 */
+						return (label.type === 'system' ? 'A' : 'B') + label.name.toLowerCase();
+					}));
+				} else {
+					reject(resp);
+				}
+			});
+		});
 	});
 
 	promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
@@ -214,6 +295,38 @@ $(function() {
 		});
 	}
 
+	function moveThreadToLabel(threadId, labelId) {
+		//TODO: Share code with archiveThread
+		return promisedFnAuthorizationGetter.then(function requestDeletePermission(fnAuthorizationGetter) {
+			return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.modify');
+		}).then(function(gapi) {
+			return Q.Promise(function(resolve, reject) {
+				console.log('Calling Gmail API threads.modify (moving to label)', threadId);
+				gapi.client.gmail.users.threads.modify({
+					userId: 'me',
+					id: threadId,
+					removeLabelIds: ['INBOX','UNREAD'],
+					addLabelIds: [labelId]
+				}).execute(function (resp) {
+					console.log('Gmail API thread.modify (moving to label) responded with', resp);
+					if (resp.id === threadId) {
+						resolve(resolve); //Successfully deleted from gmail.
+					} else {
+						//delete not successful.
+						if (resp.code === 403) {
+							//TODO: Insufficient permissions.
+						}
+						reject(resp);
+					}
+				});
+			});
+		}).then(function() {
+			return deleteOnLocalCache(threadId);
+		}).then(function() {
+			deleteThreadFromUI(threadId);
+		});
+	}
+
 	var $threadViewer = $('#thread-viewer');
 
 
@@ -267,27 +380,73 @@ $(function() {
 		}
 		return false;
 	});
+	var $labelPicker = $('#label-picker');
 	var $laterPicker = $('#later-picker');
-	$main.on('click', 'button.later', function(eventObject) {
-		var btnLater = eventObject.currentTarget;
-		var $divThread = $(btnLater).parents('.thread[data-thread-id]');
+	function mainClickerShowPicker($mainBtnClicked, $picker) {
+		var $divThread = $mainBtnClicked.parents('.thread[data-thread-id]');
 		var threadId = $divThread.data('threadId');
-		$laterPicker.find('.modal-title').text($divThread.find('.subject').text());
-		$laterPicker.data('threadId', threadId);
-		$laterPicker.modal('show');
+		$picker.find('.modal-title').text($divThread.find('.subject').text());
+		$picker.data('threadId', threadId);
+		$picker.modal('show');
 		return false;
-	});
-	$threadViewer.find('button.later').on('click', function() {
+	}
+	function switchFromThreadViewerToPicker($picker) {
 		var threadId = $threadViewer.data('threadId');
 		if (threadId) {
 			$threadViewer.modal('hide');
-			$laterPicker.find('.modal-title').text('TODO');
-			$laterPicker.data('threadId', threadId);
-			$laterPicker.modal('show');
+			$picker.find('.modal-title').text($threadViewer.find('.modal-title').text());
+			$picker.data('threadId', threadId);
+			$picker.modal('show');
 		} else {
-			console.log("Tried to do `later` from threadViewer, but there's no thread id.");
+			console.log("Tried to switch from threadViewer to ", $picker, ", but there's no thread id.");
 		}
 		return false;
+	}
+	$main.on('click', 'button.label-thread', function(eventObject) {
+		promisedLabels.then(function(labels) {
+			var $mainBtnClicked = $(eventObject.currentTarget);
+			var $divThread = $mainBtnClicked.parents('.thread[data-thread-id]');
+			var $labelList = $labelPicker.find('ul.label-list');
+			$labelList.empty();
+			labels
+				.filter(function(label) {
+					return label.labelListVisibility !== 'labelHide';
+				}).filter(function(label) {
+					/*
+					 * According to https://developers.google.com/gmail/api/guides/labels
+					 * SENT and DRAFT cannot be manually applied.
+					 */
+					return label.id !== 'SENT' && label.id !== 'DRAFT';
+				}).filter(function(label) {
+					/*
+					 * This command is more about moving to a folder than labelling.
+					 * Remove the labels where it doesn't make sense to "move" into.
+					 */
+					return label.id !== 'INBOX' &&
+						label.id !== 'IMPORTANT' &&
+						label.id !== 'STARRED' &&
+						label.id !== 'TRASH' &&
+						label.id !== 'UNREAD';
+				}).forEach(function(label) {
+					$labelList.append(handlebarsTemplates.labelSelection({
+						id: label.id,
+						isSystem: label.type === 'system',
+						hue: (label.name.hashCode() % 360)
+					}));
+				});
+			mainClickerShowPicker($mainBtnClicked, $labelPicker);
+		}).done();
+		return false;
+	});
+	$threadViewer.find('button.label-thread').on('click', function() {
+		return switchFromThreadViewerToPicker($labelPicker);
+	});
+	
+	$main.on('click', 'button.later', function(eventObject) {
+		return mainClickerShowPicker($(eventObject.currentTarget), $laterPicker);
+	});
+	$threadViewer.find('button.later').on('click', function() {
+		return switchFromThreadViewerToPicker($laterPicker);
 	});
 	$laterPicker.on('click', '.button', function(eventObject) {
 		var threadId = $laterPicker.data('threadId');
@@ -350,6 +509,17 @@ $(function() {
 		});
 		return false;
 	});
+	$labelPicker.on('click', 'button', function(eventObject) {
+		var threadId = $labelPicker.data('threadId');
+		if (!threadId) {
+			console.log('Tried to hide thread from laterPicker, but no threadId found.');
+			return;
+		}
+		var labelId = $(eventObject.currentTarget).data('label-id');
+		moveThreadToLabel(threadId, labelId).then(function() {
+			$labelPicker.modal('hide');
+		}).done();
+	});
 	
 	$main.on('click', 'div.thread', function(eventObject) {
 		var $threadDiv = $(eventObject.currentTarget);
@@ -369,12 +539,12 @@ $(function() {
 			}
 			$threadViewer.find('.loading-img').hide();
 			$threads.empty();
-			var nonDeletedMessages = threadData.filter(function(message) {
+			var nonDeletedMessages = threadData.messages.filter(function(message) {
 				return !message.deleted;
 			})
-			if (threadData.length > nonDeletedMessages.length) {
+			if (threadData.messages.length > nonDeletedMessages.length) {
 				$threads.append(handlebarsTemplates.deletedMessages({
-					num: threadData.length - nonDeletedMessages.length,
+					num: threadData.messages.length - nonDeletedMessages.length,
 					threadId: threadId
 				}));
 			}
