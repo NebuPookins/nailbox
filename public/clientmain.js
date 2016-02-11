@@ -402,44 +402,48 @@ $(function() {
 		}
 		return false;
 	}
+	var promisedThatLabelsOnLabelPickerArePopulated = promisedLabels.then(function(labels) {
+		var $labelList = $labelPicker.find('ul.label-list');
+		$labelList.empty();
+		labels
+			.filter(function(label) {
+				return label.labelListVisibility !== 'labelHide';
+			}).filter(function(label) {
+				/*
+				 * According to https://developers.google.com/gmail/api/guides/labels
+				 * SENT and DRAFT cannot be manually applied.
+				 */
+				return label.id !== 'SENT' && label.id !== 'DRAFT';
+			}).filter(function(label) {
+				/*
+				 * This command is more about moving to a folder than labelling.
+				 * Remove the labels where it doesn't make sense to "move" into.
+				 */
+				return label.id !== 'INBOX' &&
+					label.id !== 'IMPORTANT' &&
+					label.id !== 'STARRED' &&
+					label.id !== 'TRASH' &&
+					label.id !== 'UNREAD';
+			}).forEach(function(label) {
+				$labelList.append(handlebarsTemplates.labelSelection({
+					id: label.id,
+					isSystem: label.type === 'system',
+					hue: (label.name.hashCode() % 360)
+				}));
+			});
+	});
 	$main.on('click', 'button.label-thread', function(eventObject) {
-		promisedLabels.then(function(labels) {
-			var $mainBtnClicked = $(eventObject.currentTarget);
-			var $divThread = $mainBtnClicked.parents('.thread[data-thread-id]');
-			var $labelList = $labelPicker.find('ul.label-list');
-			$labelList.empty();
-			labels
-				.filter(function(label) {
-					return label.labelListVisibility !== 'labelHide';
-				}).filter(function(label) {
-					/*
-					 * According to https://developers.google.com/gmail/api/guides/labels
-					 * SENT and DRAFT cannot be manually applied.
-					 */
-					return label.id !== 'SENT' && label.id !== 'DRAFT';
-				}).filter(function(label) {
-					/*
-					 * This command is more about moving to a folder than labelling.
-					 * Remove the labels where it doesn't make sense to "move" into.
-					 */
-					return label.id !== 'INBOX' &&
-						label.id !== 'IMPORTANT' &&
-						label.id !== 'STARRED' &&
-						label.id !== 'TRASH' &&
-						label.id !== 'UNREAD';
-				}).forEach(function(label) {
-					$labelList.append(handlebarsTemplates.labelSelection({
-						id: label.id,
-						isSystem: label.type === 'system',
-						hue: (label.name.hashCode() % 360)
-					}));
-				});
-			mainClickerShowPicker($mainBtnClicked, $labelPicker);
+		promisedThatLabelsOnLabelPickerArePopulated.then(function() {
+			mainClickerShowPicker($(eventObject.currentTarget), $labelPicker);
 		}).done();
 		return false;
 	});
 	$threadViewer.find('button.label-thread').on('click', function() {
-		return switchFromThreadViewerToPicker($labelPicker);
+		promisedThatLabelsOnLabelPickerArePopulated.then(function() {
+		}).then(function() {
+			return switchFromThreadViewerToPicker($labelPicker);
+		}).done();
+		return false;
 	});
 	
 	$main.on('click', 'button.later', function(eventObject) {
