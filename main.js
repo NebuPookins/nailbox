@@ -235,9 +235,30 @@ function getBestBodyFromMessage(messagePart, threadId) {
 			});
 			if (nonAttachments.length == 1) {
 				return getBestBodyFromMessage(nonAttachments[0], threadId);
-			} else {
-				logger.error(util.format("Don't know how to decide between mimeTypes %s in thread %s.", nonAttachments.map(p => p.mimeType), threadId));
 			}
+			logger.error(util.format("Don't know how to decide between mimeTypes %s in thread %s.", nonAttachments.map(p => p.mimeType), threadId));
+			return null;
+		case 'multipart/related':
+			/*
+			 * Not sure I fully understand multipart/related. The one example I've
+			 * seen, there were 3 parts: the main content, and 2 images as attachment.
+			 * The main content was itself a multipart/alternative (from which we'd
+			 * prefer to grab the HTML variant). I suspect the 2 images were images to
+			 * be used in the HTML. Maybe it's so that you could fetch the e-mail and
+			 * then view it offline with no Internet connectivity, but still have the
+			 * images available?
+			 *
+			 * The one heuristic I could pick out is that the main message had no
+			 * filename, while the two images had filenames (presumably so that the
+			 * HTML could refer to them.
+			 */
+			const unnamedParts = messagePart.parts.filter(function(part) {
+				return part.filename === ''
+			});
+			if (unnamedParts.length == 1) {
+				return getBestBodyFromMessage(unnamedParts[0], threadId);
+			}
+			logger.error(util.format("Don't know how to decide between mimeTypes %s in thread %s.", nonAttachments.map(p => p.mimeType), threadId));
 			return null;
 		default:
 			logger.error(util.format("Don't know how to handle mimeType %s in thread %s.", messagePart.mimeType, threadId));
