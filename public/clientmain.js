@@ -169,8 +169,8 @@ $(function() {
 	function getAuthorizationGetter(gapi, clientId) {
 		var alreadyPromisedScopes = {};
 		return function(scope) {
-			if (!alreadyPromisedScopes[scope]) {
-				alreadyPromisedScopes[scope] = Q.Promise(function(resolve, reject) {
+			if ((!alreadyPromisedScopes[scope]) || alreadyPromisedScopes[scope].expiresAt.isBefore(/*now*/)) {
+				var oAuthToken = Q.Promise(function(resolve, reject) {
 					gapi.auth.authorize({client_id: clientId, scope: scope, immediate: true}, function(authResult) {
 						if (authResult.error) {
 							reject(authResult);
@@ -181,8 +181,12 @@ $(function() {
 						}
 					});
 				});
+				alreadyPromisedScopes[scope] = {
+					oAuthToken: oAuthToken,
+					expiresAt: moment().add(oAuthToken.expires_in, 'seconds')
+				};
 			}
-			return alreadyPromisedScopes[scope];
+			return alreadyPromisedScopes[scope].oAuthToken;
 		}
 	}
 
@@ -196,6 +200,7 @@ $(function() {
 		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly');
 	}).then(function(gapi) {
 		return Q.Promise(function(resolve, reject) {
+			console.log("Loading labels...");
 			gapi.client.gmail.users.labels.list({
 				userId: 'me'
 			}).execute(function(resp) {
@@ -214,9 +219,10 @@ $(function() {
 		});
 	});
 
-	promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
+	var promiseThreadsUpdatedFromGmail = promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
 		return saveThreads(fnAuthorizationGetter);
-	}).then(function() {
+	});
+	Q.all([promisedLabels, promiseThreadsUpdatedFromGmail]).then(function() {
 		showThreads();
 	}).done();
 

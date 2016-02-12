@@ -141,6 +141,10 @@ function mostRecentSubjectInThread(threadData) {
 	const newestMessageWithSubject = mostRecentMessageSatisfying(threadData, function(message) {
 		return ! _.isEmpty(headersInMessage('Subject', message));
 	});
+	if (newestMessageWithSubject == null) {
+		logger.warn(util.format("Thread %s has no messages with subject. Can that actually happen?", threadData.id));
+		return null;
+	}
 	return headersInMessage('Subject', newestMessageWithSubject)[0].value;
 }
 
