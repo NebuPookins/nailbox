@@ -19,7 +19,7 @@ $(function() {
 	});
 	var $main = $('#main');
 
-	var handlebarsTemplates = {}
+	var handlebarsTemplates = {};
 	handlebarsTemplates.thread = Handlebars.compile($('#handlebar-thread').html());
 	handlebarsTemplates.message = Handlebars.compile($('#handlebar-message').html());
 	handlebarsTemplates.deletedMessages = Handlebars.compile($('#handlebar-deleted-messages').html());
@@ -152,12 +152,12 @@ $(function() {
 						case 'TRASH': return false;
 						default: return true;
 					}
-				})
+				});
 				var $thread = $(handlebarsTemplates.thread(filteredThread));
 				$thread.data('labelIds', thread.labelIds);
 				$main.append($thread);
-			})
-		})
+			});
+		});
 	}
 
 	showThreads();
@@ -187,7 +187,7 @@ $(function() {
 				};
 			}
 			return alreadyPromisedScopes[scope].oAuthToken;
-		}
+		};
 	}
 
 	var promisedFnAuthorizationGetter = Q.all([
@@ -208,7 +208,7 @@ $(function() {
 						reject(resp);
 					}
 				});
-		})
+		});
 	});
 
 	var promisedLabels = promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
@@ -372,7 +372,7 @@ $(function() {
 					threadId: threadId,
 					body: $threadViewer.find('.reply textarea').val(),
 					inReplyTo: $threadViewer.find('.threads .message:last').data('messageId')
-				}).done(resolve).fail(reject)
+				}).done(resolve).fail(reject);
 			});
 		});
 		promisedFnAuthorizationGetter.then(function requestDeletePermission(fnAuthorizationGetter) {
@@ -395,9 +395,9 @@ $(function() {
 						}
 					});
 				});
-			})
+			});
 		}).then(function() {
-			$threadViewer.find('.reply textarea').val('')
+			$threadViewer.find('.reply textarea').val('');
 			$threadViewer.modal('hide');
 		}).done();
 	});
@@ -414,7 +414,7 @@ $(function() {
 	});
 	$main.on('click', 'a.view-on-gmail', function(eventObject) {
 		//Prevent bubbling, but otherwise do nothing since it's a link.
-		eventObject.stopPropagation()
+		eventObject.stopPropagation();
 		return true;
 	});
 	$threadViewer.find('button.view-on-gmail').on('click', function() {
@@ -531,26 +531,26 @@ $(function() {
 				hideUntil = {
 					type: 'timestamp',
 					value: moment().add(3, 'hours').valueOf()
-				}
+				};
 				break;
 			case 'evening':
 				if (moment().add(3, 'hours').isBefore(todaysEvening)) {
 					hideUntil = {
 						type: 'timestamp',
 						value: todaysEvening.valueOf()
-					}
+					};
 				} else {
 					hideUntil = {
 						type: 'timestamp',
 						value: tomorrowsEvening.valueOf()
-					}
+					};
 				}
 				break;
 			case 'tomorrow':
 				hideUntil = {
 					type: 'timestamp',
 					value: moment().hour(7).startOf('hour').add(1, 'day').valueOf()
-				}
+				};
 				break;
 			case 'weekend':
 				var weekend = moment().day(6).hour(7).startOf('hour');
@@ -560,7 +560,7 @@ $(function() {
 				hideUntil = {
 					type: 'timestamp',
 					value: weekend.valueOf()
-				}
+				};
 				break;
 			case 'monday':
 				var monday = moment().day(1).hour(7).startOf('hour');
@@ -570,26 +570,26 @@ $(function() {
 				hideUntil = {
 					type: 'timestamp',
 					value: monday.valueOf()
-				}
+				};
 				break;
 			case 'month':
 				hideUntil = {
 					type: 'timestamp',
 					value: moment().add(1, 'month').hour(7).startOf('hour').valueOf()
-				}
+				};
+				break;
 			case 'someday':
 				hideUntil = {
 					type: 'timestamp',
 					value: moment().add(6, 'month').hour(7).startOf('hour').valueOf()
-				}
+				};
 				break;
 			case 'when-i-have-time':
 				hideUntil = {
 					type: 'when-i-have-time'
-				}
+				};
 				break;
-			case 'custom':
-				//TODO
+			//case 'custom': //TODO
 			default:
 				console.log("Forgot to implement", $(btnClicked).data('value'));
 				return;
@@ -622,7 +622,7 @@ $(function() {
 	$main.on('click', 'div.thread', function(eventObject) {
 		var $threadDiv = $(eventObject.currentTarget);
 		var threadId = $threadDiv.data('threadId');
-		var $threads = $threadViewer.find('.threads')
+		var $threads = $threadViewer.find('.threads');
 		$threadViewer.data('threadId', threadId);
 		$threadViewer.find('.modal-title').text($threadDiv.find('.subject').text());
 		$threadViewer.find('.senders').text($threadDiv.find('.senders').attr('title') || '');
@@ -639,7 +639,7 @@ $(function() {
 			$threads.empty();
 			var nonDeletedMessages = threadData.messages.filter(function(message) {
 				return !message.deleted;
-			})
+			});
 			if (threadData.messages.length > nonDeletedMessages.length) {
 				$threads.append(handlebarsTemplates.deletedMessages({
 					num: threadData.messages.length - nonDeletedMessages.length,
