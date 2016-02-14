@@ -353,6 +353,63 @@ function readJsonFromOptionalFile(path) {
 	});
 }
 
+/**
+ * Returns a comparator (function) that sorts messages so that "newer" ones
+ * show up near the top, a message timestamp-hidden to 2015-jan-01 is treated as
+ * if it was lastUpdated on 2015-jan-01. Messages that are hidden "until I have
+ * time" are sorted last.
+ *
+ * The returned function takes 2 params and expects them to be objects with
+ * properties "threadId" and "lastUpdated".
+ */
+function createComparatorForThreadsForMainView(hideUntils) {
+	return (a, b) => {
+		var hideAUntil = hideUntils[a.threadId] || {type: 'none'};
+		var hideBUntil = hideUntils[b.threadId] || {type: 'none'};
+		switch (hideAUntil.type) {
+			case 'when-i-have-time':
+				switch (hideBUntil.type) {
+					case 'when-i-have-time':
+						return hideBUntil.hiddenOn - hideAUntil.hiddenOn;
+					case 'timestamp':
+						return 1;
+					case 'none':
+						return 1;
+					default:
+						logger.error(util.format("Don't know how to sort with hideBUntil.type == %s", hideAUntil.type));
+						return 0;
+				}
+			case 'timestamp':
+				switch (hideBUntil.type) {
+					case 'when-i-have-time':
+						return -1;
+					case 'timestamp':
+						return hideBUntil.value - hideAUntil.value;
+					case 'none':
+						return b.lastUpdated - hideAUntil.value;
+					default:
+						logger.error(util.format("Don't know how to sort with hideBUntil.type == %s", hideAUntil.type));
+						return 0;
+				}
+			case 'none':
+				switch (hideBUntil.type) {
+					case 'when-i-have-time':
+						return -1;
+					case 'timestamp':
+						return hideBUntil.value - a.lastUpdated;
+					case 'none':
+						return b.lastUpdated - a.lastUpdated;
+					default:
+						logger.error(util.format("Don't know how to sort with hideBUntil.type == %s", hideAUntil.type));
+						return 0;
+				}
+			default:
+				logger.error(util.format("Don't know how to sort with hideAUntil.type == %s", hideAUntil.type));
+				return 0;
+		}
+	}
+}
+
 logger.info("Checking directory structure...");
 ensureDirectoryExists('data/threads').then(function() {
 	return logger.info("Directory structure looks fine.");
@@ -455,13 +512,18 @@ ensureDirectoryExists('data/threads').then(function() {
 						.filter(file => file !== null)
 						.filter(function hideMessagesForLater(file) {
 							var hideUntil = hideUntils[file.threadId];
-							return (!hideUntil) || (hideUntil < now);
+							if (!hideUntil) {
+								return true;
+							}
+							if (hideUntil.type === 'timestamp') {
+								return hideUntil.value < now;
+							}
+							return true;
 						});
+					files.sort(createComparatorForThreadsForMainView(hideUntils));
 					res.status(200);
 					res.type('json');
-					res.send(_.sortBy(files, function(thread) {
-						return -thread.lastUpdated;
-					}));
+					res.send(files);
 				}).done();
 			}
 		});
@@ -490,15 +552,39 @@ ensureDirectoryExists('data/threads').then(function() {
 
 	app.put(/^\/api\/threads\/([a-z0-9]+)\/hideUntil$/, function(req, res) {
 		const threadId = req.params[0];
-		const hideUntil = req.body.hideUntil;
-		logger.info(util.format("Hiding thread %s until %d", threadId, hideUntil));
-		hideUntils[threadId] = hideUntil;
-		saveJsonToFile(hideUntils, PATH_TO_HIDE_UNTILS).then(function() {
-			res.sendStatus(200);
-		}, function(err) {
-			logger.error(util.format("Failed to save hideUntils: %j", err));
-			res.sendStatus(500);
-		});
+		const hideUntil = req.body;
+		switch (hideUntil.type) {
+			case 'timestamp':
+				var hideUntilTimestamp = parseInt(hideUntil.value);
+				logger.info(util.format("Hiding thread %s until timestamp %j", threadId, hideUntilTimestamp));
+				hideUntils[threadId] = {
+					type: 'timestamp',
+					value: hideUntilTimestamp
+				};
+				saveJsonToFile(hideUntils, PATH_TO_HIDE_UNTILS).then(function() {
+					res.sendStatus(200);
+				}, function(err) {
+					logger.error(util.format("Failed to save hideUntils: %j", err));
+					res.sendStatus(500);
+				});
+				return;
+			case 'when-i-have-time':
+				logger.info(util.format("Hiding thread %s until I have time", threadId));
+				hideUntils[threadId] = {
+					type: 'when-i-have-time',
+					hiddenOn: Date.now(),
+				};
+				saveJsonToFile(hideUntils, PATH_TO_HIDE_UNTILS).then(function() {
+					res.sendStatus(200);
+				}, function(err) {
+					logger.error(util.format("Failed to save hideUntils: %j", err));
+					res.sendStatus(500);
+				});
+				return;
+			default:
+				logger.error(util.format("Don't know how to handle hideUntil.type %s", hideUntil.type));
+				res.status(400).send("Invalid hideUntil.type");
+		}
 	});
 
 	function loadRelevantDataFromMessage(objMessage) {
