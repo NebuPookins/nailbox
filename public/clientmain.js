@@ -106,7 +106,7 @@ $(function() {
 				gapi.client.gmail.users.threads.list({
 					'userId': 'me',
 					'labelIds': ['INBOX']
-				}).execute(resolve);
+				}).execute(resolve); //TODO: Handle errors
 			}).then(function(resp) {
 				return resp.threads.map(function(item) {
 					return Q.promise(function(resolve, reject) {
@@ -194,6 +194,21 @@ $(function() {
 		waitForGapiToLoad(), promisedClientId
 	]).spread(function(gapi, clientId) {
 		return getAuthorizationGetter(gapi, clientId);
+	});
+
+	var promisedMyEmail = promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
+		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly');
+	}).then(function(gapi) {
+		return Q.Promise(function(resolve, reject) {
+			gapi.client.gmail.users.getProfile({userId: 'me'})
+				.execute(function(resp) {
+					if (resp.emailAddress) {
+						resolve(resp.emailAddress);
+					} else {
+						reject(resp);
+					}
+				});
+		})
 	});
 
 	var promisedLabels = promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
@@ -342,6 +357,49 @@ $(function() {
 		var threadId = $divThread.data('threadId');
 		deleteThread(threadId).done();
 		return false;
+	});
+	$threadViewer.find('button.reply-all').on('click', function() {
+		var threadId = $threadViewer.data('threadId');
+		if (!threadId) {
+			console.log("Tried to reply to thread from threadViewer, but there was no threadId.");
+			return;
+		}
+		var promisedEncodedEmail = promisedMyEmail.then(function(myEmail) {
+			return Q.Promise(function(resolve, reject) {
+				console.log('POST-ing to get RFC2822 content...');
+				$.post('/api/rfc2822', {
+					myEmail: myEmail,
+					threadId: threadId,
+					body: $threadViewer.find('.reply textarea').val(),
+					inReplyTo: $threadViewer.find('.threads .message:last').data('messageId')
+				}).done(resolve).fail(reject)
+			});
+		});
+		promisedFnAuthorizationGetter.then(function requestDeletePermission(fnAuthorizationGetter) {
+			return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.modify');
+		}).then(function(gapi) {
+			return promisedEncodedEmail.then(function(base64EncodedEmail) {
+				return Q.Promise(function(resolve, reject) {
+					gapi.client.gmail.users.messages.send({
+						userId: 'me',
+						uploadType: 'media',
+						threadId: threadId,
+						raw: base64EncodedEmail
+					}).execute(function(resp) {
+						if (resp.id) {
+							console.log("Successfully sent message with id", resp.id);
+							resolve(resp);
+						} else {
+							console.log("Failed to send message:", resp);
+							reject(resp);
+						}
+					});
+				});
+			})
+		}).then(function() {
+			$threadViewer.find('.reply textarea').val('')
+			$threadViewer.modal('hide');
+		}).done();
 	});
 	$threadViewer.find('button.delete').on('click', function() {
 		var threadId = $threadViewer.data('threadId');

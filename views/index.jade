@@ -8,9 +8,6 @@ html(lang="en")
 		link(rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap.min.css")
 		link(rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap-theme.min.css")
 		style(type="text/css").
-			.thread {
-				border-bottom: solid 1px black;
-			}
 			#main:empty {
 				background-image: url('/public/pexels-photo-41830.jpeg');
 				background-size: cover;
@@ -53,6 +50,9 @@ html(lang="en")
 				-ms-user-select: none;       /* IE/Edge */
 				user-select: none;           /* non-prefixed version, currently not supported by any browser */
 			}
+			.thread {
+				border-bottom: solid 1px black;
+			}
 			.thread:hover {
 				background: #ff8
 			}
@@ -89,6 +89,9 @@ html(lang="en")
 							.loading-img
 								img.spin.img-responsive.center-block(src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Vector_Loading.svg/1024px-Vector_Loading.svg.png" width="100px" height="100px")
 							.threads
+							.reply
+								textarea(rows=3 placeholder="Type reply here").form-control
+								button.btn.btn-primary.reply-all Reply all
 						.modal-footer
 							button.btn.btn-xs.btn-success.archive-thread(title="Done")
 								span.glyphicon.glyphicon-ok
@@ -216,7 +219,7 @@ html(lang="en")
 					| You can view {{pluralize num "it" "them"}} at
 					| <a href="https://mail.google.com/mail/u/0/#trash/{{threadId}}" target="_blank">https://mail.google.com/mail/u/0/#trash/{{threadId}}</a>.
 		script#handlebar-message(type='text/x-handlebars-template')
-			.message.panel.panel-default
+			.message(data-message-id="{{messageId}}").panel.panel-default
 				.panel-heading
 					.panel-title
 						.row
