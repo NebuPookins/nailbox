@@ -467,38 +467,68 @@ $(function() {
 		var btnClicked = eventObject.currentTarget;
 		var todaysEvening = moment().hour(18).startOf('hour');
 		var tomorrowsEvening = moment(todaysEvening).add(1, 'day');
-		var hideUntil = null;
+		var hideUntil;
 		switch ($(btnClicked).data('value')) {
 			case 'hours':
-				hideUntil = moment().add(3, 'hours');
+				hideUntil = {
+					type: 'timestamp',
+					value: moment().add(3, 'hours').valueOf()
+				}
 				break;
 			case 'evening':
 				if (moment().add(3, 'hours').isBefore(todaysEvening)) {
-					hideUntil = todaysEvening;
+					hideUntil = {
+						type: 'timestamp',
+						value: todaysEvening.valueOf()
+					}
 				} else {
-					hideUntil = tomorrowsEvening;
+					hideUntil = {
+						type: 'timestamp',
+						value: tomorrowsEvening.valueOf()
+					}
 				}
 				break;
 			case 'tomorrow':
-				hideUntil = moment().hour(7).startOf('hour').add(1, 'day');
+				hideUntil = {
+					type: 'timestamp',
+					value: moment().hour(7).startOf('hour').add(1, 'day').valueOf()
+				}
 				break;
 			case 'weekend':
-				hideUntil = moment().day(6).hour(7).startOf('hour');
-				if (hideUntil.isBefore(moment())) {
-					hideUntil.add(1, 'week');
+				var weekend = moment().day(6).hour(7).startOf('hour');
+				if (weekend.isBefore(moment())) {
+					weekend.add(1, 'week');
+				}
+				hideUntil = {
+					type: 'timestamp',
+					value: weekend.valueOf()
 				}
 				break;
 			case 'monday':
-				hideUntil = moment().day(1).hour(7).startOf('hour');
-				if (hideUntil.isBefore(moment())) {
-					hideUntil.add(1, 'week');
+				var monday = moment().day(1).hour(7).startOf('hour');
+				if (monday.isBefore(moment())) {
+					monday.add(1, 'week');
+				}
+				hideUntil = {
+					type: 'timestamp',
+					value: monday.valueOf()
 				}
 				break;
 			case 'month':
-				hideUntil = moment().add(1, 'month').hour(7).startOf('hour');
-				break;
+				hideUntil = {
+					type: 'timestamp',
+					value: moment().add(1, 'month').hour(7).startOf('hour').valueOf()
+				}
 			case 'someday':
-				hideUntil = moment().add(6, 'month').hour(7).startOf('hour');
+				hideUntil = {
+					type: 'timestamp',
+					value: moment().add(6, 'month').hour(7).startOf('hour').valueOf()
+				}
+				break;
+			case 'when-i-have-time':
+				hideUntil = {
+					type: 'when-i-have-time'
+				}
 				break;
 			case 'custom':
 				//TODO
@@ -506,10 +536,10 @@ $(function() {
 				console.log("Forgot to implement", $(btnClicked).data('value'));
 				return;
 		}
-		console.log("Hiding thread", threadId, "until", hideUntil.fromNow(), hideUntil.format(), hideUntil.valueOf());
+		console.log("Hiding thread", threadId, "until", hideUntil);
 		$.ajax({
 			url: '/api/threads/' + threadId + '/hideUntil',
-			data: { hideUntil: hideUntil.valueOf() },
+			data: hideUntil,
 			method: 'PUT'
 		}).done(function() {
 			$laterPicker.modal('hide');
