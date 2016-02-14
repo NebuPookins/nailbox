@@ -145,7 +145,7 @@ function mostRecentSubjectInThread(threadData) {
 	const newestMessageWithSubject = mostRecentMessageSatisfying(threadData, function(message) {
 		return ! _.isEmpty(headersInMessage('Subject', message));
 	});
-	if (newestMessageWithSubject == null) {
+	if (newestMessageWithSubject === null) {
 		logger.warn(util.format("Thread %s has no messages with subject. Can that actually happen?", threadData.id));
 		return null;
 	}
@@ -267,7 +267,7 @@ function getBestBodyFromMessage(messagePart, threadId) {
 			 * HTML could refer to them.
 			 */
 			const unnamedParts = messagePart.parts.filter(function(part) {
-				return part.filename === ''
+				return part.filename === '';
 			});
 			if (unnamedParts.length == 1) {
 				return getBestBodyFromMessage(unnamedParts[0], threadId);
@@ -411,6 +411,7 @@ function createComparatorForThreadsForMainView(hideUntils) {
 						logger.error(util.format("Don't know how to sort with hideBUntil.type == %s", hideAUntil.type));
 						return 0;
 				}
+				break;
 			case 'timestamp':
 				switch (hideBUntil.type) {
 					case 'when-i-have-time':
@@ -423,6 +424,7 @@ function createComparatorForThreadsForMainView(hideUntils) {
 						logger.error(util.format("Don't know how to sort with hideBUntil.type == %s", hideAUntil.type));
 						return 0;
 				}
+				break;
 			case 'none':
 				switch (hideBUntil.type) {
 					case 'when-i-have-time':
@@ -435,11 +437,12 @@ function createComparatorForThreadsForMainView(hideUntils) {
 						logger.error(util.format("Don't know how to sort with hideBUntil.type == %s", hideAUntil.type));
 						return 0;
 				}
+				break;
 			default:
 				logger.error(util.format("Don't know how to sort with hideAUntil.type == %s", hideAUntil.type));
 				return 0;
 		}
-	}
+	};
 }
 
 logger.info("Checking directory structure...");
@@ -711,7 +714,7 @@ ensureDirectoryExists('data/threads').then(function() {
 	app.post('/api/rfc2822', (req, res) => {
 		var missingFields = ['threadId', 'body', 'inReplyTo', 'myEmail'].filter((requiredField) => {
 			return !req.body[requiredField];
-		})
+		});
 		if (missingFields.length > 0) {
 			res.status(400).send(util.format("Must provide %j", missingFields));
 			return;
