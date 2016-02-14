@@ -217,7 +217,7 @@ function getBestBodyFromMessage(messagePart, threadId) {
 			return mimelib.decodeBase64(messagePart.body.data);
 		case 'multipart/alternative':
 			const biggestPart = _.maxBy(messagePart.parts, part => parseInt(part.body.size));
-			return mimelib.decodeBase64(biggestPart.body.data);
+			return getBestBodyFromMessage(biggestPart, threadId);
 		case 'multipart/mixed':
 			//I think this means there's attachments.
 			const nonAttachments = messagePart.parts.filter(function(part) {
@@ -319,11 +319,13 @@ function getBestBodyFromMessage(messagePart, threadId) {
 			mimeType: 'multipart/alternative',
 			parts: [
 				{
+					"mimeType": "text/html",
 					body: {
 						size: 10,
 						data: goodEncoded
 					}
 				}, {
+					"mimeType": "text/html",
 					body: {
 						size: 1,
 						data: badEncoded
@@ -333,6 +335,22 @@ function getBestBodyFromMessage(messagePart, threadId) {
 		}, ''),
 		goodEncoded,
 		"If there are multiple alternatives, picks the larger message, all other factors equal."
+	);
+	assert.equal(
+		getBestBodyFromMessage({
+			mimeType: 'multipart/alternative',
+			parts: [
+				{
+					"mimeType": "text/plain",
+					body: {
+						size: 10,
+						data: goodEncoded
+					}
+				}
+			]
+		}, ''),
+		'<pre>' + goodEncoded + '</pre>',
+		"If an embedded multipart/alternative is text/plain, don't forget to wrap that text/plain in a <pre>."
 	);
 })();
 
