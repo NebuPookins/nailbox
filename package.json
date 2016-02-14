@@ -15,14 +15,18 @@
   "author": "Nebu Pookins <nebupookins@gmail.com>",
   "private": true,
   "dependencies": {
+    "base64url": "^1.0.6",
     "body-parser": "^1.14.2",
     "express": "^4.13.4",
     "html-entities": "^1.2.0",
     "jade": "^1.11.0",
     "lodash": "^4.2.1",
+    "mailcomposer": "^3.6.2",
+    "marked": "^0.3.5",
     "mimelib": "^0.2.19",
     "nebulog": "^0.2.1",
     "node-fs": "^0.1.7",
+    "pygmentize-bundled": "^2.3.0",
     "q": "^1.4.1",
     "sanitize-html": "^1.11.3"
   },

@@ -17,6 +17,10 @@ const mimelib = require("mimelib");
 const sanitizeHtml = require('sanitize-html');
 const Entities = require('html-entities').AllHtmlEntities;
 const entities = new Entities();
+const mailcomposer = require("mailcomposer");
+const marked = require('marked');
+const base64url = require('base64url');
+const pygmentizeBundled = require('pygmentize-bundled');
 
 /**
  * Returns a promise. If the promise resolves successfully, then as a side
@@ -158,7 +162,17 @@ function mostRecentSnippetInThread(threadData) {
 	return newestMessageWithSnippet ? newestMessageWithSnippet.snippet : null;
 }
 
+/**
+ * @return an array that looks like:
+ * [
+ *   { name: 'Alfred Alpha', email: 'aa@gmail.com'},
+ *   { name: '"Beta, Betty"', email: 'bb@gmail.com'}
+ * ]
+ */
 function peopleInThread(threadData, fnFilter) {
+	if (fnFilter === undefined) {
+		fnFilter = () => true;
+	}
 	const recipients = threadData.messages.map(function(message) {
 		return emailAddressesInMessage(message, fnFilter);
 	}).reduce((a, b) => a.concat(b)); //Flatten the array of arrays.
@@ -178,7 +192,7 @@ function emailAddressesInMessage(message, fnHeaderFilter) {
 	return message.payload.headers
 		.filter(fnHeaderFilter)
 		.map(header => parseEmailToString(header.value))
-		.reduce((a, b) => a.concat(b)); //Flatten the array of arrays.
+		.reduce((a, b) => a.concat(b), []); //Flatten the array of arrays.
 }
 
 function readThreadFromFile(threadId) {
@@ -639,6 +653,7 @@ ensureDirectoryExists('data/threads').then(function() {
 		});
 		return {
 			deleted: objMessage.labelIds.indexOf('TRASH') !== -1,
+			messageId: objMessage.id,
 			from: emailAddressesInMessage(
 				objMessage, header => header.name === 'From'),
 			to: emailAddressesInMessage(
@@ -683,6 +698,104 @@ ensureDirectoryExists('data/threads').then(function() {
 		}, function(err) {
 			logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
 			res.sendStatus(500);
+		}).done();
+	});
+
+	/**
+	 * Conceptually, this really should be an idempotent GET operation. You give
+	 * a JSON describing an e-mail, with the body in Markdown format. It then
+	 * generates the base64url encoded stream of characters which, when decoded, is
+	 * an RFC 2822 compliant e-mail ready to be sent to an SMTP server. The reason
+	 * we're using POST instead of GET here is that GET has a max query limit.
+	 */
+	app.post('/api/rfc2822', (req, res) => {
+		var missingFields = ['threadId', 'body', 'inReplyTo', 'myEmail'].filter((requiredField) => {
+			return !req.body[requiredField];
+		})
+		if (missingFields.length > 0) {
+			res.status(400).send(util.format("Must provide %j", missingFields));
+			return;
+		}
+		logger.info(util.format("/api/rfc2822 received for thread %s", req.body.threadId));
+		const bodyPlusSignature = req.body.body + "\n\n---\nSent using [Nailbox](https://github.com/NebuPookins/nailbox/).";
+		readThreadFromFile(req.body.threadId).then(threadData => {
+			var messageInReplyTo = threadData.messages.find(message => {
+				return message.id == req.body.inReplyTo;
+			});
+			if (!messageInReplyTo) {
+				throw {
+					status: 400,
+					message: util.format("Could not find message %s in thread %s", req.body.inReplyTo, req.body.threadId)
+				};
+			}
+			return q.Promise((resolve, reject) => {
+				marked(bodyPlusSignature, {
+					gfm: true,
+					tables: true,
+					breaks: true,
+					smartLists: true,
+					smartypants: true,
+					highlight: (code, lang, callback) => {
+						pygmentizeBundled({
+							lang: lang,
+							format: 'html',
+							options: {
+								noclasses: true,
+								nowrap: true //marked already adds a <pre> tag; no need to double wrap it.
+							}
+						}, code, (err, result) => {
+							callback(err, result.toString());
+						});
+					}
+				}, (err, content) => {
+					if (err) {
+						reject(err);
+					} else {
+						resolve([threadData, content]);
+					}
+				});
+			});
+		}).spread((threadData, htmlizedMarkdown) => {
+			const mostRecentMessage = mostRecentMessageSatisfying(threadData, () => true);
+			const senders = emailAddressesInMessage(mostRecentMessage, header => header.name === 'From');
+			const receivers = emailAddressesInMessage(mostRecentMessage, header => header.name === 'From');
+			const peopleOtherThanYourself = _.uniqBy(
+				senders.concat(receivers)
+					.filter(person => person.email !== req.body.myEmail),
+				recipient => recipient.email
+			);
+			const toLine = peopleOtherThanYourself.map(person => util.format("%s <%s>", person.name, person.email));
+			const mail = mailcomposer({
+				from: req.body.myEmail,
+				to: peopleOtherThanYourself.map(person => util.format("%s <%s>", person.name, person.email)),
+				inReplyTo: req.body.inReplyTo,
+				subject: mostRecentSubjectInThread(threadData),
+				text: bodyPlusSignature,
+				html: util.format('<!DOCTYPE html><html><head>'+
+					'<style type="test/css">blockquote {padding: 10px 20px;margin: 0 0 20px; border-left: 5px solid #eee;}</style>'+
+					'</head><body>%s</body></html>', htmlizedMarkdown)
+			});
+			return q.Promise((resolve, reject) => {
+				mail.build((err, message) => {
+					if (err) {
+						logger.error(util.format("Failed to compose mail %j", err));
+						return reject({
+							status: 500,
+							message: ''
+						});
+					}
+					return resolve(message);
+				});
+			});
+		}).then((resp) => {
+			res.status(200).send(base64url.encode(resp));
+		}, (failResp) => {
+			if (failResp.status && failResp.message) {
+				res.status(failResp.status).send(failResp.message);
+			} else {
+				logger.error(util.inspect(failResp));
+				res.sendStatus(500);
+			}
 		}).done();
 	});
 
