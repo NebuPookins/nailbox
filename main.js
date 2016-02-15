@@ -226,7 +226,7 @@ function readThreadFromFile(threadId) {
 function getBestBodyFromMessage(messagePart, threadId) {
 	switch (messagePart.mimeType) {
 		case 'text/plain':
-			return '<pre>' + mimelib.decodeBase64(messagePart.body.data) + '</pre>';
+			return '<pre>' + entities.encode(mimelib.decodeBase64(messagePart.body.data)) + '</pre>';
 		case 'text/html':
 			return mimelib.decodeBase64(messagePart.body.data);
 		case 'multipart/alternative':
