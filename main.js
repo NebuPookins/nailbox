@@ -280,6 +280,7 @@ function getBestBodyFromMessage(messagePart, threadId) {
 	}
 }
 (function test_getBestBodyFromMessage() {
+	console.log("Running tests on getBestBodyFromMessage...")
 	const badDecoded = "bad";
 	const goodDecoded = "good";
 	const badEncoded = mimelib.encodeBase64(badDecoded);
