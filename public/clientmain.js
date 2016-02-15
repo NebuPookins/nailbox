@@ -103,11 +103,13 @@ $(function() {
 	function saveThreads(fnAuthorizationGetter) {
 		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly').then(function(gapi) {
 			return Q.Promise(function(resolve, reject) {
+				console.log("Downloading list of threads from Gmail...");
 				gapi.client.gmail.users.threads.list({
 					'userId': 'me',
 					'labelIds': ['INBOX']
 				}).execute(resolve); //TODO: Handle errors
 			}).then(function(resp) {
+				console.log("Downloading threads from Gmail...");
 				return resp.threads.map(function(item) {
 					return Q.promise(function(resolve, reject) {
 						gapi.client.gmail.users.threads.get({
@@ -238,6 +240,7 @@ $(function() {
 		return saveThreads(fnAuthorizationGetter);
 	});
 	Q.all([promisedLabels, promiseThreadsUpdatedFromGmail]).then(function() {
+		console.log("Updating GUI with updated threads from GMail.");
 		showThreads();
 	}).done();
 
