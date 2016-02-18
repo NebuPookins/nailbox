@@ -559,7 +559,8 @@ ensureDirectoryExists('data/threads').then(function() {
 							messageIds: threadData.messages.map(message => message.id),
 							labelIds: _.uniq(threadData.messages
 								.map(message => message.labelIds)
-								.reduce((a, b) => a.concat(b))) //Flatten the array of arrays.
+								.reduce((a, b) => a.concat(b))), //Flatten the array of arrays.
+							isWhenIHaveTime: hideUntils[threadData.id] && hideUntils[threadData.id].type === 'when-i-have-time',
 						};
 					}, function(e) {
 						//If you couldn't read certain thread files, just keep proceeding.
