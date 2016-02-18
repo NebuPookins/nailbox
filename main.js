@@ -230,7 +230,22 @@ function getBestBodyFromMessage(messagePart, threadId) {
 		case 'text/html':
 			return mimelib.decodeBase64(messagePart.body.data);
 		case 'multipart/alternative':
-			const biggestPart = _.maxBy(messagePart.parts, part => parseInt(part.body.size));
+			var biggestPart;
+			//If there's an HTML version (as opposed to text/plain), prefer that version.
+			const htmlParts = messagePart.parts.filter(part => part.mimeType === 'text/html');
+			if (htmlParts.length > 0) {
+				if (htmlParts.length == 1) {
+					logger.debug(util.format("Thread %s is multipart/alternative. Picking part with partId %s mime-type %s because it's the only text/html content.", threadId, htmlParts[0].partId, htmlParts[0].mimeType));
+					return getBestBodyFromMessage(htmlParts[0]);
+				} else {
+					biggestPart = _.maxBy(htmlParts, part => parseInt(part.body.size));
+					logger.debug(util.format("Thread %s is multipart/alternative. Picking part with partId %s mime-type %s because it's the biggest text/html content.", threadId, biggestPart.partId, biggestPart.mimeType));
+					return getBestBodyFromMessage(biggestPart, threadId);
+				}
+			}
+			//Otherwise just pick the biggest among all the available parts.
+			biggestPart = _.maxBy(messagePart.parts, part => parseInt(part.body.size));
+			logger.debug(util.format("Thread %s is multipart/alternative. Picking part with partId %s mime-type %s because it's the biggest.", threadId, biggestPart.partId, biggestPart.mimeType));
 			return getBestBodyFromMessage(biggestPart, threadId);
 		case 'multipart/mixed':
 			//I think this means there's attachments.
@@ -268,11 +283,19 @@ function getBestBodyFromMessage(messagePart, threadId) {
 			 */
 			const unnamedParts = messagePart.parts.filter(function(part) {
 				return part.filename === '';
+			}).filter(function(part) {
+				if (/image\/.+/.exec(part.mimeType)) {
+					return false; // Definitely don't pick images.
+				}
+				switch (part.mimeType) {
+					default: return true; //if not sure, keep it.
+				}
 			});
+			logger.debug(util.format("Thread %s is multipart/related. Picking part with partId %s because it's the only one with no filename.", threadId, unnamedParts.partId));
 			if (unnamedParts.length == 1) {
 				return getBestBodyFromMessage(unnamedParts[0], threadId);
 			}
-			logger.error(util.format("Don't know how to decide between mimeTypes %s in thread %s.", nonAttachments.map(p => p.mimeType), threadId));
+			logger.error(util.format("Don't know how to decide between mimeTypes %s in thread %s.", unnamedParts.map(p => p.mimeType), threadId));
 			return null;
 		default:
 			logger.error(util.format("Don't know how to handle mimeType %s in thread %s.", messagePart.mimeType, threadId));
@@ -280,7 +303,7 @@ function getBestBodyFromMessage(messagePart, threadId) {
 	}
 }
 (function test_getBestBodyFromMessage() {
-	console.log("Running tests on getBestBodyFromMessage...")
+	console.log("Running tests on getBestBodyFromMessage...");
 	const badDecoded = "bad";
 	const goodDecoded = "good";
 	const badEncoded = mimelib.encodeBase64(badDecoded);
