@@ -60,6 +60,9 @@
 		return newestMessageWithSubject.header('Subject').value;
 	}
 
+	/**
+	 * @return [String] returns a snippet of the thread (the first few words of the most recent e-mail.)
+	 */
 	Thread.prototype.snippet = function() {
 		const newestMessageWithSnippet = this.mostRecentMessageSatisfying(m => (typeof m.snippet()) === 'string');
 		if (newestMessageWithSnippet === null) {
@@ -67,6 +70,20 @@
 			return '';
 		}
 		return newestMessageWithSnippet.snippet();
+	}
+
+	/**
+	 * @return [String] the id gmail uses to identify this thread.
+	 */
+	Thread.prototype.id = function() {
+		return this._data.id;
+	}
+
+	/**
+	 * @return [Array<String>] returns the ids of all the messages in this thread.
+	 */
+	Thread.prototype.messageIds = function() {
+		return this._messages.map(m => m.id());
 	}
 
 	exports.Thread = Thread; //TODO: This is temporary; prefer to use the get factory method.
