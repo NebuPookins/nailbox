@@ -79,6 +79,5 @@
 		return senders.length === 0 ? null : senders[0];
 	}
 
-	exports.parseEmailToString = parseEmailToString; //TODO: Deprecated
 	exports.Message = Message;
 })();
