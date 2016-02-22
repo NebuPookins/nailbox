@@ -297,7 +297,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 				"table", "tbody", "td", "th", "thead", "tr", "ul"],
 			allowedAttributes: {
 				a: [ 'href', 'name', 'style', 'target' ],
-				div: ['style'],
+				div: ['class', 'style'],
 				img: [ 'alt', 'border', 'height', 'src', 'style', 'width' ],
 				p: ['style'],
 				span: ['style'],

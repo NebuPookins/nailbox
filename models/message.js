@@ -145,207 +145,190 @@
 		return this._data.labelIds;
 	};
 
+	function formatPartAsHtml(messagePart) {
+		switch (messagePart.mimeType) {
+			case 'text/plain':
+				return '<div class="pre">' + entities.encode(mimelib.decodeBase64(messagePart.body.data)) + '</div>';
+			case 'text/html':
+				return mimelib.decodeBase64(messagePart.body.data);
+			default:
+				logger.error(util.format("Don't know how to handle mimeType %s in thread %s.", messagePart.mimeType, threadId));
+				return '';
+		}
+	}
+
 	/**
 	 * @param messagePart If you have a message, then `message.payload` is probably
 	 * the messagePart that you want to pass in. More generally, a messagePart is
 	 * a hash that contains the fields `mimeType`, `body` and `parts`.
 	 * @param threadId [string] used for reporting error messages.
-	 * @return [string] the body of the e-mail.
+	 * @return [object] the best found part (which may possibly be the part that
+	 * was passed in, if it contains no subparts).
 	 */
-	function getBestBodyFromMessage(messagePart, threadId) {
-		switch (messagePart.mimeType) {
-			case 'text/plain':
-				return '<pre>' + entities.encode(mimelib.decodeBase64(messagePart.body.data)) + '</pre>';
-			case 'text/html':
-				return mimelib.decodeBase64(messagePart.body.data);
-			case 'multipart/alternative':
-				var biggestPart;
-				//If there's an HTML version (as opposed to text/plain), prefer that version.
-				const htmlParts = messagePart.parts.filter(part => part.mimeType === 'text/html');
-				if (htmlParts.length > 0) {
-					if (htmlParts.length == 1) {
-						logger.debug(util.format("Thread %s is multipart/alternative. Picking part with partId %s mime-type %s because it's the only text/html content.", threadId, htmlParts[0].partId, htmlParts[0].mimeType));
-						return getBestBodyFromMessage(htmlParts[0]);
-					} else {
-						biggestPart = _.maxBy(htmlParts, part => parseInt(part.body.size));
-						logger.debug(util.format("Thread %s is multipart/alternative. Picking part with partId %s mime-type %s because it's the biggest text/html content.", threadId, biggestPart.partId, biggestPart.mimeType));
-						return getBestBodyFromMessage(biggestPart, threadId);
-					}
-				}
-				//Otherwise just pick the biggest among all the available parts.
-				biggestPart = _.maxBy(messagePart.parts, part => parseInt(part.body.size));
-				logger.debug(util.format("Thread %s is multipart/alternative. Picking part with partId %s mime-type %s because it's the biggest.", threadId, biggestPart.partId, biggestPart.mimeType));
-				return getBestBodyFromMessage(biggestPart, threadId);
-			case 'multipart/mixed':
-				//I think this means there's attachments.
-				if (messagePart.parts.length === 1) {
-					//If there's only 1 part, then you have no choice, just pick it.
-					return getBestBodyFromMessage(messagePart.parts[0], threadId);
-				}
-				const nonAttachments = messagePart.parts.filter(function(part) {
-					if (part.mimeType == 'multipart/alternative') {
-						return true;
-					}
-					if (part.mimeType == 'text/plain') {
-						return true;
-					}
-					if (part.mimeType == 'text/html') {
-						return true;
-					}
-					//TODO: What other mimetypes do we want to keep?
-					return false;
-				});
-				if (nonAttachments.length == 1) {
-					return getBestBodyFromMessage(nonAttachments[0], threadId);
-				}
-				logger.error(util.format("Don't know how to decide between mimeTypes %s in thread %s.", nonAttachments.map(p => p.mimeType), threadId));
-				return null;
-			case 'multipart/related':
-				/*
-				 * Not sure I fully understand multipart/related. The one example I've
-				 * seen, there were 3 parts: the main content, and 2 images as attachment.
-				 * The main content was itself a multipart/alternative (from which we'd
-				 * prefer to grab the HTML variant). I suspect the 2 images were images to
-				 * be used in the HTML. Maybe it's so that you could fetch the e-mail and
-				 * then view it offline with no Internet connectivity, but still have the
-				 * images available?
-				 *
-				 * The one heuristic I could pick out is that the main message had no
-				 * filename, while the two images had filenames (presumably so that the
-				 * HTML could refer to them.
-				 */
-				const unnamedParts = messagePart.parts.filter(function(part) {
-					return part.filename === '';
-				}).filter(function(part) {
-					if (/image\/.+/.exec(part.mimeType)) {
-						return false; // Definitely don't pick images.
-					}
-					switch (part.mimeType) {
-						default: return true; //if not sure, keep it.
-					}
-				});
-				logger.debug(util.format("Thread %s is multipart/related. Picking part with partId %s because it's the only one with no filename.", threadId, unnamedParts.partId));
-				if (unnamedParts.length == 1) {
-					return getBestBodyFromMessage(unnamedParts[0], threadId);
-				}
-				logger.error(util.format("Don't know how to decide between mimeTypes %s in thread %s.", unnamedParts.map(p => p.mimeType), threadId));
-				return null;
-			default:
-				logger.error(util.format("Don't know how to handle mimeType %s in thread %s.", messagePart.mimeType, threadId));
-				return null;
+	function selectedBestPart(messagePart, threadId) {
+		if (_.isArray(messagePart.parts) && messagePart.parts.length > 0) {
+			/*
+			 * Without needing to understand what the mimetype is (I've seen fucked up
+			 * stuff like "text/related"), if we have multiple parts, recursively pick
+			 * the best part from each of them.
+			 */
+			var bestParts = messagePart.parts.map(part => selectedBestPart(part, threadId));
+			if (bestParts.length === 1) {
+				return bestParts[0];
+			}
+			const bestHtmlParts = bestParts.filter(part => part.mimeType === 'text/html');
+			if (bestHtmlParts.length > 0) {
+				return _.maxBy(bestHtmlParts, part => parseInt(part.body.size));
+			}
+			const bestPlainTextParts = bestParts.filter(part => part.mimeType === 'text/plain');
+			if (bestPlainTextParts.length > 0) {
+				return _.maxBy(bestPlainTextParts, part => parseInt(part.body.size));
+			}
+			logger.warn(`In thread ${threadId}, couldn't figure out the best part of ${messagePart.mimeType}. Arbitrarily returning the first part. Parts were ${util.inspect(bestParts)}`)
+			return bestParts[0];
+		} else {
+			/*
+			 * If there are no subparts, then just return this part as the best part.
+			 */
+			return messagePart;
 		}
 	}
-	(function test_getBestBodyFromMessage() {
-		console.log("Running tests on getBestBodyFromMessage...");
+	(function test_selectedBestPart() {
+		console.log("Running tests on selectedBestPart...");
 		const badDecoded = "bad";
 		const goodDecoded = "good";
 		const badEncoded = mimelib.encodeBase64(badDecoded);
 		const goodEncoded = mimelib.encodeBase64(goodDecoded);
-		// If the message is in plain text/html, just return its body.
-		assert.equal(
-			getBestBodyFromMessage({
+		(() => {
+			// If the part is text/html, just return it.
+			const bestPart = {
 				mimeType: 'text/html',
 				body: {
 					size: 1,
-					data: goodEncoded
+					data: "good"
 				}
-			}, ''),
-			goodDecoded);
-		//Don't take the attachment, even if it's the biggest item in there.
-		assert.equal(
-			getBestBodyFromMessage({
+			};
+			const selectedPart = selectedBestPart(bestPart, 'thread-id');
+			assert.equal(selectedPart, bestPart);
+		})();
+		(() => {
+			//Don't take the attachment, even if it's the biggest item in there.
+			const secondBestPart = {
+				mimeType: 'text/plain',
+				body: {
+					size: 10,
+					data: "bad"
+				}
+			};
+			const bestPart = {
+				mimeType: 'text/html',
+				body: {
+					size: 100,
+					data: "good"
+				}
+			}
+			const attachment = {
+				mimeType: 'image/jpeg',
+				body: {
+					size: 1000,
+					data: "bad"
+				}
+			};
+			const selectedPart = selectedBestPart({
 				mimeType: 'multipart/mixed',
 				parts: [
 					{
 						mimeType: 'multipart/alternative',
-						parts: [
-							{
-								mimeType: 'text/plain',
-								body: {
-									size: 10,
-									data: badEncoded
-								}
-							}, {
-								mimeType: 'text/html',
-								body: {
-									size: 100,
-									data: goodEncoded
-								}
-							}
-						]
-					}, {
-						mimeType: 'image/jpeg',
-						body: {
-							size: 1000,
-							data: badEncoded
-						}
-					}
+						parts: [secondBestPart, bestPart]
+					},
+					attachment
 				]
-			}, ''),
-			goodDecoded
-		);
-		// If there are multiple alternatives, picks the larger message, all other factors equal.
-		assert.equal(
-			getBestBodyFromMessage({
+			}, 'thread-id');
+			assert.equal(selectedPart, bestPart);
+		})();
+		(() => {
+			// If there are multiple alternatives, picks the larger message, all other factors equal.
+			const bestPart = {
+				"mimeType": "text/html",
+				body: {
+					size: 10,
+					data: "good"
+				}
+			};
+			const secondBestPart = {
+				"mimeType": "text/html",
+				body: {
+					size: 1,
+					data: "bad"
+				}
+			}
+			const selectedPart = selectedBestPart({
 				mimeType: 'multipart/alternative',
-				parts: [
-					{
-						"mimeType": "text/html",
-						body: {
-							size: 10,
-							data: goodEncoded
-						}
-					}, {
-						"mimeType": "text/html",
-						body: {
-							size: 1,
-							data: badEncoded
-						}
-					}
-				]
-			}, ''),
-			goodDecoded
-		);
-		//If an embedded multipart/alternative is text/plain, don't forget to wrap that text/plain in a <pre>.
-		assert.equal(
-			getBestBodyFromMessage({
-				mimeType: 'multipart/alternative',
-				parts: [
-					{
-						"mimeType": "text/plain",
-						body: {
-							size: 10,
-							data: goodEncoded
-						}
-					}
-				]
-			}, ''),
-			'<pre>' + goodDecoded + '</pre>'
-		);
-		//Empirical from thread 1530198d39cabdf5, message 1530198d39cabdf5
-		assert.equal(
-			getBestBodyFromMessage({
+				parts: [bestPart, secondBestPart]
+			}, 'thread-id');
+			assert.equal(selectedPart, bestPart);
+		})();
+		(() => {
+			//Empirical from thread 1530198d39cabdf5, message 1530198d39cabdf5
+			const bestPart = {
+				"mimeType": "text/html",
+				"filename": "",
+				"body": {
+					"size": "1923",
+					data: goodEncoded
+				}
+			};
+			const layer1 = {
+				mimeType: "multipart/related",
+				filename: "",
+				body: {
+					size: "0"
+				},
+				parts: [bestPart]
+			};
+			const layer2 = {
 				mimeType: 'multipart/mixed',
-				parts: [
-					{
-						mimeType: "multipart/related",
-						filename: "",
-						body: {
-							size: "0"
-						},
-						parts: [{
-							"mimeType": "text/html",
-							"filename": "",
-							"body": {
-								"size": "1923",
-								data: goodEncoded
-							}
-						}]
-					}
-				]
-			}, ''),
-			goodDecoded
-		);
+				parts: [layer1]
+			};
+			const selectedPart = selectedBestPart(layer2, 'thread-id');
+			assert.equal(selectedPart, bestPart);
+		})();
+		(() => {
+			const secondBestPart = {
+				mimeType: "text/plain",
+				filename: "",
+				body: {
+					size: "3540",
+					data: "bad"
+				}
+			};
+			const bestPart = {
+				mimeType: "text/html",
+				filename: "",
+				body: {
+					size: '15595',
+					data: "good"
+				}
+			};
+			const layer1 = {
+				"mimeType": "text/related", //WTF? text/related?
+				"filename": "",
+				"body": {
+					"size": "0"
+				},
+				parts: [bestPart]
+			};
+			const layer2 = {
+				mimeType: "multipart/alternative",
+				filename: "",
+				body: {
+					size: "0"
+				},
+				parts: [secondBestPart, layer1]
+			};
+			const selectedPart = selectedBestPart(layer2, 'thread-id');
+			assert.deepEqual(selectedPart, bestPart);
+		})();
 	})();
 
 	/**
@@ -356,7 +339,8 @@
 	 */
 	Message.prototype.bestBody = function() {
 		assert(this._data.payload, util.inspect(this._data));
-		return getBestBodyFromMessage(this._data.payload, this._data.threadId);
+		const bestPart = selectedBestPart(this._data.payload, this._data.threadId);
+		return formatPartAsHtml(bestPart);
 	};
 
 	exports.Message = Message;
