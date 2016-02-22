@@ -376,17 +376,17 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 						const thread = new models.thread.Thread(threadData);
 						const maybeMostRecentSnippetInThread = thread.snippet();
 						return {
-							threadId: threadData.id,
+							threadId: thread.id(),
 							senders: thread.people(header => header.name === 'From'),
 							receivers: thread.people(header => header.name === 'To'),
 							lastUpdated: thread.lastUpdated(),
 							subject: thread.subject(),
 							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
-							messageIds: threadData.messages.map(message => message.id),
+							messageIds: thread.messageIds(),
 							labelIds: _.uniq(threadData.messages
 								.map(message => message.labelIds)
 								.reduce((a, b) => a.concat(b))), //Flatten the array of arrays.
-							isWhenIHaveTime: hideUntils[threadData.id] && hideUntils[threadData.id].type === 'when-i-have-time',
+							isWhenIHaveTime: hideUntils[thread.id()] && hideUntils[thread.id()].type === 'when-i-have-time',
 						};
 					}, function(e) {
 						//If you couldn't read certain thread files, just keep proceeding.

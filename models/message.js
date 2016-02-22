@@ -129,5 +129,12 @@
 		return this._data.snippet;
 	}
 
+	/**
+	 * @return [String] returns the id gmail used to identify this message.
+	 */
+	Message.prototype.id = function() {
+		return this._data.id;
+	}
+
 	exports.Message = Message;
 })();
