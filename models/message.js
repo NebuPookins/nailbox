@@ -79,5 +79,9 @@
 		return senders.length === 0 ? null : senders[0];
 	}
 
+	Message.prototype.recipients = function() {
+		return this.emailAddresses(header => header.name === 'To');
+	}
+
 	exports.Message = Message;
 })();

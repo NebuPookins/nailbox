@@ -585,7 +585,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			deleted: messageData.labelIds.indexOf('TRASH') !== -1,
 			messageId: messageData.id,
 			from: [objMessage.sender()], //TODO: Fix contract so this is no longer an array
-			to: objMessage.emailAddresses(header => header.name === 'To'),
+			to: objMessage.recipients(),
 			date: parseInt(messageData.internalDate),
 			body: {
 				original: originalBody,
@@ -685,7 +685,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			});
 		}).spread((threadData, htmlizedMarkdown) => {
 			const mostRecentMessage = new models.message.Message(mostRecentMessageSatisfying(threadData, () => true));
-			const receivers = mostRecentMessage.emailAddresses(header => header.name === 'To');
+			const receivers = mostRecentMessage.recipients();
 			const peopleOtherThanYourself = _.uniqBy(
 				receivers.concat(mostRecentMessage.sender())
 					.filter(person => person.email !== req.body.myEmail),
