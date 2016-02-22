@@ -25,7 +25,7 @@
 		const people = this._messages.map(m => m.emailAddresses(fnFilter))
 			.reduce((a, b) => a.concat(b)); //Flatten the array of arrays.
 		return _.uniqBy(people, people => people.email);
-	}
+	};
 
 	/**
 	 * @return [Number] milliseconds since the epoch, representing the last time
@@ -33,7 +33,7 @@
 	 */
 	Thread.prototype.lastUpdated = function() {
 		return _.max(this._messages.map(m => m.timestamp()));
-	}
+	};
 
 	/**
 	 * @param fnMessagePredicate [Function] a predicate which receives instances of Message.
@@ -47,7 +47,7 @@
 			return null;
 		}
 		return _.maxBy(satisfyingMessages, message => message.timestamp());
-	}
+	};
 
 	/**
 	 * @return [String] returns the subject to use to represent the whole thread.
@@ -59,7 +59,7 @@
 			return '';
 		}
 		return newestMessageWithSubject.header('Subject').value;
-	}
+	};
 
 	/**
 	 * @return [String] returns a snippet of the thread (the first few words of the most recent e-mail.)
@@ -71,21 +71,21 @@
 			return '';
 		}
 		return newestMessageWithSnippet.snippet();
-	}
+	};
 
 	/**
 	 * @return [String] the id gmail uses to identify this thread.
 	 */
 	Thread.prototype.id = function() {
 		return this._data.id;
-	}
+	};
 
 	/**
 	 * @return [Array<String>] returns the ids of all the messages in this thread.
 	 */
 	Thread.prototype.messageIds = function() {
 		return this._messages.map(m => m.id());
-	}
+	};
 
 	/**
 	 * @return [Array<String>]
@@ -95,7 +95,7 @@
 			.map(m => m.labelIds())
 			.reduce((a, b) => a.concat(b)); //Flatten the array of arrays.
 		return _.uniq(labelsWithDuplicates);
-	}
+	};
 
 	/**
 	 * @return [Message] the message in this thread with the specified id, or null
@@ -103,16 +103,14 @@
 	 */
 	Thread.prototype.message = function(messageId) {
 		return this._messages.find(m => m.id() == messageId);
-	}
+	};
 
 	/**
 	 * @return [Array<Message>] all messages in this thread.
 	 */
 	Thread.prototype.messages = function() {
 		return this._messages;
-	}
-
-	exports.Thread = Thread; //TODO: This is temporary; prefer to use the get factory method.
+	};
 
 	/**
 	 * Factory method. Returns a promise to a Thread object.
@@ -142,6 +140,5 @@
 				}
 			});
 		});
-	}
-	//TODO
+	};
 })();

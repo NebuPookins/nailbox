@@ -68,7 +68,7 @@
 			.filter(fnHeaderFilter)
 			.map(header => parseEmailToString(header.value))
 			.reduce((a, b) => a.concat(b), []); //Flatten the array of arrays.
-	}
+	};
 
 	/**
 	 * Returns an object in the format { name: 'Alfred Alpha', email: 'aa@gmail.com'}
@@ -80,7 +80,7 @@
 			logger.warn(`Expected to have exactly 1 sender, but found ${senders.length} senders. Data was ${util.inspect(this._data)} and senders was ${senders}.`);
 		}
 		return senders.length === 0 ? null : senders[0];
-	}
+	};
 
 	/**
 	 * @return an array that looks like:
@@ -92,7 +92,7 @@
 	 */
 	Message.prototype.recipients = function() {
 		return this.emailAddresses(header => header.name === 'To');
-	}
+	};
 
 	/**
 	 * @return an object that looks like:
@@ -113,7 +113,7 @@
 			logger.warn(`Expected either 0 or 1 headers with the name ${headerName}, but found ${matchingHeader.length} matching headers. Data was ${util.inspect(this._data)} and watching headers were ${matchingHeader}.`);
 		}
 		return matchingHeader[0];
-	}
+	};
 
 	/**
 	 * @return [Number] milliseconds since epoch. It's not clear exactly what this
@@ -122,28 +122,28 @@
 	 */
 	Message.prototype.timestamp = function() {
 		return parseInt(this._data.internalDate);
-	}
+	};
 
 	/**
 	 * @return [String] a snippet of the message (e.g. the first few words.)
 	 */
 	Message.prototype.snippet = function() {
 		return this._data.snippet;
-	}
+	};
 
 	/**
 	 * @return [String] returns the id gmail used to identify this message.
 	 */
 	Message.prototype.id = function() {
 		return this._data.id;
-	}
+	};
 
 	/**
 	 * @return [Array<String>] the label ids associated with this message.
 	 */
 	Message.prototype.labelIds = function() {
 		return this._data.labelIds;
-	}
+	};
 
 	/**
 	 * @param messagePart If you have a message, then `message.payload` is probably
@@ -329,7 +329,7 @@
 	Message.prototype.bestBody = function() {
 		assert(this._data.payload, util.inspect(this._data));
 		return getBestBodyFromMessage(this._data.payload, this._data.threadId);
-	}
+	};
 
 	exports.Message = Message;
 })();
