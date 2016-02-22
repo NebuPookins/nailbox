@@ -136,5 +136,12 @@
 		return this._data.id;
 	}
 
+	/**
+	 * @return [Array<String>] the label ids associated with this message.
+	 */
+	Message.prototype.labelIds = function() {
+		return this._data.labelIds;
+	}
+
 	exports.Message = Message;
 })();

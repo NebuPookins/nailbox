@@ -383,9 +383,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 							subject: thread.subject(),
 							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
 							messageIds: thread.messageIds(),
-							labelIds: _.uniq(threadData.messages
-								.map(message => message.labelIds)
-								.reduce((a, b) => a.concat(b))), //Flatten the array of arrays.
+							labelIds: thread.labelIds(),
 							isWhenIHaveTime: hideUntils[thread.id()] && hideUntils[thread.id()].type === 'when-i-have-time',
 						};
 					}, function(e) {

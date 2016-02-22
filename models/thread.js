@@ -86,6 +86,13 @@
 		return this._messages.map(m => m.id());
 	}
 
+	Thread.prototype.labelIds = function() {
+		const labelsWithDuplicates = this._messages
+			.map(m => m.labelIds())
+			.reduce((a, b) => a.concat(b)); //Flatten the array of arrays.
+		return _.uniq(labelsWithDuplicates);
+	}
+
 	exports.Thread = Thread; //TODO: This is temporary; prefer to use the get factory method.
 
 	/**
