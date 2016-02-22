@@ -372,8 +372,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			} else {
 				var jsonResponse = {};
 				q.all(filenames.map(function(filename) {
-					return readThreadFromFile(filename).then(function(threadData) {
-						const thread = new models.thread.Thread(threadData);
+					return models.thread.get(filename).then(function(thread) {
 						const maybeMostRecentSnippetInThread = thread.snippet();
 						return {
 							threadId: thread.id(),
@@ -388,14 +387,15 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 						};
 					}, function(e) {
 						//If you couldn't read certain thread files, just keep proceeding.
+						logger.warn(util.inspect(e));
 						return null;
 					});
-				})).then(function (files) {
+				})).then(function (formattedThreads) {
 					var now = Date.now();
-					files = files
-						.filter(file => file !== null)
-						.filter(function hideMessagesForLater(file) {
-							var hideUntil = hideUntils[file.threadId];
+					formattedThreads = formattedThreads
+						.filter(formattedThread => formattedThread !== null)
+						.filter(function hideMessagesForLater(formattedThread) {
+							var hideUntil = hideUntils[formattedThread.threadId];
 							if (!hideUntil) {
 								return true;
 							}
@@ -404,10 +404,10 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 							}
 							return true;
 						});
-					files.sort(createComparatorForThreadsForMainView(hideUntils));
+					formattedThreads.sort(createComparatorForThreadsForMainView(hideUntils));
 					res.status(200);
 					res.type('json');
-					res.send(files);
+					res.send(formattedThreads);
 				}).done();
 			}
 		});

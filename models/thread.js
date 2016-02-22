@@ -2,8 +2,9 @@
 	'use strict';
 
 	const _ = require('lodash');
-	const logger = require('nebulog').make({filename: __filename, level: 'debug'});
+	const logger = require('nebulog').make({filename: __filename, level: 'info'});
 	const Message = require('./message').Message;
+	const nodeFs = require('node-fs');
 	const q = require('q');
 
 	function Thread(data) {
@@ -99,9 +100,13 @@
 	 * Factory method. Returns a promise to a Thread object.
 	 */
 	exports.get = (id) => {
+		logger.debug(`Loading thread ${id}`);
 		return q.Promise((resolve, reject) => {
+			logger.debug(`nodeFs.readFile('data/threads/${id}')`);
 			nodeFs.readFile('data/threads/' + id, (err, strFileContents) => {
+				logger.debug(`nodeFs.readFile returned for thread ${id}`);
 				if (err) {
+					logger.error(util.inspect(err));
 					return reject(err);
 				} else {
 					var jsonFileContents;
@@ -111,8 +116,10 @@
 						if (e instanceof SyntaxError) {
 							logger.warn(`Failed to parse JSON from ${id}`);
 						}
+						logger.error(util.inspect(err));
 						return reject(e);
 					}
+					logger.debug(`Loaded thread ${id}`);
 					return resolve(new Thread(jsonFileContents));
 				}
 			});
