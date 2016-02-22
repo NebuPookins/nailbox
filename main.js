@@ -329,11 +329,11 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			nonTextTags: [ 'style', 'script', 'textarea', 'title' ]
 		});
 		return {
-			deleted: messageData.labelIds.indexOf('TRASH') !== -1,
-			messageId: messageData.id,
+			deleted: objMessage.labelIds().indexOf('TRASH') !== -1,
+			messageId: objMessage.id(),
 			from: [objMessage.sender()], //TODO: Fix contract so this is no longer an array
 			to: objMessage.recipients(),
-			date: parseInt(messageData.internalDate),
+			date: objMessage.timestamp(),
 			body: {
 				original: originalBody,
 				sanitized: sanitizedBody
