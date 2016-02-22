@@ -58,16 +58,6 @@ function threadLastUpdated(threadData) {
 }
 
 /**
- * Returns all headers in the given message with the given name. Under normal
- * circumstances, the message will have either 0 or 1 headers with a given
- * name.
- */
-function headersInMessage(headerName, message) {
-	return message.payload.headers
-		.filter(header => header.name === headerName);
-}
-
-/**
  * @return the message object, or null if no message satisfies the predicate.
  */
 function mostRecentMessageSatisfying(threadData, fnMessagePredicate) {
@@ -79,14 +69,15 @@ function mostRecentMessageSatisfying(threadData, fnMessagePredicate) {
 }
 
 function mostRecentSubjectInThread(threadData) {
-	const newestMessageWithSubject = mostRecentMessageSatisfying(threadData, function(message) {
-		return ! _.isEmpty(headersInMessage('Subject', message));
+	const newestMessageDataWithSubject = mostRecentMessageSatisfying(threadData, function(message) {
+		return new models.message.Message(message).header('Subject');
 	});
-	if (newestMessageWithSubject === null) {
+	if (newestMessageDataWithSubject === null) {
 		logger.warn(util.format("Thread %s has no messages with subject. Can that actually happen?", threadData.id));
 		return null;
 	}
-	return headersInMessage('Subject', newestMessageWithSubject)[0].value;
+	const newestMessageWithSubject = new models.message.Message(newestMessageDataWithSubject);
+	return newestMessageWithSubject.header('Subject').value;
 }
 
 /**
