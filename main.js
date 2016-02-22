@@ -685,7 +685,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 		}).spread((threadData, htmlizedMarkdown) => {
 			const mostRecentMessage = mostRecentMessageSatisfying(threadData, () => true);
 			const senders = new models.message.Message(mostRecentMessage).emailAddresses(header => header.name === 'From');
-			const receivers = new models.message.Message(mostRecentMessage).emailAddresses(header => header.name === 'From');
+			const receivers = new models.message.Message(mostRecentMessage).emailAddresses(header => header.name === 'To');
 			const peopleOtherThanYourself = _.uniqBy(
 				senders.concat(receivers)
 					.filter(person => person.email !== req.body.myEmail),
