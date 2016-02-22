@@ -21,6 +21,9 @@ const mailcomposer = require("mailcomposer");
 const marked = require('marked');
 const base64url = require('base64url');
 const pygmentizeBundled = require('pygmentize-bundled');
+const helpers = {
+	fileio: require('./helpers/fileio')
+};
 
 /**
  * Returns a promise. If the promise resolves successfully, then as a side
@@ -392,23 +395,6 @@ function getBestBodyFromMessage(messagePart, threadId) {
 	);
 })();
 
-function readJsonFromOptionalFile(path) {
-	return q.Promise(function(resolve, reject) {
-		nodeFs.readFile(path, function(err, strFileContents) {
-			if (err) {
-				if (err.code === 'ENOENT') {
-					logger.info(util.format("No file found at %s, using empty json by default.", path));
-					resolve({});
-				} else {
-					reject(err);
-				}
-			} else {
-				resolve(JSON.parse(strFileContents));
-			}
-		});
-	});
-}
-
 /**
  * Returns a comparator (function) that sorts messages so that "newer" ones
  * show up near the top, a message timestamp-hidden to 2015-jan-01 is treated as
@@ -474,8 +460,8 @@ ensureDirectoryExists('data/threads').then(function() {
 	return logger.info("Directory structure looks fine.");
 }).then(function() {
 	return q.all([
-		readJsonFromOptionalFile(PATH_TO_CONFIG),
-		readJsonFromOptionalFile(PATH_TO_HIDE_UNTILS)
+		helpers.fileio.readJsonFromOptionalFile(PATH_TO_CONFIG),
+		helpers.fileio.readJsonFromOptionalFile(PATH_TO_HIDE_UNTILS)
 	]);
 }).spread(function(config, hideUntils) {
 	const app = express();
