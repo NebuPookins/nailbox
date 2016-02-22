@@ -113,5 +113,14 @@
 		return matchingHeader[0];
 	}
 
+	/**
+	 * @return [Number] milliseconds since epoch. It's not clear exactly what this
+	 * contractually represents. It's probably close to "when the e-mail was
+	 * received" by gmail.
+	 */
+	Message.prototype.timestamp = function() {
+		return parseInt(this._data.internalDate);
+	}
+
 	exports.Message = Message;
 })();

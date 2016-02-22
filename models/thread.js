@@ -25,6 +25,14 @@
 		return _.uniqBy(people, people => people.email);
 	}
 
+	/**
+	 * @return [Number] milliseconds since the epoch, representing the last time
+	 * a message got added to this thread.
+	 */
+	Thread.prototype.lastUpdated = function() {
+		return _.max(this._messages.map(m => m.timestamp()));
+	}
+
 	exports.Thread = Thread; //TODO: This is temporary; prefer to use the get factory method.
 
 	/**
