@@ -87,11 +87,29 @@
 		return this._messages.map(m => m.id());
 	}
 
+	/**
+	 * @return [Array<String>]
+	 */
 	Thread.prototype.labelIds = function() {
 		const labelsWithDuplicates = this._messages
 			.map(m => m.labelIds())
 			.reduce((a, b) => a.concat(b)); //Flatten the array of arrays.
 		return _.uniq(labelsWithDuplicates);
+	}
+
+	/**
+	 * @return [Message] the message in this thread with the specified id, or null
+	 * if there is no such message.
+	 */
+	Thread.prototype.message = function(messageId) {
+		return this._messages.find(m => m.id() == messageId);
+	}
+
+	/**
+	 * @return [Array<Message>] all messages in this thread.
+	 */
+	Thread.prototype.messages = function() {
+		return this._messages;
 	}
 
 	exports.Thread = Thread; //TODO: This is temporary; prefer to use the get factory method.

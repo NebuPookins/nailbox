@@ -49,9 +49,8 @@
 
 	function Message(data) {
 		this._data = data;
-		if (data.payload === undefined) {
-			logger.warn('Malformed data; did not contain payload.');
-		}
+		assert(this._data.id, util.inspect(data));
+		assert(this._data.payload, util.inspect(data));
 	}
 
 	/**
@@ -328,6 +327,7 @@
 	 * the that body wrapped in <pre></pre> tags.
 	 */
 	Message.prototype.bestBody = function() {
+		assert(this._data.payload, util.inspect(this._data));
 		return getBestBodyFromMessage(this._data.payload, this._data.threadId);
 	}
 

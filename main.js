@@ -295,8 +295,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 		}
 	});
 
-	function loadRelevantDataFromMessage(messageData) {
-		const objMessage = new models.message.Message(messageData);
+	function loadRelevantDataFromMessage(objMessage) {
 		const originalBody = objMessage.bestBody();
 		const sanitizedBody = sanitizeHtml(originalBody, {
 			transformTags: {
@@ -343,9 +342,9 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 
 	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, function(req, res) {
 		const threadId = req.params[0];
-		readThreadFromFile(threadId).then(function(threadData) {
+		models.thread.get(threadId).then(function(thread) {
 			res.status(200).send({
-				messages: threadData.messages.map(loadRelevantDataFromMessage)
+				messages: thread.messages().map(loadRelevantDataFromMessage)
 			});
 		}, function(err) {
 			if (err.code === 'ENOENT') {
@@ -360,16 +359,13 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)$/, function(req, res) {
 		const threadId = req.params[0];
 		const messageId = req.params[1];
-		readThreadFromFile(threadId).then(function(threadData) {
-			const matchingMessage = threadData.messages.find(function(message) {
-				return message.id === messageId;
-			});
+		models.thread.get(threadId).then(function(thread) {
+			const matchingMessage = thread.message(messageId);
 			if (matchingMessage) {
 				res.status(200).send(loadRelevantDataFromMessage(matchingMessage));
 			} else {
 				res.sendStatus(404);
 			}
-			
 		}, function(err) {
 			logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
 			res.sendStatus(500);
@@ -384,7 +380,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	 * we're using POST instead of GET here is that GET has a max query limit.
 	 */
 	app.post('/api/rfc2822', (req, res) => {
-		var missingFields = ['threadId', 'body', 'inReplyTo', 'myEmail'].filter((requiredField) => {
+		const missingFields = ['threadId', 'body', 'inReplyTo', 'myEmail'].filter((requiredField) => {
 			return !req.body[requiredField];
 		});
 		if (missingFields.length > 0) {
@@ -393,11 +389,8 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 		}
 		logger.info(util.format("/api/rfc2822 received for thread %s", req.body.threadId));
 		const bodyPlusSignature = req.body.body + "\n\n---\nSent using [Nailbox](https://github.com/NebuPookins/nailbox/).";
-		readThreadFromFile(req.body.threadId).then(threadData => {
-			var messageInReplyTo = threadData.messages.find(message => {
-				return message.id == req.body.inReplyTo;
-			});
-			if (!messageInReplyTo) {
+		models.thread.get(req.body.threadId).then(thread => {
+			if (!thread.message(req.body.inReplyTo)) {
 				throw {
 					status: 400,
 					message: util.format("Could not find message %s in thread %s", req.body.inReplyTo, req.body.threadId)
@@ -426,12 +419,11 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 					if (err) {
 						reject(err);
 					} else {
-						resolve([threadData, content]);
+						resolve([thread, content]);
 					}
 				});
 			});
-		}).spread((threadData, htmlizedMarkdown) => {
-			const thread = new models.thread.Thread(threadData);
+		}).spread((thread, htmlizedMarkdown) => {
 			const mostRecentMessage = thread.mostRecentMessageSatisfying(() => true);
 			const receivers = mostRecentMessage.recipients();
 			const peopleOtherThanYourself = _.uniqBy(
