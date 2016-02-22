@@ -37,18 +37,6 @@ function readConfigWithDefault(config, strFieldName) {
 	}
 }
 
-function recipientsInThread(threadData) {
-	return peopleInThread(threadData, function(header) {
-		return header.name === 'To';
-	});
-}
-
-function sendersInThread(threadData) {
-	return peopleInThread(threadData, function(header) {
-		return header.name === 'From';
-	});
-}
-
 function threadLastUpdated(threadData) {
 	return _.max(
 		threadData.messages.map(function(message) {
@@ -88,20 +76,6 @@ function mostRecentSnippetInThread(threadData) {
 		return message.snippet;
 	});
 	return newestMessageWithSnippet ? newestMessageWithSnippet.snippet : null;
-}
-
-/**
- * @return an array that looks like:
- * [
- *   { name: 'Alfred Alpha', email: 'aa@gmail.com'},
- *   { name: '"Beta, Betty"', email: 'bb@gmail.com'}
- * ]
- */
-function peopleInThread(threadData, fnFilter) {
-	const recipients = threadData.messages.map(function(message) {
-		return new models.message.Message(message).emailAddresses(fnFilter);
-	}).reduce((a, b) => a.concat(b)); //Flatten the array of arrays.
-	return _.uniqBy(recipients, recipient => recipient.email);
 }
 
 function readThreadFromFile(threadId) {
@@ -440,11 +414,12 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 				var jsonResponse = {};
 				q.all(filenames.map(function(filename) {
 					return readThreadFromFile(filename).then(function(threadData) {
+						const thread = new models.thread.Thread(threadData);
 						const maybeMostRecentSnippetInThread = mostRecentSnippetInThread(threadData);
 						return {
 							threadId: threadData.id,
-							senders: sendersInThread(threadData),
-							receivers: recipientsInThread(threadData),
+							senders: thread.people(header => header.name === 'From'),
+							receivers: thread.people(header => header.name === 'To'),
 							lastUpdated: threadLastUpdated(threadData),
 							subject: mostRecentSubjectInThread(threadData),
 							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
