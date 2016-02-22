@@ -37,14 +37,6 @@ function readConfigWithDefault(config, strFieldName) {
 	}
 }
 
-function threadLastUpdated(threadData) {
-	return _.max(
-		threadData.messages.map(function(message) {
-			return parseInt(message.internalDate);
-		})
-	);
-}
-
 /**
  * @return the message object, or null if no message satisfies the predicate.
  */
@@ -420,7 +412,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 							threadId: threadData.id,
 							senders: thread.people(header => header.name === 'From'),
 							receivers: thread.people(header => header.name === 'To'),
-							lastUpdated: threadLastUpdated(threadData),
+							lastUpdated: thread.lastUpdated(),
 							subject: mostRecentSubjectInThread(threadData),
 							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
 							messageIds: threadData.messages.map(message => message.id),
