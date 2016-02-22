@@ -1,9 +1,10 @@
 (() => {
 	'use strict';
 
-	const q = require('q');
 	const _ = require('lodash');
+	const logger = require('nebulog').make({filename: __filename, level: 'debug'});
 	const Message = require('./message').Message;
+	const q = require('q');
 
 	function Thread(data) {
 		this._data = data;
@@ -31,6 +32,41 @@
 	 */
 	Thread.prototype.lastUpdated = function() {
 		return _.max(this._messages.map(m => m.timestamp()));
+	}
+
+	/**
+	 * @param fnMessagePredicate [Function] a predicate which receives instances of Message.
+	 * @return the message object, or null if no message satisfies the predicate.
+	 * @deprecated use Thread.subject() or Thread.snippet() instead, assuming that's the
+	 * data you're trying to get.
+	 */
+	Thread.prototype.mostRecentMessageSatisfying = function(fnMessagePredicate) {
+		const satisfyingMessages = this._messages.filter(fnMessagePredicate);
+		if (satisfyingMessages.length === 0) {
+			return null;
+		}
+		return _.maxBy(satisfyingMessages, message => message.timestamp());
+	}
+
+	/**
+	 * @return [String] returns the subject to use to represent the whole thread.
+	 */
+	Thread.prototype.subject = function() {
+		const newestMessageWithSubject = this.mostRecentMessageSatisfying(m => (typeof m.header('Subject')) === 'object');
+		if (newestMessageWithSubject === null) {
+			logger.warn(`Thread ${this._data.id} has no messages with subject. Can that actually happen?`);
+			return '';
+		}
+		return newestMessageWithSubject.header('Subject').value;
+	}
+
+	Thread.prototype.snippet = function() {
+		const newestMessageWithSnippet = this.mostRecentMessageSatisfying(m => (typeof m.snippet()) === 'string');
+		if (newestMessageWithSnippet === null) {
+			logger.warn(`Thread ${this._data.id} has no messages with snippet. Can that actually happen?`);
+			return '';
+		}
+		return newestMessageWithSnippet.snippet();
 	}
 
 	exports.Thread = Thread; //TODO: This is temporary; prefer to use the get factory method.

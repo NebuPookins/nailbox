@@ -122,5 +122,12 @@
 		return parseInt(this._data.internalDate);
 	}
 
+	/**
+	 * @return [String] a snippet of the message (e.g. the first few words.)
+	 */
+	Message.prototype.snippet = function() {
+		return this._data.snippet;
+	}
+
 	exports.Message = Message;
 })();

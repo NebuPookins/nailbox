@@ -37,39 +37,6 @@ function readConfigWithDefault(config, strFieldName) {
 	}
 }
 
-/**
- * @return the message object, or null if no message satisfies the predicate.
- */
-function mostRecentMessageSatisfying(threadData, fnMessagePredicate) {
-	const satisfyingMessages = threadData.messages.filter(fnMessagePredicate);
-	if (satisfyingMessages.length === 0) {
-		return null;
-	}
-	return _.maxBy(satisfyingMessages, message => parseInt(message.internalDate));
-}
-
-function mostRecentSubjectInThread(threadData) {
-	const newestMessageDataWithSubject = mostRecentMessageSatisfying(threadData, function(message) {
-		return new models.message.Message(message).header('Subject');
-	});
-	if (newestMessageDataWithSubject === null) {
-		logger.warn(util.format("Thread %s has no messages with subject. Can that actually happen?", threadData.id));
-		return null;
-	}
-	const newestMessageWithSubject = new models.message.Message(newestMessageDataWithSubject);
-	return newestMessageWithSubject.header('Subject').value;
-}
-
-/**
- * @return the message object, or null if no messages have snippets.
- */
-function mostRecentSnippetInThread(threadData) {
-	const newestMessageWithSnippet = mostRecentMessageSatisfying(threadData, function(message) {
-		return message.snippet;
-	});
-	return newestMessageWithSnippet ? newestMessageWithSnippet.snippet : null;
-}
-
 function readThreadFromFile(threadId) {
 	return q.Promise(function(resolve, reject) {
 		nodeFs.readFile('data/threads/' + threadId, function(err, strFileContents) {
@@ -407,13 +374,13 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 				q.all(filenames.map(function(filename) {
 					return readThreadFromFile(filename).then(function(threadData) {
 						const thread = new models.thread.Thread(threadData);
-						const maybeMostRecentSnippetInThread = mostRecentSnippetInThread(threadData);
+						const maybeMostRecentSnippetInThread = thread.snippet();
 						return {
 							threadId: threadData.id,
 							senders: thread.people(header => header.name === 'From'),
 							receivers: thread.people(header => header.name === 'To'),
 							lastUpdated: thread.lastUpdated(),
-							subject: mostRecentSubjectInThread(threadData),
+							subject: thread.subject(),
 							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
 							messageIds: threadData.messages.map(message => message.id),
 							labelIds: _.uniq(threadData.messages
@@ -642,7 +609,8 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 				});
 			});
 		}).spread((threadData, htmlizedMarkdown) => {
-			const mostRecentMessage = new models.message.Message(mostRecentMessageSatisfying(threadData, () => true));
+			const thread = new models.thread.Thread(threadData);
+			const mostRecentMessage = thread.mostRecentMessageSatisfying(() => true);
 			const receivers = mostRecentMessage.recipients();
 			const peopleOtherThanYourself = _.uniqBy(
 				receivers.concat(mostRecentMessage.sender())
@@ -654,7 +622,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 				from: req.body.myEmail,
 				to: peopleOtherThanYourself.map(person => util.format("%s <%s>", person.name, person.email)),
 				inReplyTo: req.body.inReplyTo,
-				subject: mostRecentSubjectInThread(threadData),
+				subject: thread.subject(),
 				text: bodyPlusSignature,
 				html: util.format('<!DOCTYPE html><html><head>'+
 					'<style type="test/css">blockquote {padding: 10px 20px;margin: 0 0 20px; border-left: 5px solid #eee;}</style>'+
