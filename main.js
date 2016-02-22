@@ -548,8 +548,9 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 		}
 	});
 
-	function loadRelevantDataFromMessage(objMessage) {
-		const originalBody = getBestBodyFromMessage(objMessage.payload, objMessage.threadId);
+	function loadRelevantDataFromMessage(messageData) {
+		const objMessage = new models.message.Message(messageData);
+		const originalBody = getBestBodyFromMessage(messageData.payload, messageData.threadId);
 		const sanitizedBody = sanitizeHtml(originalBody, {
 			transformTags: {
 				'body': 'div',
@@ -581,11 +582,11 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			nonTextTags: [ 'style', 'script', 'textarea', 'title' ]
 		});
 		return {
-			deleted: objMessage.labelIds.indexOf('TRASH') !== -1,
-			messageId: objMessage.id,
-			from: new models.message.Message(objMessage).emailAddresses(header => header.name === 'From'),
-			to: new models.message.Message(objMessage).emailAddresses(header => header.name === 'To'),
-			date: parseInt(objMessage.internalDate),
+			deleted: messageData.labelIds.indexOf('TRASH') !== -1,
+			messageId: messageData.id,
+			from: [objMessage.sender()], //TODO: Fix contract so this is no longer an array
+			to: objMessage.emailAddresses(header => header.name === 'To'),
+			date: parseInt(messageData.internalDate),
 			body: {
 				original: originalBody,
 				sanitized: sanitizedBody
@@ -683,11 +684,10 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 				});
 			});
 		}).spread((threadData, htmlizedMarkdown) => {
-			const mostRecentMessage = mostRecentMessageSatisfying(threadData, () => true);
-			const senders = new models.message.Message(mostRecentMessage).emailAddresses(header => header.name === 'From');
-			const receivers = new models.message.Message(mostRecentMessage).emailAddresses(header => header.name === 'To');
+			const mostRecentMessage = new models.message.Message(mostRecentMessageSatisfying(threadData, () => true));
+			const receivers = mostRecentMessage.emailAddresses(header => header.name === 'To');
 			const peopleOtherThanYourself = _.uniqBy(
-				senders.concat(receivers)
+				receivers.concat(mostRecentMessage.sender())
 					.filter(person => person.email !== req.body.myEmail),
 				recipient => recipient.email
 			);
