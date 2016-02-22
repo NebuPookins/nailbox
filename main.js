@@ -37,27 +37,6 @@ function readConfigWithDefault(config, strFieldName) {
 	}
 }
 
-function readThreadFromFile(threadId) {
-	return q.Promise(function(resolve, reject) {
-		nodeFs.readFile('data/threads/' + threadId, function(err, strFileContents) {
-			if (err) {
-				return reject(err);
-			} else {
-				var jsonFileContents;
-				try {
-					jsonFileContents = JSON.parse(strFileContents);
-				} catch (e) {
-					if (e instanceof SyntaxError) {
-						logger.warn(util.format("Failed to parse JSON from %s", threadId));
-					}
-					return reject(e);
-				}
-				return resolve(jsonFileContents);
-			}
-		});
-	});
-}
-
 /**
  * Returns a comparator (function) that sorts messages so that "newer" ones
  * show up near the top, a message timestamp-hidden to 2015-jan-01 is treated as
