@@ -271,7 +271,7 @@ $(function() {
 					id: threadId
 				}).execute(function (resp) {
 					console.log('Gmail API thread.trash responded with', resp);
-					if (resp.id === threadId) {
+					if (resp.id == threadId) {
 						resolve(resolve); //Successfully deleted from gmail.
 					} else {
 						//delete not successful.
