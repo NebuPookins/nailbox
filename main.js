@@ -24,23 +24,10 @@ const pygmentizeBundled = require('pygmentize-bundled');
 const helpers = {
 	fileio: require('./helpers/fileio')
 };
-
-/**
- * Returns a promise. If the promise resolves successfully, then as a side
- * effect the specified directory exists on the filesystem.
- */
-function ensureDirectoryExists(dir) {
-	return q.Promise(function(resolve, reject) {
-		const recursive = true;
-		nodeFs.mkdir(dir, 0700, recursive, function(err) {
-			if (err) {
-				reject(err);
-			} else {
-				resolve(dir);
-			}
-		});
-	});
-}
+const models = {
+	thread: require('./models/thread'),
+	message: require('./models/message'),
+};
 
 function readConfigWithDefault(config, strFieldName) {
 	if (config[strFieldName]) {
@@ -49,59 +36,6 @@ function readConfigWithDefault(config, strFieldName) {
 		return DEFAULT_CONFIG[strFieldName];
 	}
 }
-
-function saveJsonToFile(json, path) {
-	return q.Promise(function(resolve, reject) {
-		nodeFs.writeFile(path, JSON.stringify(json), function(err) {
-			if (err) {
-				reject(err);
-			} else {
-				resolve(json);
-			}
-		});
-	});
-}
-
-/**
- * Given an input like:
- *
- *     Alfred Alpha <aa@gmail.com>, "Beta, Betty" <bb@gmail.com>
- *
- * returns an array that looks like
- * [
- *   { name: 'Alfred Alpha', email: 'aa@gmail.com'},
- *   { name: '"Beta, Betty"', email: 'bb@gmail.com'}
- * ]
- */ 
-function parseEmailToString(str) {
-	/*
-	 * We're using a hack here where String.replace accepts a callback which is
-	 * invoked for each match in a regexp. We're not interested in the String that
-	 * results from the replacement, but we can have our callback function perform
-	 * side effects so that we can extract each match.
-	 */
-	var retVal = [];
-	str.replace(/("[^"]+"|[^,]+) <([^>]+)>/g, function(match, p1, p2) {
-		retVal.push({ name: p1, email: p2});
-	});
-	return retVal;
-}
-(function test_parseEmailToString() {
-	assert.deepEqual(parseEmailToString('"Alfred Alpha" <aa@gmail.com>'), [{name:'"Alfred Alpha"', email:'aa@gmail.com'}]);
-	assert.deepEqual(parseEmailToString('Alfred Alpha <aa@gmail.com>'), [{name: "Alfred Alpha", email: 'aa@gmail.com'}]);
-	assert.deepEqual(parseEmailToString(
-		'"Alfred Alpha" <aa@gmail.com>, "Beta, Betty" <bb@gmail.com>'),
-		[
-			{name: '"Alfred Alpha"', email: 'aa@gmail.com'},
-			{name: '"Beta, Betty"', email: 'bb@gmail.com'}
-		]);
-	assert.deepEqual(parseEmailToString(
-		'Alfred Alpha <aa@gmail.com>, "Beta, Betty" <bb@gmail.com>'),
-		[
-			{name: "Alfred Alpha", email: 'aa@gmail.com'},
-			{name: '"Beta, Betty"', email: 'bb@gmail.com'}
-		]);
-})();
 
 function recipientsInThread(threadData) {
 	return peopleInThread(threadData, function(header) {
@@ -173,29 +107,10 @@ function mostRecentSnippetInThread(threadData) {
  * ]
  */
 function peopleInThread(threadData, fnFilter) {
-	if (fnFilter === undefined) {
-		fnFilter = () => true;
-	}
 	const recipients = threadData.messages.map(function(message) {
-		return emailAddressesInMessage(message, fnFilter);
+		return new models.message.Message(message).emailAddresses(fnFilter);
 	}).reduce((a, b) => a.concat(b)); //Flatten the array of arrays.
 	return _.uniqBy(recipients, recipient => recipient.email);
-}
-
-/**
- * @param fnHeaderFilter Identifies the headers containing the e-mail addresses
- * you're interested in. E.g. (header => header.name === 'To')
- * @return an array that looks like:
- * [
- *   { name: 'Alfred Alpha', email: 'aa@gmail.com'},
- *   { name: '"Beta, Betty"', email: 'bb@gmail.com'}
- * ]
- */
-function emailAddressesInMessage(message, fnHeaderFilter) {
-	return message.payload.headers
-		.filter(fnHeaderFilter)
-		.map(header => parseEmailToString(header.value))
-		.reduce((a, b) => a.concat(b), []); //Flatten the array of arrays.
 }
 
 function readThreadFromFile(threadId) {
@@ -456,7 +371,7 @@ function createComparatorForThreadsForMainView(hideUntils) {
 }
 
 logger.info("Checking directory structure...");
-ensureDirectoryExists('data/threads').then(function() {
+helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	return logger.info("Directory structure looks fine.");
 }).then(function() {
 	return q.all([
@@ -492,7 +407,7 @@ ensureDirectoryExists('data/threads').then(function() {
 	app.post('/setup', function(req, res) {
 		logger.info(util.format("Updating client ID to '%s'.", req.body.clientId));
 		config.clientId = req.body.clientId;
-		saveJsonToFile(config, PATH_TO_CONFIG).then(function() {
+		helpers.fileio.saveJsonToFile(config, PATH_TO_CONFIG).then(function() {
 			res.redirect('/setup');
 		}, function(err) {
 			logger.error(util.format("Failed to save config file: %s", util.inspect(err)));
@@ -607,7 +522,7 @@ ensureDirectoryExists('data/threads').then(function() {
 					type: 'timestamp',
 					value: hideUntilTimestamp
 				};
-				saveJsonToFile(hideUntils, PATH_TO_HIDE_UNTILS).then(function() {
+				helpers.fileio.saveJsonToFile(hideUntils, PATH_TO_HIDE_UNTILS).then(function() {
 					res.sendStatus(200);
 				}, function(err) {
 					logger.error(util.format("Failed to save hideUntils: %j", err));
@@ -620,7 +535,7 @@ ensureDirectoryExists('data/threads').then(function() {
 					type: 'when-i-have-time',
 					hiddenOn: Date.now(),
 				};
-				saveJsonToFile(hideUntils, PATH_TO_HIDE_UNTILS).then(function() {
+				helpers.fileio.saveJsonToFile(hideUntils, PATH_TO_HIDE_UNTILS).then(function() {
 					res.sendStatus(200);
 				}, function(err) {
 					logger.error(util.format("Failed to save hideUntils: %j", err));
@@ -668,10 +583,8 @@ ensureDirectoryExists('data/threads').then(function() {
 		return {
 			deleted: objMessage.labelIds.indexOf('TRASH') !== -1,
 			messageId: objMessage.id,
-			from: emailAddressesInMessage(
-				objMessage, header => header.name === 'From'),
-			to: emailAddressesInMessage(
-				objMessage, header => header.name === 'To'),
+			from: new models.message.Message(objMessage).emailAddresses(header => header.name === 'From'),
+			to: new models.message.Message(objMessage).emailAddresses(header => header.name === 'To'),
 			date: parseInt(objMessage.internalDate),
 			body: {
 				original: originalBody,
@@ -771,8 +684,8 @@ ensureDirectoryExists('data/threads').then(function() {
 			});
 		}).spread((threadData, htmlizedMarkdown) => {
 			const mostRecentMessage = mostRecentMessageSatisfying(threadData, () => true);
-			const senders = emailAddressesInMessage(mostRecentMessage, header => header.name === 'From');
-			const receivers = emailAddressesInMessage(mostRecentMessage, header => header.name === 'From');
+			const senders = new models.message.Message(mostRecentMessage).emailAddresses(header => header.name === 'From');
+			const receivers = new models.message.Message(mostRecentMessage).emailAddresses(header => header.name === 'From');
 			const peopleOtherThanYourself = _.uniqBy(
 				senders.concat(receivers)
 					.filter(person => person.email !== req.body.myEmail),
