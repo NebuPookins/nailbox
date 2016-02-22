@@ -178,6 +178,10 @@
 				return getBestBodyFromMessage(biggestPart, threadId);
 			case 'multipart/mixed':
 				//I think this means there's attachments.
+				if (messagePart.parts.length === 1) {
+					//If there's only 1 part, then you have no choice, just pick it.
+					return getBestBodyFromMessage(messagePart.parts[0], threadId);
+				}
 				const nonAttachments = messagePart.parts.filter(function(part) {
 					if (part.mimeType == 'multipart/alternative') {
 						return true;
@@ -317,6 +321,30 @@
 				]
 			}, ''),
 			'<pre>' + goodDecoded + '</pre>'
+		);
+		//Empirical from thread 1530198d39cabdf5, message 1530198d39cabdf5
+		assert.equal(
+			getBestBodyFromMessage({
+				mimeType: 'multipart/mixed',
+				parts: [
+					{
+						mimeType: "multipart/related",
+						filename: "",
+						body: {
+							size: "0"
+						},
+						parts: [{
+							"mimeType": "text/html",
+							"filename": "",
+							"body": {
+								"size": "1923",
+								data: goodEncoded
+							}
+						}]
+					}
+				]
+			}, ''),
+			goodDecoded
 		);
 	})();
 
