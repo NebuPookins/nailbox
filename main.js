@@ -291,14 +291,17 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 				}
 			},
 			allowedTags: [
-				"a", "b", "blockquote", "br", "caption", "center", "code", "div", "em",
+				"a", "area", "b", "blockquote", "br", "caption", "center", "code",
+				"div", "em",
 				"h1", "h2", "h3", "h4", "h5", "h6",
-				"hr", "i", "img", "li", "nl", "ol", "p", "pre", 'span', "strike", "strong",
-				"table", "tbody", "td", "th", "thead", "tr", "ul"],
+				"hr", "i", "img", "li", "map", "nl", "ol", "p", "pre", 'span',
+				"strike", "strong", "table", "tbody", "td", "th", "thead", "tr", "ul"],
 			allowedAttributes: {
 				a: [ 'href', 'name', 'style', 'target' ],
+				area: ['href', 'shape', 'coords', 'style', 'target'],
 				div: ['class', 'style'],
-				img: [ 'alt', 'border', 'height', 'src', 'style', 'width' ],
+				img: [ 'alt', 'border', 'height', 'src', 'style', 'usemap', 'width' ],
+				map: ['name'],
 				p: ['style'],
 				span: ['style'],
 				table: ['align', 'bgcolor', 'border', 'cellpadding', 'cellspacing', 'style', 'width'],
