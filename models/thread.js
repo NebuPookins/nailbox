@@ -6,6 +6,7 @@
 	const Message = require('./message').Message;
 	const nodeFs = require('node-fs');
 	const q = require('q');
+	const util = require('util');
 
 	function Thread(data) {
 		this._data = data;
