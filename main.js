@@ -409,7 +409,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			const mostRecentMessage = thread.mostRecentMessageSatisfying(() => true);
 			const receivers = mostRecentMessage.recipients();
 			const peopleOtherThanYourself = _.uniqBy(
-				receivers.concat(mostRecentMessage.sender())
+				receivers.concat(mostRecentMessage.replyTo())
 					.filter(person => person.email !== req.body.myEmail),
 				recipient => recipient.email
 			);

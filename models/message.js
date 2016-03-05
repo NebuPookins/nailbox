@@ -77,9 +77,27 @@
 	Message.prototype.sender = function() {
 		const senders = this.emailAddresses(header => header.name === 'From');
 		if (senders.length !== 1) {
-			logger.warn(`Expected to have exactly 1 sender, but found ${senders.length} senders. Data was ${util.inspect(this._data)} and senders was ${senders}.`);
+			logger.warn(`Expected to have exactly 1 sender, but found ${senders.length} senders. Data was ${util.inspect(this._data)} and senders were ${senders}.`);
 		}
 		return senders.length === 0 ? null : senders[0];
+	};
+
+	/**
+	 * Returns an object in the format { name: 'Alfred Alpha', email: 'aa@gmail.com'}
+	 * representing person/address to reply to, according to this message. If there
+	 * was a "Reply-To" header, that address is used. Else, if there's a sender,
+	 * that address is used. Otherwise, null is returned.
+	 */
+	Message.prototype.replyTo = function() {
+		const replyToAddr = this.emailAddresses(header => header.name === 'Reply-To');
+		if (replyToAddr.length === 0) {
+			return this.sender();
+		} else if (replyToAddr.length === 1) {
+			return replyToAddr[0];
+		} else {
+			logger.warn(`Expected to have exactly 1 Reply-To, but found ${replyToAddr.length} addresses. Data was ${util.inspect(this._data)} and addresses were ${replyToAddr}.`);
+			return replyToAddr[0];
+		}
 	};
 
 	/**
@@ -184,7 +202,7 @@
 			if (bestPlainTextParts.length > 0) {
 				return _.maxBy(bestPlainTextParts, part => parseInt(part.body.size));
 			}
-			logger.warn(`In thread ${threadId}, couldn't figure out the best part of ${messagePart.mimeType}. Arbitrarily returning the first part. Parts were ${util.inspect(bestParts)}`)
+			logger.warn(`In thread ${threadId}, couldn't figure out the best part of ${messagePart.mimeType}. Arbitrarily returning the first part. Parts were ${util.inspect(bestParts)}`);
 			return bestParts[0];
 		} else {
 			/*
@@ -226,7 +244,7 @@
 					size: 100,
 					data: "good"
 				}
-			}
+			};
 			const attachment = {
 				mimeType: 'image/jpeg',
 				body: {
@@ -261,7 +279,7 @@
 					size: 1,
 					data: "bad"
 				}
-			}
+			};
 			const selectedPart = selectedBestPart({
 				mimeType: 'multipart/alternative',
 				parts: [bestPart, secondBestPart]
