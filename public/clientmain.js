@@ -633,28 +633,42 @@ $(function() {
 		$threads.text($threadDiv.find('.snippet').text());
 		$threadViewer.find('.loading-img').show();
 		$threadViewer.modal('show');
-		$.get('/api/threads/' + threadId +'/messages').done(function(threadData, textStatus, jqXHR) {
-			if ($threadViewer.data('threadId') !== threadId) {
-				//The user closed the modal and opened a new thread; this ajax result is stale.
-				return;
-			}
-			$threadViewer.find('.loading-img').hide();
-			$threads.empty();
-			var nonDeletedMessages = threadData.messages.filter(function(message) {
-				return !message.deleted;
+		function getThreadData(attemptNumber) {
+			return Q.Promise(function(resolve, reject) {
+				$.get('/api/threads/' + threadId +'/messages').done(function(threadData, textStatus, jqXHR) {
+					resolve(threadData);
+				}).fail(function(jqXHR, textStatus, errorThrown) {
+					console.log('Error getting thread data', arguments);
+					if (attemptNumber < 3) {
+						console.log('Retrying getThreadData');
+						resolve(getThreadData(attemptNumber + 1));
+					} else {
+						reject('Failed after too many retries');
+					}
+				});
 			});
-			if (threadData.messages.length > nonDeletedMessages.length) {
-				$threads.append(handlebarsTemplates.deletedMessages({
-					num: threadData.messages.length - nonDeletedMessages.length,
-					threadId: threadId
-				}));
-			}
-			nonDeletedMessages.forEach(function(message) {
-				$threads.append(handlebarsTemplates.message(message));
-			});
-		}).fail(function(jqXHR, textStatus, errorThrown) {
-			console.log('Error getting thread data', arguments);
-		});
+		}
+		getThreadData(0)
+			.then(function(threadData) {
+				if ($threadViewer.data('threadId') !== threadId) {
+					//The user closed the modal and opened a new thread; this ajax result is stale.
+					return;
+				}
+				$threadViewer.find('.loading-img').hide();
+				$threads.empty();
+				var nonDeletedMessages = threadData.messages.filter(function(message) {
+					return !message.deleted;
+				});
+				if (threadData.messages.length > nonDeletedMessages.length) {
+					$threads.append(handlebarsTemplates.deletedMessages({
+						num: threadData.messages.length - nonDeletedMessages.length,
+						threadId: threadId
+					}));
+				}
+				nonDeletedMessages.forEach(function(message) {
+					$threads.append(handlebarsTemplates.message(message));
+				});
+			}).done();
 	});
 	
 });
