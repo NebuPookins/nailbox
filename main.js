@@ -2,7 +2,6 @@ const DEFAULT_CONFIG = {
 	port: 3000
 };
 const PATH_TO_CONFIG = 'data/config.json';
-const PATH_TO_HIDE_UNTILS = 'data/hideUntils.json';
 
 const util = require('util');
 const express = require('express');
@@ -27,6 +26,7 @@ const helpers = {
 const models = {
 	thread: require('./models/thread'),
 	message: require('./models/message'),
+	hideUntils: require('./models/hide_until'),
 };
 
 function readConfigWithDefault(config, strFieldName) {
@@ -37,73 +37,13 @@ function readConfigWithDefault(config, strFieldName) {
 	}
 }
 
-/**
- * Returns a comparator (function) that sorts messages so that "newer" ones
- * show up near the top, a message timestamp-hidden to 2015-jan-01 is treated as
- * if it was lastUpdated on 2015-jan-01. Messages that are hidden "until I have
- * time" are sorted last.
- *
- * The returned function takes 2 params and expects them to be objects with
- * properties "threadId" and "lastUpdated".
- */
-function createComparatorForThreadsForMainView(hideUntils) {
-	return (a, b) => {
-		var hideAUntil = hideUntils[a.threadId] || {type: 'none'};
-		var hideBUntil = hideUntils[b.threadId] || {type: 'none'};
-		switch (hideAUntil.type) {
-			case 'when-i-have-time':
-				switch (hideBUntil.type) {
-					case 'when-i-have-time':
-						return hideBUntil.hiddenOn - hideAUntil.hiddenOn;
-					case 'timestamp':
-						return 1;
-					case 'none':
-						return 1;
-					default:
-						logger.error(util.format("Don't know how to sort with hideBUntil.type == %s", hideAUntil.type));
-						return 0;
-				}
-				break;
-			case 'timestamp':
-				switch (hideBUntil.type) {
-					case 'when-i-have-time':
-						return -1;
-					case 'timestamp':
-						return hideBUntil.value - hideAUntil.value;
-					case 'none':
-						return b.lastUpdated - hideAUntil.value;
-					default:
-						logger.error(util.format("Don't know how to sort with hideBUntil.type == %s", hideAUntil.type));
-						return 0;
-				}
-				break;
-			case 'none':
-				switch (hideBUntil.type) {
-					case 'when-i-have-time':
-						return -1;
-					case 'timestamp':
-						return hideBUntil.value - a.lastUpdated;
-					case 'none':
-						return b.lastUpdated - a.lastUpdated;
-					default:
-						logger.error(util.format("Don't know how to sort with hideBUntil.type == %s", hideAUntil.type));
-						return 0;
-				}
-				break;
-			default:
-				logger.error(util.format("Don't know how to sort with hideAUntil.type == %s", hideAUntil.type));
-				return 0;
-		}
-	};
-}
-
 logger.info("Checking directory structure...");
 helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	return logger.info("Directory structure looks fine.");
 }).then(function() {
 	return q.all([
 		helpers.fileio.readJsonFromOptionalFile(PATH_TO_CONFIG),
-		helpers.fileio.readJsonFromOptionalFile(PATH_TO_HIDE_UNTILS)
+		models.hideUntils.load(),
 	]);
 }).spread(function(config, hideUntils) {
 	const app = express();
@@ -186,7 +126,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
 							messageIds: thread.messageIds(),
 							labelIds: thread.labelIds(),
-							isWhenIHaveTime: hideUntils[thread.id()] && hideUntils[thread.id()].type === 'when-i-have-time',
+							isWhenIHaveTime: hideUntils.get(thread.id()).isWhenIHaveTime()
 						};
 					}, function(e) {
 						//If you couldn't read certain thread files, just keep proceeding.
@@ -198,16 +138,9 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 					formattedThreads = formattedThreads
 						.filter(formattedThread => formattedThread !== null)
 						.filter(function hideMessagesForLater(formattedThread) {
-							var hideUntil = hideUntils[formattedThread.threadId];
-							if (!hideUntil) {
-								return true;
-							}
-							if (hideUntil.type === 'timestamp') {
-								return hideUntil.value < now;
-							}
-							return true;
+							return hideUntils.get(formattedThread.threadId).getVisibility(formattedThread.lastUpdated, now) !== 'hidden';
 						});
-					formattedThreads.sort(createComparatorForThreadsForMainView(hideUntils));
+					formattedThreads.sort(hideUntils.comparator());
 					res.status(200);
 					res.type('json');
 					res.send(formattedThreads);
@@ -240,38 +173,29 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	app.put(/^\/api\/threads\/([a-z0-9]+)\/hideUntil$/, function(req, res) {
 		const threadId = req.params[0];
 		const hideUntil = req.body;
+		var promiseHideUntilIsSaved;
 		switch (hideUntil.type) {
 			case 'timestamp':
-				var hideUntilTimestamp = parseInt(hideUntil.value);
-				logger.info(util.format("Hiding thread %s until timestamp %j", threadId, hideUntilTimestamp));
-				hideUntils[threadId] = {
-					type: 'timestamp',
-					value: hideUntilTimestamp
-				};
-				helpers.fileio.saveJsonToFile(hideUntils, PATH_TO_HIDE_UNTILS).then(function() {
-					res.sendStatus(200);
-				}, function(err) {
-					logger.error(util.format("Failed to save hideUntils: %j", err));
-					res.sendStatus(500);
-				});
-				return;
+				const hideUntilTimestamp = parseInt(hideUntil.value);
+				logger.info(`Hiding thread ${threadId} until timestamp ${hideUntilTimestamp}.`);
+				promiseHideUntilIsSaved = hideUntils.hideUntilTimestamp(threadId, hideUntilTimestamp);
+				break;
 			case 'when-i-have-time':
-				logger.info(util.format("Hiding thread %s until I have time", threadId));
-				hideUntils[threadId] = {
-					type: 'when-i-have-time',
-					hiddenOn: Date.now(),
-				};
-				helpers.fileio.saveJsonToFile(hideUntils, PATH_TO_HIDE_UNTILS).then(function() {
-					res.sendStatus(200);
-				}, function(err) {
-					logger.error(util.format("Failed to save hideUntils: %j", err));
-					res.sendStatus(500);
-				});
-				return;
+				logger.info(`Hiding thread ${threadId} until I have time.`);
+				promiseHideUntilIsSaved = hideUntils.hideUntilIHaveTime(threadId);
+				break;
 			default:
-				logger.error(util.format("Don't know how to handle hideUntil.type %s", hideUntil.type));
+				logger.error(`Don't know how to handle hideUntil.type ${hideUntil.type}.`);
 				res.status(400).send("Invalid hideUntil.type");
+				return;
 		}
+		promiseHideUntilIsSaved.then(function() {
+			res.sendStatus(200);
+		}, function(err) {
+			logger.error(util.format("Failed to save hideUntils: %j", err));
+			res.sendStatus(500);
+		});
+		return;
 	});
 
 	function loadRelevantDataFromMessage(objMessage) {
