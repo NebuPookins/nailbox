@@ -15,7 +15,7 @@ module.exports = function(grunt) {
 				script: 'main.js',
 				options: {
 					legacyWatch: true,
-					ignore: 'data/*'
+					ignore: ['data/*', 'public/*']
 				}
 			}
 		},
