@@ -361,5 +361,33 @@
 		return formatPartAsHtml(bestPart);
 	};
 
+	/**
+	 * @param messagePart If you have a message, then `message.payload` is probably
+	 * the messagePart that you want to pass in. More generally, a messagePart is
+	 * a hash that contains the fields `mimeType`, `body` and `parts`.
+	 * @return [Array<Hash>] example:
+	 *  [{filename: 'IMG_2266.PNG', size: 260734, attachmentId: 'FOOBAR'}]
+	 */
+	function getAttachments(messagePart) {
+		var retVal = [];
+		if (messagePart.body.attachmentId) {
+			retVal.push({
+				filename: messagePart.filename,
+				size: parseInt(messagePart.body.size),
+				attachmentId: messagePart.body.attachmentId
+			});
+		}
+		if (messagePart.parts) {
+			messagePart.parts.forEach((part) => {
+				retVal = retVal.concat(getAttachments(part));
+			});
+		}
+		return retVal;
+	}
+
+	Message.prototype.getAttachments = function() {
+		return getAttachments(this._data.payload);
+	};
+
 	exports.Message = Message;
 })();

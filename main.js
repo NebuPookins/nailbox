@@ -200,6 +200,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 
 	function loadRelevantDataFromMessage(objMessage) {
 		const originalBody = objMessage.bestBody();
+		const attachments = objMessage.getAttachments();
 		const sanitizedBody = sanitizeHtml(originalBody, {
 			transformTags: {
 				'body': 'div',
@@ -242,7 +243,8 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			body: {
 				original: originalBody,
 				sanitized: sanitizedBody
-			}
+			},
+			attachments: attachments
 		};
 	}
 

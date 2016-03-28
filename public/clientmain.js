@@ -30,6 +30,9 @@ $(function() {
 		}
 		return total - amountToSubtract;
 	});
+	Handlebars.registerHelper('filesize', function(bytes) {
+		return filesize(bytes);
+	});
 
 	Handlebars.registerHelper("prettyTimestamp", function(timestamp) {
 		var now = moment();
@@ -517,6 +520,59 @@ $(function() {
 			$threadViewer.find('.reply textarea').val('');
 			$threadViewer.modal('hide');
 		}).done();
+	});
+	function b64toBlob(b64Data) {
+		var sliceSize = 512;
+		var byteCharacters = atob(b64Data);
+		var byteArrays = [];
+		for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+			var slice = byteCharacters.slice(offset, offset + sliceSize);
+			var byteNumbers = new Array(slice.length);
+			for (var i = 0; i < slice.length; i++) {
+				byteNumbers[i] = slice.charCodeAt(i);
+			}
+			var byteArray = new Uint8Array(byteNumbers);
+			byteArrays.push(byteArray);
+		}
+		var blob = new Blob(byteArrays);
+		return blob;
+	}
+	$threadViewer.on('click', 'button.dl-attachment', function(eventObj) {
+		var $clickedButton = $(eventObj.target);
+		var attachmentId = $clickedButton.data('attachment-id');
+		var attachmentName = $clickedButton.data('attachment-name');
+		var $message = $clickedButton.parents('.message');
+		var messageId = $message.data('message-id');
+		var updateMessenger = Messenger().info("Download attachment from "+messageId+".");
+		promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
+			return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly');
+		}).then(function(gapi) {
+			return Q.Promise(function(resolve, reject) {
+				gapi.client.gmail.users.messages.attachments.get({
+					id: attachmentId,
+					messageId: messageId,
+					userId: 'me'
+				}).execute(function(resp) {
+						if (resp.data) {
+							resolve(resp.data);
+						} else {
+							reject(resp);
+						}
+					});
+			});
+		}).then(function(base64UrlAttachment) {
+			var base64Version = base64UrlAttachment.replace(/[-_]/g, function(char) {
+				if (char === '-') {
+					return '+';
+				}
+				if (char === '_') {
+					return '/';
+				}
+				throw "Don't know how to transform " + char;
+			});
+			var blob = b64toBlob(base64Version);
+			saveAs(blob, attachmentName);
+		});
 	});
 	$threadViewer.find('button.delete').on('click', function() {
 		var threadId = $threadViewer.data('threadId');
