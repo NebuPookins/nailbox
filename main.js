@@ -223,7 +223,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			allowedAttributes: {
 				a: [ 'href', 'name', 'style', 'target' ],
 				area: ['href', 'shape', 'coords', 'style', 'target'],
-				div: ['class', 'style'],
+				div: ['style'],
 				img: [ 'alt', 'border', 'height', 'src', 'style', 'usemap', 'width' ],
 				map: ['name'],
 				p: ['style'],
