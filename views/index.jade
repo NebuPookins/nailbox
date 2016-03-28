@@ -181,6 +181,8 @@ html(lang="en")
 		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.11.2/moment.js')
 		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/q.js/1.4.1/q.js')
 		script(type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/messenger/1.4.2/js/messenger.js")
+		script(type='text/javascript' src="http://cdn.filesizejs.com/filesize.min.js")
+		script(type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2014-11-29/FileSaver.min.js")
 		script(type='text/javascript' src='public/clientmain.js')
 		script#handlebar-thread(type='text/x-handlebars-template')
 			.thread(data-thread-id="{{threadId}}" class="{{#if isWhenIHaveTime}}when-i-have-time{{/if}}")
@@ -254,6 +256,16 @@ html(lang="en")
 					.row
 						.col-xs-12.message-body
 							| {{& body.sanitized}}
+				.panel-footer
+					.row
+						.col-xs-12.message-body
+							| {{#each attachments}}
+							button.btn.btn-default.dl-attachment(data-attachment-id="{{attachmentId}}" data-attachment-name="{{filename}}")
+								span.glyphicon.glyphicon-file(aria-hidden="true")
+								| {{filename}}
+								| {{filesize size}}
+							| 
+							| {{/each}}
 		script#handlebar-label-selection(type='text/x-handlebars-template')
 			| <button class="btn {{#if isSystem}}btn-warning{{else}}{{/if}}" {{#if isSystem}}{{else}}style="background-image: linear-gradient(to bottom,hsl({{hue}},84%,40%),hsl({{hue}},84%,38%) 100%); border-color: hsl({{hue}},85%,26%); color:#fff; text-shadow: 0 -1px 0 rgba(0,0,0,.2);"{{/if}}" data-label-id="{{id}}")>
 			| {{labelIdToName id}}
