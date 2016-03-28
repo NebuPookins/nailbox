@@ -50,8 +50,8 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	app.set('views', path.join(__dirname, 'views'));
 	app.set('view engine', 'jade');
 	app.use('/public', express.static('public'));
-	app.use(bodyParser.json({limit: '10mb', parameterLimit: 5000}));
-	app.use(bodyParser.urlencoded({limit: '10mb', parameterLimit: 5000, extended: true }));
+	app.use(bodyParser.json({limit: '10mb', parameterLimit: 10000}));
+	app.use(bodyParser.urlencoded({limit: '10mb', parameterLimit: 10000, extended: true }));
 	app.use(function (req, res, next) {
 		//Log each request.
 		logger.info(util.format("%s %s => %s %s %s", new Date().toISOString(), req.ip, req.protocol, req.method, req.url));

@@ -7,7 +7,7 @@ $(function() {
 	if (!console.log) {
 		console.log = function() {};
 	}
-	
+
 	var promisedClientId = Q.Promise(function(resolve, reject) {
 		$.get({
 			url: '/api/clientId'
@@ -58,6 +58,9 @@ $(function() {
 		var promiseSnapshot = promisedLabels.inspect();
 		if (promiseSnapshot.state === 'fulfilled') {
 			var labelObj = promiseSnapshot.value.find(function(label) { return label.id === labelId; });
+			if (labelObj === undefined) {
+				return '';
+			}
 			/*
 			 * For whatever reason, the system labels that begin with "CATEGORY_"
 			 * (e.g. "CATEGORY_SOCIAL") don't have a pleasant display name.
@@ -83,20 +86,22 @@ $(function() {
 		return hash;
 	};
 
-	var messenger = Messenger().info("Initializing Nailbox...");
-
 	/**
 	 * Waits for the global variable `gapi`, representing the Google API, to
 	 * finish loading.
 	 */
-	function waitForGapiToLoad() {
+	function waitForGapiToLoad(updateMessenger) {
 		return Q.Promise(function(resolve, reject) {
 			function _waitForGapiToLoad() {
-				messenger.update({
+				updateMessenger.update({
 					type: 'info',
 					message: "Waiting for Google API to load..."
 				});
 				if (gapi && gapi.auth && gapi.auth.authorize) {
+					updateMessenger.update({
+						type: 'success',
+						message: "Google API to loaded!"
+					});
 					resolve(gapi);
 				} else {
 					setTimeout(_waitForGapiToLoad, 500);
@@ -106,10 +111,10 @@ $(function() {
 		});
 	}
 
-	function saveThreadsFromGmailToServer(fnAuthorizationGetter) {
+	function saveThreadsFromGmailToServer(fnAuthorizationGetter, updateMessenger) {
 		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly').then(function(gapi) {
 			return Q.Promise(function(resolve, reject) {
-				messenger.update({
+				updateMessenger.update({
 					type: 'info',
 					message: "Downloading list of threads from Gmail..."
 				});
@@ -118,9 +123,9 @@ $(function() {
 					'labelIds': ['INBOX']
 				}).execute(resolve); //TODO: Handle errors
 			}).then(function(resp) {
-				messenger.update({
+				updateMessenger.update({
 					type: 'info',
-					message: "Downloading threads from Gmail..."
+					message: "Downloading "+resp.threads.length+" threads from Gmail..."
 				});
 				return resp.threads.map(function(item) {
 					return Q.promise(function(resolve, reject) {
@@ -131,20 +136,24 @@ $(function() {
 							$.post(
 								'/api/threads',
 								resp.result
-							).done(resolve).fail(reject);
+							).done(resolve).fail(function(jqXHR, textStatus, errorThrown) {
+								Messenger().error("Failed to save thread " + item.id);
+								console.log("Failed to save thread", item, resp, jqXHR, textStatus, errorThrown);
+								reject(jqXHR, textStatus, errorThrown);
+							});
 						});
 					});
 				});
 			}).then(function(arrOfPromises) {
-				return Q.all(arrOfPromises);
+				return Q.allSettled(arrOfPromises);
 			});
 		});
 	}
 
-	function updateUiWithThreadsFromServer() {
-		messenger.update({
+	function updateUiWithThreadsFromServer(updateMessenger) {
+		updateMessenger.update({
 			type: 'info',
-			message: "Updating GUI with updated threads from server..."
+			message: "Downloading threads from local cache..."
 		});
 		$.get({
 			url: '/api/threads',
@@ -175,25 +184,22 @@ $(function() {
 				$thread.data('labelIds', thread.labelIds);
 				$main.append($thread);
 			});
-			messenger.update({
+			updateMessenger.update({
 				type: 'success',
 				message: "GUI updated with threads from server..."
 			});
 		});
 	}
 
-	updateUiWithThreadsFromServer();
-	setInterval(function() {
-		messenger.update({
-			type: 'info',
-			message: "Refreshing threads..."
-		});
-		updateUiWithThreadsFromServer();
-	}, moment.duration(5, 'minutes').as('milliseconds'));
-	//saveThreadsFromGmailToServer
+	(function() {
+		var fnScheduledUpdate = function() {
+			updateUiWithThreadsFromServer(Messenger().info("Refreshing threads from cache..."));
+			setTimeout(fnScheduledUpdate, moment.duration(5, 'minutes').as('milliseconds'));
+		};
+		fnScheduledUpdate();
+	}());
 
-
-	function getAuthorizationGetter(gapi, clientId) {
+	function getAuthorizationGetter(gapi, clientId) { //TODO: Accept an updateMessenger
 		var alreadyPromisedScopes = {};
 		return function(scope) {
 			if ((!alreadyPromisedScopes[scope]) || alreadyPromisedScopes[scope].expiresAt.isBefore(/*now*/)) {
@@ -218,7 +224,7 @@ $(function() {
 	}
 
 	var promisedFnAuthorizationGetter = Q.all([
-		waitForGapiToLoad(), promisedClientId
+		waitForGapiToLoad(Messenger().info("Loading Google API...")), promisedClientId
 	]).spread(function(gapi, clientId) {
 		return getAuthorizationGetter(gapi, clientId);
 	});
@@ -242,14 +248,15 @@ $(function() {
 		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly');
 	}).then(function(gapi) {
 		return Q.Promise(function(resolve, reject) {
-			messenger.update({
-				type: 'info',
-				message: "Download labels from GMail..."
-			});
+			var updateMessenger = Messenger().info("Downloading labels from GMail...");
 			gapi.client.gmail.users.labels.list({
 				userId: 'me'
 			}).execute(function(resp) {
 				if (_.isArray(resp.labels)) {
+					updateMessenger.update({
+						type: 'success',
+						message: "Successfully downloaded labels from GMail."
+					});
 					resolve(_.sortBy(resp.labels, function(label) {
 						/*
 						 * Show all the system labels before the user labels, then sort
@@ -258,24 +265,34 @@ $(function() {
 						return (label.type === 'system' ? 'A' : 'B') + label.name.toLowerCase();
 					}));
 				} else {
+					updateMessenger.update({
+						type: 'error',
+						message: "Failed to download labels from GMail."
+					});
 					reject(resp);
 				}
 			});
 		});
 	});
 
-	setInterval(function() {
-		messenger.update({
-			type: 'info',
-			message: "Downloading new threads from gmail."
-		});
-		var promiseThreadsUpdatedFromGmail = promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
-			return saveThreadsFromGmailToServer(fnAuthorizationGetter);
-		});
-		Q.all([promisedLabels, promiseThreadsUpdatedFromGmail]).then(function() {
-			updateUiWithThreadsFromServer();
-		}).done();
-	}, moment.duration(30, 'minutes').as('milliseconds'));
+	(function() {
+		var fnScheduledUpdate = () => {
+			var updateMessenger = Messenger().info("Downloading new threads from gmail...");
+			var promiseThreadsUpdatedFromGmail = promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
+				return saveThreadsFromGmailToServer(fnAuthorizationGetter, updateMessenger);
+			}).then(function() {
+				updateUiWithThreadsFromServer(updateMessenger);
+			}).then(function() {
+				updateMessenger.update({
+					type: 'success',
+					message: "Successfully downloaded new threads from gmail."
+				});
+				setTimeout(fnScheduledUpdate, moment.duration(30, 'minutes').as('milliseconds'));
+			}).done();
+		};
+		fnScheduledUpdate();
+	})();
+	
 
 	function deleteThreadFromUI(threadId) {
 		var $uiElemToDelete = $main.find('.thread[data-thread-id="'+threadId+'"]');
@@ -284,21 +301,29 @@ $(function() {
 		});
 	}
 
-	function deleteOnLocalCache(threadId) {
-			return Q.Promise(function(resolve, reject) {
-				$.ajax({
-					url: '/api/threads/' + threadId,
-					type: 'DELETE'
-				}).done(resolve).fail(reject);
-			});
-		}
+	function deleteOnLocalCache(threadId, updateMessenger) {
+		updateMessenger.update({
+			type: 'info',
+			message: "Deleting thread "+threadId+" from local cache..."
+		});
+		return Q.Promise(function(resolve, reject) {
+			$.ajax({
+				url: '/api/threads/' + threadId,
+				type: 'DELETE'
+			}).done(resolve).fail(reject);
+		});
+	}
 
-	function deleteThread(threadId) {
+	function deleteThread(threadId, updateMessenger) {
+		updateMessenger.update({
+			type: 'info',
+			message: "Requesting delete permissions from Google API..."
+		});
 		return promisedFnAuthorizationGetter.then(function requestDeletePermission(fnAuthorizationGetter) {
 			return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.modify');
 		}).then(function trashOnGmail(gapi) {
 			return Q.Promise(function(resolve, reject) {
-				messenger.update({
+				updateMessenger.update({
 					type: 'info',
 					message: "Calling Gmail API thread.trash("+threadId+")"
 				});
@@ -307,37 +332,38 @@ $(function() {
 					id: threadId
 				}).execute(function (resp) {
 					if (resp.id == threadId) {
-						messenger.update({
-							type: 'success',
-							message: "Thread "+threadId+" deleted from gmail."
-						});
 						resolve(resolve); //Successfully deleted from gmail.
 					} else {
 						//delete not successful.
 						if (resp.code === 403) {
-							messenger.update({
+							updateMessenger.update({
 								type: 'error',
 								message: "Insufficient permissions to delete thread."
 							});
 							//TODO: Insufficient permissions.
+						} else {
+							updateMessenger.update({
+								type: 'error',
+								message: "Failed to delete thread from gmail."
+							});
 						}
 						reject(resp);
 					}
 				});
 			});
 		}).then(function() {
-			return deleteOnLocalCache(threadId);
+			return deleteOnLocalCache(threadId, updateMessenger);
 		}).then(function() {
 			deleteThreadFromUI(threadId);
 		});
 	}
 
-	function archiveThread(threadId) {
+	function archiveThread(threadId, updateMessenger) {
 		return promisedFnAuthorizationGetter.then(function requestDeletePermission(fnAuthorizationGetter) {
 			return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.modify');
 		}).then(function trashOnGmail(gapi) {
 			return Q.Promise(function(resolve, reject) {
-				messenger.update({
+				updateMessenger.update({
 					type: 'info',
 					message: "Calling Gmail API threads.modify (archiving) on "+threadId+"."
 				});
@@ -347,17 +373,18 @@ $(function() {
 					removeLabelIds: ['INBOX']
 				}).execute(function (resp) {
 					if (resp.id === threadId) {
-						messenger.update({
-							type: 'success',
-							message: "Successfully archived thread on gmail."
-						});
 						resolve(resolve);
 					} else {
 						//delete not successful.
 						if (resp.code === 403) {
-							messenger.update({
+							updateMessenger.update({
 								type: 'error',
 								message: "Insufficient permissions to archive thread on gmail."
+							});
+						} else {
+							updateMessenger.update({
+								type: 'error',
+								message: "Failed to archive thread."
 							});
 						}
 						reject(resp);
@@ -365,19 +392,19 @@ $(function() {
 				});
 			});
 		}).then(function() {
-			return deleteOnLocalCache(threadId);
+			return deleteOnLocalCache(threadId, updateMessenger);
 		}).then(function() {
 			deleteThreadFromUI(threadId);
 		});
 	}
 
-	function moveThreadToLabel(threadId, labelId) {
+	function moveThreadToLabel(threadId, labelId, updateMessenger) {
 		//TODO: Share code with archiveThread
 		return promisedFnAuthorizationGetter.then(function requestDeletePermission(fnAuthorizationGetter) {
 			return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.modify');
 		}).then(function(gapi) {
 			return Q.Promise(function(resolve, reject) {
-				messenger.update({
+				updateMessenger.update({
 					type: 'info',
 					message: "Calling Gmail API threads.modify (moving to label) on "+threadId+"."
 				});
@@ -388,17 +415,18 @@ $(function() {
 					addLabelIds: [labelId]
 				}).execute(function (resp) {
 					if (resp.id === threadId) {
-						messenger.update({
-							type: 'success',
-							message: "Successfully moved thread to label."
-						});
 						resolve(resolve); //Successfully deleted from gmail.
 					} else {
 						//delete not successful.
 						if (resp.code === 403) {
-							messenger.update({
+							updateMessenger.update({
 								type: 'error',
 								message: "Insufficient permissions to move thread to label."
+							});
+						} else {
+							updateMessenger.update({
+								type: 'error',
+								message: "Failed to move thread "+threadId+" to label."
 							});
 						}
 						reject(resp);
@@ -406,7 +434,7 @@ $(function() {
 				});
 			});
 		}).then(function() {
-			return deleteOnLocalCache(threadId);
+			return deleteOnLocalCache(threadId, updateMessenger);
 		}).then(function() {
 			deleteThreadFromUI(threadId);
 		});
@@ -419,13 +447,20 @@ $(function() {
 		var btnDelete = eventObject.currentTarget;
 		var $divThread = $(btnDelete).parents('.thread[data-thread-id]');
 		var threadId = $divThread.data('threadId');
-		deleteThread(threadId).done();
+		var updateMessenger = Messenger().info("Deleting thread "+threadId+"...");
+		deleteThread(threadId, updateMessenger).then(function() {
+			updateMessenger.update({
+				type: 'success',
+				message: "Successfully deleted message " + threadId
+			});
+		}).done();
 		return false;
 	});
 	$threadViewer.find('button.reply-all').on('click', function() {
 		var threadId = $threadViewer.data('threadId');
+		var updateMessenger = Messenger().info("Sending reply to thread "+threadId+"...");
 		if (!threadId) {
-			messenger.update({
+			updateMessenger.update({
 				type: 'error',
 				message: "Tried to reply to thread from threadViewer, but there was no threadId."
 			});
@@ -433,7 +468,7 @@ $(function() {
 		}
 		var promisedEncodedEmail = promisedMyEmail.then(function(myEmail) {
 			return Q.Promise(function(resolve, reject) {
-				messenger.update({
+				updateMessenger.update({
 					type: 'info',
 					message: "POST-ing to get RFC2822 content..."
 				});
@@ -450,6 +485,10 @@ $(function() {
 		}).then(function(gapi) {
 			return promisedEncodedEmail.then(function(base64EncodedEmail) {
 				return Q.Promise(function(resolve, reject) {
+					updateMessenger.update({
+						type: 'info',
+						message: "Sending e-mail to gmail..."
+					});
 					gapi.client.gmail.users.messages.send({
 						userId: 'me',
 						uploadType: 'media',
@@ -457,13 +496,13 @@ $(function() {
 						raw: base64EncodedEmail
 					}).execute(function(resp) {
 						if (resp.id) {
-							messenger.update({
+							updateMessenger.update({
 								type: 'success',
 								message: "Successfully sent message with id "+ resp.id +"."
 							});
 							resolve(resp);
 						} else {
-							messenger.update({
+							updateMessenger.update({
 								type: 'error',
 								message: "Failed to send message."
 							});
@@ -481,12 +520,17 @@ $(function() {
 	});
 	$threadViewer.find('button.delete').on('click', function() {
 		var threadId = $threadViewer.data('threadId');
+		var updateMessenger = Messenger().info("Deleting thread "+threadId+"...");
 		if (threadId) {
-			deleteThread(threadId).then(function() {
+			deleteThread(threadId, updateMessenger).then(function() {
+				updateMessenger.update({
+					type: 'success',
+					message: "Successfully deleted message " + threadId
+				});
 				$threadViewer.modal('hide');
 			}).done();
 		} else {
-			messenger.update({
+			updateMessenger.update({
 				type: 'error',
 				message: "Tried to delete from threadViewer, but there's no thread id."
 			});
@@ -503,10 +547,7 @@ $(function() {
 		if (threadId) {
 			window.open('https://mail.google.com/mail/u/0/#inbox/' + threadId,'_blank');
 		} else {
-			messenger.update({
-				type: 'error',
-				message: "Tried to view-on-gmail from threadViewer, but there's no thread id."
-			});
+			Messenger().error("Tried to view-on-gmail from threadViewer, but there's no thread id.");
 		}
 		return false;
 	});
@@ -514,17 +555,28 @@ $(function() {
 		var btnDelete = eventObject.currentTarget;
 		var $divThread = $(btnDelete).parents('.thread[data-thread-id]');
 		var threadId = $divThread.data('threadId');
-		archiveThread(threadId).done();
+		var updateMessenger = Messenger().info("Archiving thread "+threadId+"...");
+		archiveThread(threadId, updateMessenger).then(function() {
+			updateMessenger.update({
+				type: 'success',
+				message: "Successfully archived thread "+threadId+"."
+			});
+		}).done();
 		return false;
 	});
 	$threadViewer.find('button.archive-thread').on('click', function() {
 		var threadId = $threadViewer.data('threadId');
+		var updateMessenger = Messenger().info("Archiving thread "+threadId+"...");
 		if (threadId) {
-			archiveThread(threadId).then(function() {
+			archiveThread(threadId, updateMessenger).then(function() {
 				$threadViewer.modal('hide');
+				updateMessenger.update({
+					type: 'success',
+					message: "Successfully archived thread "+threadId+"."
+				});
 			}).done();
 		} else {
-			messenger.update({
+			updateMessenger.update({
 				type: 'error',
 				message: "Tried to archive from threadViewer, but there's no thread id."
 			});
@@ -549,10 +601,7 @@ $(function() {
 			$picker.data('threadId', threadId);
 			$picker.modal('show');
 		} else {
-			messenger.update({
-				type: 'error',
-				message: "Tried to switch from threadViewer to $picker, but there's no thread id."
-			});
+			Messenger().error("Tried to switch from threadViewer to $picker, but there's no thread id.");
 			console.log("Tried to switch from threadViewer to ", $picker, ", but there's no thread id.");
 		}
 		return false;
@@ -609,8 +658,9 @@ $(function() {
 	});
 	$laterPicker.on('click', '.button', function(eventObject) {
 		var threadId = $laterPicker.data('threadId');
+		var updateMessenger = Messenger().info("Hiding thread " + threadId + ".");
 		if (!threadId) {
-			messenger.update({
+			updateMessenger.update({
 				type: 'error',
 				message: "Tried to hide thread from laterPicker, but no threadId found."
 			});
@@ -685,13 +735,13 @@ $(function() {
 				break;
 			//case 'custom': //TODO
 			default:
-				messenger.update({
+				updateMessenger.update({
 					type: 'error',
 					message: "Forgot to implement " + $(btnClicked).data('value')
 				});
 				return;
 		}
-		messenger.update({
+		updateMessenger.update({
 			type: 'info',
 			message: "Hiding thread " + threadId + " until " + JSON.stringify(hideUntil) + "."
 		});
@@ -700,14 +750,14 @@ $(function() {
 			data: hideUntil,
 			method: 'PUT'
 		}).done(function() {
-			messenger.update({
+			updateMessenger.update({
 				type: 'success',
-				message: "Successuflly hid thread " + threadId + " until " + JSON.stringify(hideUntil) + "."
+				message: "Successfully hid thread " + threadId + " until " + JSON.stringify(hideUntil) + "."
 			});
 			$laterPicker.modal('hide');
 			deleteThreadFromUI(threadId);
 		}).fail(function() {
-			messenger.update({
+			updateMessenger.update({
 				type: 'error',
 				message: "Failed to hide threads."
 			});
@@ -718,16 +768,21 @@ $(function() {
 	});
 	$labelPicker.on('click', 'button', function(eventObject) {
 		var threadId = $labelPicker.data('threadId');
+		var updateMessenger = Messenger().info("Moving thread "+threadId+" to label...");
 		if (!threadId) {
-			messenger.update({
+			updateMessenger.update({
 				type: 'error',
-				message: "Tried to hide thread from laterPicker, but no threadId found."
+				message: "Tried to assign label thread from labelPicker, but no threadId found."
 			});
 			return;
 		}
 		var labelId = $(eventObject.currentTarget).data('label-id');
-		moveThreadToLabel(threadId, labelId).then(function() {
+		moveThreadToLabel(threadId, labelId, updateMessenger).then(function() {
 			$labelPicker.modal('hide');
+			updateMessenger.update({
+				type: 'success',
+				message: "Successfully moved thread "+threadId+" to label."
+			});
 		}).done();
 	});
 	
@@ -742,25 +797,22 @@ $(function() {
 		$threads.text($threadDiv.find('.snippet').text());
 		$threadViewer.find('.loading-img').show();
 		$threadViewer.modal('show');
+		var updateMessenger = Messenger().info("Downloading thread data for "+threadId +"...");
 		function getThreadData(attemptNumber) {
 			return Q.Promise(function(resolve, reject) {
 				$.get('/api/threads/' + threadId +'/messages').done(function(threadData, textStatus, jqXHR) {
-					messenger.update({
-						type: 'success',
-						message: "Successfully downloaded thread data."
-					});
 					resolve(threadData);
 				}).fail(function(jqXHR, textStatus, errorThrown) {
 					console.log('Error getting thread data', arguments);
 					if (attemptNumber < 60) {
-						messenger.update({
+						updateMessenger.update({
 							type: 'info',
 							message: "Failed to get thread data, retrying..."
 						});
 						console.log('Retrying getThreadData');
 						resolve(getThreadData(attemptNumber + 1));
 					} else {
-						messenger.update({
+						updateMessenger.update({
 							type: 'error',
 							message: "Failed to get thread data after too many retries."
 						});
@@ -773,6 +825,10 @@ $(function() {
 			.then(function(threadData) {
 				if ($threadViewer.data('threadId') !== threadId) {
 					//The user closed the modal and opened a new thread; this ajax result is stale.
+					updateMessenger.update({
+						type: 'info',
+						message: "Detected that user no longer cares about "+threadId+"; discarding thread data."
+					});
 					return;
 				}
 				$threadViewer.find('.loading-img').hide();
@@ -788,6 +844,10 @@ $(function() {
 				}
 				nonDeletedMessages.forEach(function(message) {
 					$threads.append(handlebarsTemplates.message(message));
+				});
+				updateMessenger.update({
+					type: 'success',
+					message: "Successfully downloaded thread data for "+threadId+"."
 				});
 			}).done();
 	});
