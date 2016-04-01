@@ -45,7 +45,7 @@
 			 * 1459135641259 (AKA 2016, March 27) is when this property was added. If
 			 * the property did not exist, just assume it was hidden "around now".
 			 */
-			this._data = 1459135641259;
+			this._data.hiddenOn = 1459135641259;
 		}
 	}
 	HideUntilTimestamp.prototype = Object.create(HideUntil.prototype);
@@ -259,4 +259,15 @@
 			});
 		});
 	};
+
+	//////////////////////////////////////////////////////////////////////////////
+	(function test() {
+		const underTest = new HideUntilTimestamp({
+			type:"timestamp",
+			value: 1
+		});
+		const lastUpdated = 2;
+		const now = 3;
+		assert.equal(underTest.getVisibility(lastUpdated, now), 'visible');
+	})();
 })();
