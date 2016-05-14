@@ -27,6 +27,7 @@ const models = {
 	thread: require('./models/thread'),
 	message: require('./models/message'),
 	hideUntils: require('./models/hide_until'),
+	lastRefreshed: require('./models/last_refreshed'),
 };
 
 function readConfigWithDefault(config, strFieldName) {
@@ -44,8 +45,9 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	return q.all([
 		helpers.fileio.readJsonFromOptionalFile(PATH_TO_CONFIG),
 		models.hideUntils.load(),
+		models.lastRefreshed.load(),
 	]);
-}).spread(function(config, hideUntils) {
+}).spread(function(config, hideUntils, lastRefresheds) {
 	const app = express();
 	app.set('views', path.join(__dirname, 'views'));
 	app.set('view engine', 'jade');
@@ -100,6 +102,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 					res.sendStatus(500);
 				} else {
 					res.sendStatus(200);
+					lastRefresheds.markRefreshed(threadId).done();
 				}
 			});
 		} else {
@@ -126,7 +129,8 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
 							messageIds: thread.messageIds(),
 							labelIds: thread.labelIds(),
-							isWhenIHaveTime: hideUntils.get(thread.id()).isWhenIHaveTime()
+							isWhenIHaveTime: hideUntils.get(thread.id()).isWhenIHaveTime(),
+							needsRefreshing: lastRefresheds.needsRefreshing(thread.id(), thread.lastUpdated(), Date.now()),
 						};
 					}, function(e) {
 						//If you couldn't read certain thread files, just keep proceeding.

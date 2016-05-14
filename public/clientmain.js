@@ -114,6 +114,30 @@ $(function() {
 		});
 	}
 
+	function saveThreadFromGmailToServer(fnAuthorizationGetter, threadId) {
+		if (!threadId) {
+			debugger;
+			throw "foo";
+		}
+		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly').then(function(gapi) {
+			return Q.promise(function(resolve, reject) {
+				gapi.client.gmail.users.threads.get({
+					userId: 'me',
+					id: threadId
+				}).execute(function(resp) {
+					$.post(
+						'/api/threads',
+						resp.result
+					).done(resolve).fail(function(jqXHR, textStatus, errorThrown) {
+						Messenger().error("Failed to save thread " + threadId);
+						console.log("Failed to save thread", item, resp, jqXHR, textStatus, errorThrown);
+						reject(jqXHR, textStatus, errorThrown);
+					});
+				});
+			});
+		});
+	}
+
 	function saveThreadsFromGmailToServer(fnAuthorizationGetter, updateMessenger) {
 		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly').then(function(gapi) {
 			return Q.Promise(function(resolve, reject) {
@@ -131,21 +155,7 @@ $(function() {
 					message: "Downloading "+resp.threads.length+" threads from Gmail..."
 				});
 				return resp.threads.map(function(item) {
-					return Q.promise(function(resolve, reject) {
-						gapi.client.gmail.users.threads.get({
-							userId: 'me',
-							id: item.id
-						}).execute(function(resp) {
-							$.post(
-								'/api/threads',
-								resp.result
-							).done(resolve).fail(function(jqXHR, textStatus, errorThrown) {
-								Messenger().error("Failed to save thread " + item.id);
-								console.log("Failed to save thread", item, resp, jqXHR, textStatus, errorThrown);
-								reject(jqXHR, textStatus, errorThrown);
-							});
-						});
-					});
+					return saveThreadFromGmailToServer(fnAuthorizationGetter, item.id);
 				});
 			}).then(function(arrOfPromises) {
 				return Q.allSettled(arrOfPromises);
@@ -153,7 +163,7 @@ $(function() {
 		});
 	}
 
-	function updateUiWithThreadsFromServer(updateMessenger) {
+	function updateUiWithThreadsFromServer(fnAuthorizationGetter, updateMessenger) {
 		updateMessenger.update({
 			type: 'info',
 			message: "Downloading threads from local cache..."
@@ -164,6 +174,11 @@ $(function() {
 		}).done(function(threads, textStatus, jqXHR) {
 			$('#status').hide();
 			$main.text('');
+			threads.forEach(function refreshIfNeeded(thread) {
+				if (thread.needsRefreshing) {
+					saveThreadFromGmailToServer(fnAuthorizationGetter, thread.threadId);
+				}
+			})
 			threads.forEach(function(thread) {
 				var filteredThread = thread;
 				filteredThread.mainDisplayedLabelIds = thread.labelIds.filter(function(labelId) {
@@ -194,14 +209,6 @@ $(function() {
 		});
 	}
 
-	(function() {
-		var fnScheduledUpdate = function() {
-			updateUiWithThreadsFromServer(Messenger().info("Refreshing threads from cache..."));
-			setTimeout(fnScheduledUpdate, moment.duration(5, 'minutes').as('milliseconds'));
-		};
-		fnScheduledUpdate();
-	}());
-
 	function getAuthorizationGetter(gapi, clientId) { //TODO: Accept an updateMessenger
 		var alreadyPromisedScopes = {};
 		return function(scope) {
@@ -231,6 +238,16 @@ $(function() {
 	]).spread(function(gapi, clientId) {
 		return getAuthorizationGetter(gapi, clientId);
 	});
+
+	(function() {
+		var fnScheduledUpdate = function() {
+			promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
+				updateUiWithThreadsFromServer(fnAuthorizationGetter, Messenger().info("Refreshing threads from cache..."));
+				setTimeout(fnScheduledUpdate, moment.duration(5, 'minutes').as('milliseconds'));
+			});
+		};
+		fnScheduledUpdate();
+	}());
 
 	var promisedMyEmail = promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
 		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly');
@@ -282,9 +299,11 @@ $(function() {
 		var fnScheduledUpdate = () => {
 			var updateMessenger = Messenger().info("Downloading new threads from gmail...");
 			var promiseThreadsUpdatedFromGmail = promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
-				return saveThreadsFromGmailToServer(fnAuthorizationGetter, updateMessenger);
-			}).then(function() {
-				updateUiWithThreadsFromServer(updateMessenger);
+				return saveThreadsFromGmailToServer(fnAuthorizationGetter, updateMessenger).then(function() {
+					return fnAuthorizationGetter;
+				});
+			}).then(function(fnAuthorizationGetter) {
+				updateUiWithThreadsFromServer(fnAuthorizationGetter, updateMessenger);
 			}).then(function() {
 				updateMessenger.update({
 					type: 'success',
