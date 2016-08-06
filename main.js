@@ -217,6 +217,20 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 						tagName: 'a',
 						attribs: attribs
 					};
+				},
+				'*': function(tagName, attribs) {
+					if ((typeof attribs.style) === 'string') {
+						attribs.style = attribs.style.replace(/position: *absolute;/, '');
+						return {
+							tagName: tagName,
+							attribs: attribs
+						};
+					} else {
+						return {
+							tagName: tagName,
+							attribs: attribs
+						};
+					}
 				}
 			},
 			allowedTags: [
