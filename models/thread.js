@@ -54,7 +54,8 @@
 	 * @return [String] returns the subject to use to represent the whole thread.
 	 */
 	Thread.prototype.subject = function() {
-		const newestMessageWithSubject = this.mostRecentMessageSatisfying(m => (typeof m.header('Subject')) === 'object');
+		const newestMessageWithSubject = this.mostRecentMessageSatisfying(m =>
+			m.header('Subject') !== null && (typeof m.header('Subject')) === 'object');
 		if (newestMessageWithSubject === null) {
 			logger.warn(`Thread ${this._data.id} has no messages with subject. Can that actually happen?`);
 			return '';
