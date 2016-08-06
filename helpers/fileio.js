@@ -11,6 +11,7 @@
 	 */
 	exports.readJsonFromOptionalFile = path => {
 		return q.Promise((resolve, reject) => {
+			logger.info(`Reading optional JSON from ${path}.`);
 			nodeFs.readFile(path, (err, strFileContents) => {
 				if (err) {
 					if (err.code === 'ENOENT') {

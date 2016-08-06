@@ -42,11 +42,11 @@
 	LastRefreshedData.prototype.needsRefreshing = function(
 			threadId, lastMessageAdded, now) {
 		const threadLastRefreshed = this._jsonData[threadId];
-		if (threadLastRefreshed == undefined) {
+		if (threadLastRefreshed === undefined) {
 			return true;
 		}
 		const noMessagesForAtLeast = threadLastRefreshed - lastMessageAdded;
-		assert(noMessagesForAtLeast >= 0);
+		//assert(noMessagesForAtLeast >= 0, `noMessagesForAtLeast ${noMessagesForAtLeast} = threadLastRefreshed ${threadLastRefreshed} - lastMessageAdded ${lastMessageAdded}`);
 		const haventCheckedFor = now - threadLastRefreshed;
 		assert(haventCheckedFor >= 0, `haventCheckedFor ${haventCheckedFor} = now ${now} - threadLastRefreshed ${threadLastRefreshed}`);
 		return haventCheckedFor > noMessagesForAtLeast;
@@ -69,7 +69,7 @@
 	 * Don't refresh
 	 */
 	(function test1() {
-		const messageLastAdded = 10
+		const messageLastAdded = 10;
 		const threadWasRefreshed = 20;
 		const now = 21;
 
@@ -87,7 +87,7 @@
 	 * Refresh
 	 */
 	(function test2() {
-		const messageLastAdded = 10
+		const messageLastAdded = 10;
 		const threadWasRefreshed = 20;
 		const now = 200;
 

@@ -125,14 +125,24 @@ $(function() {
 					userId: 'me',
 					id: threadId
 				}).execute(function(resp) {
-					$.post(
-						'/api/threads',
-						resp.result
-					).done(resolve).fail(function(jqXHR, textStatus, errorThrown) {
-						Messenger().error("Failed to save thread " + threadId);
-						console.log("Failed to save thread", item, resp, jqXHR, textStatus, errorThrown);
-						reject(jqXHR, textStatus, errorThrown);
-					});
+					if (resp.result) {
+						$.post(
+							'/api/threads',
+							resp.result
+						).done(resolve).fail(function(jqXHR, textStatus, errorThrown) {
+							Messenger().error("Failed to save thread " + threadId);
+							console.log("Failed to save thread", resp, jqXHR, textStatus, errorThrown);
+							reject(jqXHR, textStatus, errorThrown);
+						});
+					} else {
+						switch (resp.code) {
+							case 404:
+							//TODO: Thread no longer exists on gmail; whatdo?
+							default:
+								Messenger().error("Failed to save thread " + threadId + " due to HTTP " + resp.code);
+								reject(resp);
+						}
+					}
 				});
 			});
 		});
@@ -178,7 +188,7 @@ $(function() {
 				if (thread.needsRefreshing) {
 					saveThreadFromGmailToServer(fnAuthorizationGetter, thread.threadId);
 				}
-			})
+			});
 			threads.forEach(function(thread) {
 				var filteredThread = thread;
 				filteredThread.mainDisplayedLabelIds = thread.labelIds.filter(function(labelId) {
@@ -357,17 +367,24 @@ $(function() {
 						resolve(resolve); //Successfully deleted from gmail.
 					} else {
 						//delete not successful.
-						if (resp.code === 403) {
-							updateMessenger.update({
-								type: 'error',
-								message: "Insufficient permissions to delete thread."
-							});
-							//TODO: Insufficient permissions.
-						} else {
-							updateMessenger.update({
-								type: 'error',
-								message: "Failed to delete thread from gmail."
-							});
+						switch(resp.code) {
+							case 403:
+								updateMessenger.update({
+									type: 'error',
+									message: "Insufficient permissions to delete thread."
+								});
+								//TODO: Insufficient permissions.
+								break;
+							case 404:
+								//Message apparently already deleted on Google.
+								resolve(resolve);
+								break;
+							default:
+								updateMessenger.update({
+									type: 'error',
+									message: "Failed to delete thread from gmail (HTTP code "+resp.code+")."
+								});
+								break;
 						}
 						reject(resp);
 					}
@@ -436,7 +453,11 @@ $(function() {
 					removeLabelIds: ['INBOX','UNREAD'],
 					addLabelIds: [labelId]
 				}).execute(function (resp) {
-					if (resp.id === threadId) {
+					/*
+					 * Don't know why but sometimes the ids are strings (but all numeric)
+					 * and sometimes they're ints. Hence the need to use == instead of ===
+					 */
+					if (resp.id == threadId) {
 						resolve(resolve); //Successfully deleted from gmail.
 					} else {
 						//delete not successful.
@@ -446,6 +467,7 @@ $(function() {
 								message: "Insufficient permissions to move thread to label."
 							});
 						} else {
+							debugger;
 							updateMessenger.update({
 								type: 'error',
 								message: "Failed to move thread "+threadId+" to label."
