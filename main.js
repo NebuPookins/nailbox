@@ -161,6 +161,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			if (err) {
 				if (err.code === 'ENOENT') {
 					//Files is already deleted; that's okay, delete is idempotent.
+					logger.info(`File ${pathToDelete} already deleted.`);
 					res.sendStatus(200);
 				} else {
 					logger.error(util.format("Error deleting %s. Code: %s. Stack: %s",
