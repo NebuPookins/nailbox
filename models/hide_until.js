@@ -194,46 +194,59 @@
 
 	/**
 	 * Returns a comparator (function) that sorts messages so that "newer" ones
-	 * show up near the top, a message timestamp-hidden to 2015-jan-01 is treated as
-	 * if it was lastUpdated on 2015-jan-01. Messages that are hidden "until I have
-	 * time" are sorted last.
+	 * show up near the top.
+	 *
+	 * Messages that are hidden "until I have time" are shown last, essentially
+	 * breaking the list into two sections.
+	 *
+	 * For each section, if a message has never been hidden (i.e. it's a new
+	 * message that the user has not acted upon yet, i.e. its "hiddenOn" field is
+	 * null), those guys show up first, sorted by the lastUpdated date on of the
+	 * thread itself. Then, we have all the remaining messages sorted by the
+	 * their "hiddenOn" field (i.e. by when the last time the user took action
+	 * on the thread), with the items with the most recent user activity last.
 	 *
 	 * The returned function takes 2 params and expects them to be objects with
 	 * properties "threadId" and "lastUpdated".
 	 */
 	HideUntilData.prototype.comparator = function() {
 		return (a, b) => {
+			const BFirst = 1;
+			const AFirst = -1;
 			const hideAUntil = this.get(a.threadId);
 			const hideBUntil = this.get(b.threadId);
 			if (hideAUntil instanceof HideUntilIHaveTime) {
 				if (hideBUntil instanceof HideUntilIHaveTime) {
-					return hideBUntil._data.hiddenOn - hideAUntil._data.hiddenOn;
+					return hideAUntil._data.hiddenOn < hideBUntil._data.hiddenOn ?
+						AFirst : BFirst;
 				} else if (hideBUntil instanceof HideUntilTimestamp) {
-					return 1;
+					return BFirst;
 				} else if (hideBUntil instanceof EmptyHideUntil) {
-					return 1;
+					return BFirst;
 				} else {
 					logger.error(`Don't know how to sort with ${util.inspect(hideBUntil)}.`);
 					return 0;
 				}
 			} else if (hideAUntil instanceof HideUntilTimestamp) {
 				if (hideBUntil instanceof HideUntilIHaveTime) {
-					return -1;
+					return AFirst;
 				} else if (hideBUntil instanceof HideUntilTimestamp) {
-					return hideBUntil._data.value - hideAUntil._data.value;
+					return hideAUntil._data.hiddenOn < hideBUntil._data.hiddenOn ?
+						AFirst : BFirst;
 				} else if (hideBUntil instanceof EmptyHideUntil) {
-					return b.lastUpdated - hideAUntil._data.value;
+					return BFirst;
 				} else {
 					logger.error(`Don't know how to sort with ${util.inspect(hideBUntil)}.`);
 					return 0;
 				}
 			} else if (hideAUntil instanceof EmptyHideUntil) {
 				if (hideBUntil instanceof HideUntilIHaveTime) {
-					return -1;
+					return AFirst;
 				} else if (hideBUntil instanceof HideUntilTimestamp) {
-					return hideBUntil._data.value - a.lastUpdated;
+					return AFirst;
 				} else if (hideBUntil instanceof EmptyHideUntil) {
-					return b.lastUpdated - a.lastUpdated;
+					return a.lastUpdated < b.lastUpdated ?
+						BFirst : AFirst;
 				} else {
 					logger.error(`Don't know how to sort with ${util.inspect(hideBUntil)}.`);
 					return 0;
