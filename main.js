@@ -20,6 +20,7 @@ const mailcomposer = require("mailcomposer");
 const marked = require('marked');
 const base64url = require('base64url');
 const pygmentizeBundled = require('pygmentize-bundled');
+const Optional = require('optional-js');
 const helpers = {
 	fileio: require('./helpers/fileio')
 };
@@ -359,10 +360,13 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 				recipient => recipient.email
 			);
 			const toLine = peopleOtherThanYourself.map(person => util.format("%s <%s>", person.name, person.email));
+			const inReplyToId = Optional.ofNullable(mostRecentMessage.header('Message-ID'))
+				.map((header) => header.value)
+				.orElse(null)
 			const mail = mailcomposer({
 				from: req.body.myEmail,
 				to: peopleOtherThanYourself.map(person => util.format("%s <%s>", person.name, person.email)),
-				inReplyTo: req.body.inReplyTo,
+				inReplyTo: inReplyToId,
 				subject: thread.subject(),
 				text: bodyPlusSignature,
 				html: util.format('<!DOCTYPE html><html><head>'+
