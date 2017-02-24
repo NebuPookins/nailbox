@@ -26,6 +26,7 @@
     "mimelib": "^0.2.19",
     "nebulog": "^0.2.1",
     "node-fs": "^0.1.7",
+    "optional-js": "^1.2.1",
     "pygmentize-bundled": "^2.3.0",
     "q": "^1.4.1",
     "sanitize-html": "^1.11.3"
