@@ -148,7 +148,16 @@ $(function() {
 					} else {
 						switch (resp.code) {
 							case 404:
-							//TODO: Thread no longer exists on gmail; whatdo?
+								/*
+								 * Thread no longer exists on gmail, so let's delete it from
+								 * our locale cache too.
+								 */
+								/*
+								 * TODO: Am I doing the promises correctly here?
+								 */
+								var updateMessenger = Messenger().info("Deleting thread "+threadId+" because it's no longer on gmail...");
+								reject(deleteOnLocalCache(threadId, updateMessenger));
+								return;
 							default:
 								Messenger().error("Failed to save thread " + threadId + " due to HTTP " + resp.code);
 								reject(resp);
