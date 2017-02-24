@@ -239,27 +239,64 @@ $(function() {
 		});
 	}
 
+	/**
+	 * An fnAuthorizationGetter is a function which, if you pass it a string (e.g. 'https://www.googleapis.com/auth/gmail.readonly'),
+	 * will as a side effect ensure we have authorization for the operation represented by that string.
+	 *
+	 * @return Returns a promise that will only resolve once the authorization is granted. As a convenience, the value the
+	 * promise resolves to will be the same gapi object that was passed in, as callers probably want to immediately call
+	 * some operation on gapi once we know we have authorization to do so.
+	 */
 	function getAuthorizationGetter(gapi, clientId) { //TODO: Accept an updateMessenger
+		/*
+		 * alreadyPromisedScopes is a map from strings representing scopes to Promises<POJO>. For now, the POJO just
+		 * contains a single field "expiresAt" specifying at what point in time the auth token we've got will expire. It's
+		 * basically a cache, but also is intended so that if 10 "threads" all want the same scope, they can all "block" on
+		 * the same promise.
+		 */
 		var alreadyPromisedScopes = {};
 		return function(scope) {
-			if ((!alreadyPromisedScopes[scope]) || alreadyPromisedScopes[scope].expiresAt.isBefore(/*now*/)) {
-				var oAuthToken = Q.Promise(function(resolve, reject) {
-					gapi.auth.authorize({client_id: clientId, scope: scope, immediate: true}, function(authResult) {
+			/*
+			 * * If we've never requested this scope before, we need to request authorization.
+			 * * If we've requested the scope, and the promise is rejected, we need to re-request authorization.
+			 * * If we've requested the scope, and the promise is pending, then we can just wait.
+			 * * If we've requested the scope, and the promise is fulfilled, we need to check if the auth expired. If so, then
+			 *   we need to re-request. Otherwise, we don't need to re-request.
+			 */
+			var needToRequestAuthorization = true;
+			if (alreadyPromisedScopes[scope]) {
+				if (alreadyPromisedScopes[scope].isFulfilled()) {
+					var inspectedPromise = alreadyPromisedScopes[scope].inspect();
+					if (inspectedPromise.value.expiresAt.isAfter(/*now*/)) {
+						needToRequestAuthorization = false;
+					}
+				} else if (alreadyPromisedScopes[scope].isPending()) {
+					needToRequestAuthorization = false;
+				}
+			}
+			if (needToRequestAuthorization) {
+				/*
+				 * If we need to request, then immediately put a promise into our cache so that it's sharable.
+				 */
+				alreadyPromisedScopes[scope] = Q.Promise(function(resolve, reject) {
+					gapi.auth.authorize({client_id: clientId, scope: scope}, function(authResult) {
 						if (authResult.error) {
 							reject(authResult);
 						} else {
 							gapi.client.load('gmail', 'v1', function() {
-								resolve(gapi);
+								resolve({
+									expiresAt: moment().add(authResult.expires_in, 'seconds')
+								});
 							});
 						}
 					});
 				});
-				alreadyPromisedScopes[scope] = {
-					oAuthToken: oAuthToken,
-					expiresAt: moment().add(oAuthToken.expires_in, 'seconds')
-				};
 			}
-			return alreadyPromisedScopes[scope].oAuthToken;
+			/*
+			 * Our callers don't care about our {expiry: 'whatever'} POJO; they just want an instance of gapi to work with.
+			 * So write a transform that blocks on the promise, and then just returns the gapi.
+			 */
+			return alreadyPromisedScopes[scope].then(function() {return gapi;})
 		};
 	}
 
