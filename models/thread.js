@@ -121,9 +121,11 @@
 		logger.debug(`Loading thread ${id}`);
 		return q.Promise((resolve, reject) => {
 			logger.debug(`nodeFs.readFile('data/threads/${id}')`);
-			nodeFs.readFile('data/threads/' + id, (err, strFileContents) => {
+			const threadFilename = 'data/threads/' + id;
+			nodeFs.readFile(threadFilename, (err, strFileContents) => {
 				logger.debug(`nodeFs.readFile returned for thread ${id}`);
 				if (err) {
+					logger.error('Failed to read from ' + threadFilename);
 					logger.error(util.inspect(err));
 					return reject(err);
 				} else {
