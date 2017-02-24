@@ -31,7 +31,18 @@ $(function() {
 		return total - amountToSubtract;
 	});
 	Handlebars.registerHelper('filesize', function(bytes) {
-		return filesize(bytes);
+		if (typeof filesize === 'function') {
+			return filesize(bytes);
+		} else {
+			/*
+			 * the filesize function is supposed to be loaded via a CDN, but there has
+			 * been issues in the past where the CDN forgets to renew their SSL
+			 * certificate or something like that, causing the javascript to fail to
+			 * load, which causes the function to not be defined. Here's a "dumb"
+			 * fallback implementation.
+			 */
+			return bytes + " bytes";
+		}
 	});
 
 	Handlebars.registerHelper("prettyTimestamp", function(timestamp) {
