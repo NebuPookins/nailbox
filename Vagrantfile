@@ -29,6 +29,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # argument is a set of non-required options.
   config.vm.synced_folder ".", "/home/vagrant/nailbox"
 
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 1024
+  end
+
   # TODO: Use Puppet or Chef or something to set up nodejs so that the user
   # doesn't have to do it manually.
 end
