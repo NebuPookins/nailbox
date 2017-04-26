@@ -168,7 +168,7 @@ $(function() {
 		});
 	}
 
-	function saveThreadsFromGmailToServer(fnAuthorizationGetter, updateMessenger) {
+	function saveLabelledThreadsFromGmailToServer(fnAuthorizationGetter, labelIds, updateMessenger) {
 		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly').then(function(gapi) {
 			return Q.Promise(function(resolve, reject) {
 				updateMessenger.update({
@@ -177,7 +177,7 @@ $(function() {
 				});
 				gapi.client.gmail.users.threads.list({
 					'userId': 'me',
-					'labelIds': ['INBOX']
+					'labelIds': labelIds
 				}).execute(resolve); //TODO: Handle errors
 			}).then(function(resp) {
 				updateMessenger.update({
@@ -191,6 +191,12 @@ $(function() {
 				return Q.allSettled(arrOfPromises);
 			});
 		});
+	}
+
+	function saveThreadsFromGmailToServer(fnAuthorizationGetter, updateMessenger) {
+		var inboxMessages = saveLabelledThreadsFromGmailToServer(fnAuthorizationGetter, ['INBOX'], updateMessenger)
+		var trashedMessages = saveLabelledThreadsFromGmailToServer(fnAuthorizationGetter, ['TRASH'], updateMessenger)
+		return Q.allSettled([inboxMessages, trashedMessages]);
 	}
 
 	function updateUiWithThreadsFromServer(fnAuthorizationGetter, updateMessenger) {

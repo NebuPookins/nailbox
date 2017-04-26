@@ -94,10 +94,50 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 		}
 	});
 
+	/**
+	 * @param threadId [String] the thread to delete
+	 * @param resultCallback [function] Callback function receive a boolean. True
+	 * indicates that the deletion was successful, false indicates the deletion was
+	 * unsuccessful.
+	 */
+	function deleteThread(threadId, resultCallback) {
+		const pathToDelete = 'data/threads/' + threadId;
+		nodeFs.unlink(pathToDelete, function(err) {
+			if (err) {
+				if (err.code === 'ENOENT') {
+					//Files is already deleted; that's okay, delete is idempotent.
+					logger.info(`File ${pathToDelete} already deleted.`);
+					resultCallback(true);
+				} else {
+					logger.error(util.format("Error deleting %s. Code: %s. Stack: %s",
+						pathToDelete, err.code, err.stack));
+					resultCallback(false);
+				}
+			} else {
+				logger.info(util.format("Deleted file %s", pathToDelete));
+				resultCallback(true);
+			}
+		});
+	}
+
+	/**
+	 * Records the existence of a thread. The client-side code periodically checks
+	 * gmail for the 100 most recent threads, and performs a POST to this route
+	 * to inform the backend the contents of those threads.
+	 */
 	app.post('/api/threads', function(req, res) {
 		const threadId = req.body.id;
 		if (typeof threadId === 'string' && threadId.match(/^[0-9a-z]+$/)) {
-			nodeFs.writeFile('data/threads/' + threadId, JSON.stringify(req.body), function(err) {
+			const allMessagesInTrash = req.body.messages.every(
+				(message) => message.labelIds.indexOf('TRASH') !== -1
+			);
+			if (allMessagesInTrash) {
+				logger.info(`Deleting thread ${threadId} because all messages in thread are in trash.`);
+				deleteThread(threadId, function(isSuccessful) {
+					res.sendStatus(isSuccessful ? 200 : 500);
+				});
+			} else {
+				nodeFs.writeFile('data/threads/' + threadId, JSON.stringify(req.body), function(err) {
 				if (err) {
 					logger.error(util.inspect(err));
 					res.sendStatus(500);
@@ -106,11 +146,15 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 					lastRefresheds.markRefreshed(threadId).done();
 				}
 			});
+			}
 		} else {
 			res.status(400).send({ humanErrorMessage: "invalid threadId" });
 		}
 	});
 
+	/**
+	 * Replies with a list of threads to show on the main page.
+	 */
 	app.get('/api/threads', function(req, res) {
 		nodeFs.readdir('data/threads', function(err, filenames) {
 			if (err) {
@@ -157,22 +201,8 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	app.delete(/^\/api\/threads\/([a-z0-9]+)$/, function(req, res) {
 		const threadId = req.params[0];
 		logger.info(util.format("Receive request to delete thread %s.", threadId));
-		const pathToDelete = 'data/threads/' + threadId;
-		nodeFs.unlink(pathToDelete, function(err) {
-			if (err) {
-				if (err.code === 'ENOENT') {
-					//Files is already deleted; that's okay, delete is idempotent.
-					logger.info(`File ${pathToDelete} already deleted.`);
-					res.sendStatus(200);
-				} else {
-					logger.error(util.format("Error deleting %s. Code: %s. Stack: %s",
-						pathToDelete, err.code, err.stack));
-					res.sendStatus(500);
-				}
-			} else {
-				logger.info(util.format("Deleted file %s", pathToDelete));
-				res.sendStatus(200);
-			}
+		deleteThread(threadId, function(isSuccessful) {
+			res.sendStatus(isSuccessful ? 200 : 500);
 		});
 	});
 
