@@ -190,6 +190,9 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 							return hideUntils.get(formattedThread.threadId).getVisibility(formattedThread.lastUpdated, now) !== 'hidden';
 						});
 					formattedThreads.sort(hideUntils.comparator());
+					if (formattedThreads.length > 100) {
+						formattedThreads.length = 100;
+					}
 					res.status(200);
 					res.type('json');
 					res.send(formattedThreads);
