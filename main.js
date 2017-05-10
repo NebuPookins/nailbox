@@ -174,7 +174,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
 							messageIds: thread.messageIds(),
 							labelIds: thread.labelIds(),
-							isWhenIHaveTime: hideUntils.get(thread.id()).isWhenIHaveTime(),
+							isWhenIHaveTime: hideUntils.get({threadId: thread.id(), lastUpdated: thread.lastUpdated()}).isWhenIHaveTime(),
 							needsRefreshing: lastRefresheds.needsRefreshing(thread.id(), thread.lastUpdated(), Date.now()),
 						};
 					}, function(e) {
@@ -187,12 +187,10 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 					formattedThreads = formattedThreads
 						.filter(formattedThread => formattedThread !== null)
 						.filter(function hideMessagesForLater(formattedThread) {
-							return hideUntils.get(formattedThread.threadId).getVisibility(formattedThread.lastUpdated, now) !== 'hidden';
+							return hideUntils.get(formattedThread).getVisibility(formattedThread.lastUpdated, now) !== 'hidden';
 						});
 					formattedThreads.sort(hideUntils.comparator());
-					if (formattedThreads.length > 100) {
-						formattedThreads.length = 100;
-					}
+					formattedThreads.length = Math.min(formattedThreads.length, 100);
 					res.status(200);
 					res.type('json');
 					res.send(formattedThreads);
