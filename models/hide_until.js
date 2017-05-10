@@ -136,9 +136,11 @@
 	 * @param threadId [Number]
 	 * @return [HideUntil]
 	 */
-	HideUntilData.prototype.get = function(threadId) {
-		assert((typeof threadId) === 'string', `Expected threadId to be string but was ${typeof threadId}.`);
-		const data = this._jsonData[threadId];
+	HideUntilData.prototype.get = function(thread) {
+		assert((typeof thread) === 'object', `Expected thread to be an object but was ${typeof thread}.`);
+		assert((typeof thread.threadId) === 'string', `Expected thread.threadId to be a string but was ${typeof thread.threadId}.`);
+		assert((typeof thread.lastUpdated) === 'number', `Expected thread.lastUpdated to be a number but was ${typeof thread.lastUpdated}.`);
+		const data = this._jsonData[thread.threadId];
 		/* data example:
 		 *    {"type":"timestamp","value":"1455501600000", "hiddenOn":1459104449187}
 		 *    OR
@@ -147,9 +149,19 @@
 		if (data) {
 			switch (data.type) {
 				case 'timestamp':
-					return new HideUntilTimestamp(data);
+					if (data.hiddenOn < thread.lastUpdated && false) {
+						return new EmptyHideUntil();
+					} else {
+						return new HideUntilTimestamp(data);
+					}
+					break;
 				case 'when-i-have-time':
-					return new HideUntilIHaveTime(data);
+					if (data.hiddenOn < thread.lastUpdated && false) {
+						return new EmptyHideUntil();
+					} else {
+						return new HideUntilIHaveTime(data);
+					}
+					break;
 				default:
 					throw `Don't know how to handle type ${data.type}`;
 			}
@@ -196,15 +208,17 @@
 	 * Returns a comparator (function) that sorts messages so that "newer" ones
 	 * show up near the top.
 	 *
-	 * Messages that are hidden "until I have time" are shown last, essentially
-	 * breaking the list into two sections.
+	 * We basically have 3 sections:
 	 *
-	 * For each section, if a message has never been hidden (i.e. it's a new
-	 * message that the user has not acted upon yet, i.e. its "hiddenOn" field is
-	 * null), those guys show up first, sorted by the lastUpdated date on of the
-	 * thread itself. Then, we have all the remaining messages sorted by the
-	 * their "hiddenOn" field (i.e. by when the last time the user took action
-	 * on the thread), with the items with the most recent user activity last.
+	 * All messages which have an update since the last time they were hidden
+	 * (or which will never hidden at all) show up first, sorted by the order of
+	 * those updates.
+	 *
+	 * Then messages which were hidden, but their hidden-until expired are shown,
+	 * ordered by the date on which the hiding was performed.
+	 *
+	 * Finally, any messages that were hidden "until I have time" are shown, in a
+	 * shuffled order.
 	 *
 	 * The returned function takes 2 params and expects them to be objects with
 	 * properties "threadId" and "lastUpdated".
@@ -213,12 +227,11 @@
 		return (a, b) => {
 			const BFirst = 1;
 			const AFirst = -1;
-			const hideAUntil = this.get(a.threadId);
-			const hideBUntil = this.get(b.threadId);
+			const hideAUntil = this.get(a);
+			const hideBUntil = this.get(b);
 			if (hideAUntil instanceof HideUntilIHaveTime) {
 				if (hideBUntil instanceof HideUntilIHaveTime) {
-					return hideAUntil._data.hiddenOn < hideBUntil._data.hiddenOn ?
-						AFirst : BFirst;
+					return Math.random() > 0.5 ? AFirst : BFirst;
 				} else if (hideBUntil instanceof HideUntilTimestamp) {
 					return BFirst;
 				} else if (hideBUntil instanceof EmptyHideUntil) {
