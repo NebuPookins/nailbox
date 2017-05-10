@@ -717,6 +717,30 @@ $(function() {
 		}
 		return false;
 	});
+	$threadViewer.on('keydown', function(event) {
+		/*
+		 * If the textarea (where the user types their reply) has focus, then don't
+		 * process any key events.
+		 */
+		if ($threadViewer.find('textarea').is(":focus")) {
+			return;
+		}
+		var threadId = $threadViewer.data('threadId');
+		switch (event.key) {
+			case 'Delete':
+				var updateMessenger = Messenger().info("Deleting thread "+threadId+"...");
+				deleteThread(threadId, updateMessenger).then(function() {
+					updateMessenger.update({
+						type: 'success',
+						message: "Successfully deleted message " + threadId
+					});
+					$threadViewer.modal('hide');
+				}).done();
+				break;
+			default:
+				//Do nothing
+		}
+	});
 	$main.on('click', 'a.view-on-gmail', function(eventObject) {
 		//Prevent bubbling, but otherwise do nothing since it's a link.
 		eventObject.stopPropagation();
