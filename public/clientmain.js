@@ -7,6 +7,26 @@ $(function() {
 	if (!console.log) {
 		console.log = function() {};
 	}
+	if (!Messenger) {
+		/* If https://cdnjs.cloudflare.com/ajax/libs/messenger/1.4.2/js/messenger.js
+		 * is down, put a fake messenger implementation so that the user can still
+		 * read their e-mails, etc.
+		 */
+		var mockMessenger = {
+			info: function() {
+				return mockMessenger;
+			},
+			update: function() {
+				return mockMessenger;
+			},
+			error: function() {
+				return mockMessenger;
+			}
+		};
+		var Messenger = function() {
+			return mockMessenger;
+		}
+	}
 
 	var promisedClientId = Q.Promise(function(resolve, reject) {
 		$.get({
