@@ -7,11 +7,7 @@ $(function() {
 	if (!console.log) {
 		console.log = function() {};
 	}
-	if (!Messenger) {
-		/* If https://cdnjs.cloudflare.com/ajax/libs/messenger/1.4.2/js/messenger.js
-		 * is down, put a fake messenger implementation so that the user can still
-		 * read their e-mails, etc.
-		 */
+	var messengerGetter = (function() {
 		var mockMessenger = {
 			info: function() {
 				return mockMessenger;
@@ -23,10 +19,14 @@ $(function() {
 				return mockMessenger;
 			}
 		};
-		var Messenger = function() {
-			return mockMessenger;
+		return function() {
+			if (typeof Messenger === 'undefined') {
+				return mockMessenger;
+			} else {
+				return Messenger();
+			}
 		}
-	}
+	})();
 
 	var promisedClientId = Q.Promise(function(resolve, reject) {
 		$.get({
@@ -161,7 +161,7 @@ $(function() {
 							'/api/threads',
 							resp.result
 						).done(resolve).fail(function(jqXHR, textStatus, errorThrown) {
-							Messenger().error("Failed to save thread " + threadId);
+							messengerGetter().error("Failed to save thread " + threadId);
 							console.log("Failed to save thread", resp, jqXHR, textStatus, errorThrown);
 							reject(jqXHR, textStatus, errorThrown);
 						});
@@ -175,11 +175,11 @@ $(function() {
 								/*
 								 * TODO: Am I doing the promises correctly here?
 								 */
-								var updateMessenger = Messenger().info("Deleting thread "+threadId+" because it's no longer on gmail...");
+								var updateMessenger = messengerGetter().info("Deleting thread "+threadId+" because it's no longer on gmail...");
 								reject(deleteOnLocalCache(threadId, updateMessenger));
 								return;
 							default:
-								Messenger().error("Failed to save thread " + threadId + " due to HTTP " + resp.code);
+								messengerGetter().error("Failed to save thread " + threadId + " due to HTTP " + resp.code);
 								reject(resp);
 						}
 					}
@@ -327,7 +327,7 @@ $(function() {
 	}
 
 	var promisedFnAuthorizationGetter = Q.all([
-		waitForGapiToLoad(Messenger().info("Loading Google API...")), promisedClientId
+		waitForGapiToLoad(messengerGetter().info("Loading Google API...")), promisedClientId
 	]).spread(function(gapi, clientId) {
 		return getAuthorizationGetter(gapi, clientId);
 	});
@@ -335,7 +335,7 @@ $(function() {
 	(function() {
 		var fnScheduledUpdate = function() {
 			promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
-				updateUiWithThreadsFromServer(fnAuthorizationGetter, Messenger().info("Refreshing threads from cache..."));
+				updateUiWithThreadsFromServer(fnAuthorizationGetter, messengerGetter().info("Refreshing threads from cache..."));
 				setTimeout(fnScheduledUpdate, moment.duration(5, 'minutes').as('milliseconds'));
 			});
 		};
@@ -361,7 +361,7 @@ $(function() {
 		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly');
 	}).then(function(gapi) {
 		return Q.Promise(function(resolve, reject) {
-			var updateMessenger = Messenger().info("Downloading labels from GMail...");
+			var updateMessenger = messengerGetter().info("Downloading labels from GMail...");
 			gapi.client.gmail.users.labels.list({
 				userId: 'me'
 			}).execute(function(resp) {
@@ -390,7 +390,7 @@ $(function() {
 
 	(function() {
 		var fnScheduledUpdate = () => {
-			var updateMessenger = Messenger().info("Downloading new threads from gmail...");
+			var updateMessenger = messengerGetter().info("Downloading new threads from gmail...");
 			var promiseThreadsUpdatedFromGmail = promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
 				return saveThreadsFromGmailToServer(fnAuthorizationGetter, updateMessenger).then(function() {
 					return fnAuthorizationGetter;
@@ -574,7 +574,7 @@ $(function() {
 		var btnDelete = eventObject.currentTarget;
 		var $divThread = $(btnDelete).parents('.thread[data-thread-id]');
 		var threadId = $divThread.data('threadId');
-		var updateMessenger = Messenger().info("Deleting thread "+threadId+"...");
+		var updateMessenger = messengerGetter().info("Deleting thread "+threadId+"...");
 		deleteThread(threadId, updateMessenger).then(function() {
 			updateMessenger.update({
 				type: 'success',
@@ -585,7 +585,7 @@ $(function() {
 	});
 	$threadViewer.find('button.reply-all').on('click', function() {
 		var threadId = $threadViewer.data('threadId');
-		var updateMessenger = Messenger().info("Sending reply to thread "+threadId+"...");
+		var updateMessenger = messengerGetter().info("Sending reply to thread "+threadId+"...");
 		if (!threadId) {
 			updateMessenger.update({
 				type: 'error',
@@ -667,7 +667,7 @@ $(function() {
 		var attachmentName = $clickedButton.data('attachment-name');
 		var $message = $clickedButton.parents('.message');
 		var messageId = $message.data('message-id');
-		var updateMessenger = Messenger().info("Download attachment from "+messageId+".");
+		var updateMessenger = messengerGetter().info("Download attachment from "+messageId+".");
 		promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
 			return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly');
 		}).then(function(gapi) {
@@ -700,7 +700,7 @@ $(function() {
 	});
 	$threadViewer.find('button.delete').on('click', function() {
 		var threadId = $threadViewer.data('threadId');
-		var updateMessenger = Messenger().info("Deleting thread "+threadId+"...");
+		var updateMessenger = messengerGetter().info("Deleting thread "+threadId+"...");
 		if (threadId) {
 			deleteThread(threadId, updateMessenger).then(function() {
 				updateMessenger.update({
@@ -728,7 +728,7 @@ $(function() {
 		var threadId = $threadViewer.data('threadId');
 		switch (event.key) {
 			case 'Delete':
-				var updateMessenger = Messenger().info("Deleting thread "+threadId+"...");
+				var updateMessenger = messengerGetter().info("Deleting thread "+threadId+"...");
 				deleteThread(threadId, updateMessenger).then(function() {
 					updateMessenger.update({
 						type: 'success',
@@ -751,7 +751,7 @@ $(function() {
 		if (threadId) {
 			window.open('https://mail.google.com/mail/u/0/#inbox/' + threadId,'_blank');
 		} else {
-			Messenger().error("Tried to view-on-gmail from threadViewer, but there's no thread id.");
+			messengerGetter().error("Tried to view-on-gmail from threadViewer, but there's no thread id.");
 		}
 		return false;
 	});
@@ -759,7 +759,7 @@ $(function() {
 		var btnDelete = eventObject.currentTarget;
 		var $divThread = $(btnDelete).parents('.thread[data-thread-id]');
 		var threadId = $divThread.data('threadId');
-		var updateMessenger = Messenger().info("Archiving thread "+threadId+"...");
+		var updateMessenger = messengerGetter().info("Archiving thread "+threadId+"...");
 		archiveThread(threadId, updateMessenger).then(function() {
 			updateMessenger.update({
 				type: 'success',
@@ -770,7 +770,7 @@ $(function() {
 	});
 	$threadViewer.find('button.archive-thread').on('click', function() {
 		var threadId = $threadViewer.data('threadId');
-		var updateMessenger = Messenger().info("Archiving thread "+threadId+"...");
+		var updateMessenger = messengerGetter().info("Archiving thread "+threadId+"...");
 		if (threadId) {
 			archiveThread(threadId, updateMessenger).then(function() {
 				$threadViewer.modal('hide');
@@ -805,7 +805,7 @@ $(function() {
 			$picker.data('threadId', threadId);
 			$picker.modal('show');
 		} else {
-			Messenger().error("Tried to switch from threadViewer to $picker, but there's no thread id.");
+			messengerGetter().error("Tried to switch from threadViewer to $picker, but there's no thread id.");
 			console.log("Tried to switch from threadViewer to ", $picker, ", but there's no thread id.");
 		}
 		return false;
@@ -862,7 +862,7 @@ $(function() {
 	});
 	$laterPicker.on('click', '.button', function(eventObject) {
 		var threadId = $laterPicker.data('threadId');
-		var updateMessenger = Messenger().info("Hiding thread " + threadId + ".");
+		var updateMessenger = messengerGetter().info("Hiding thread " + threadId + ".");
 		if (!threadId) {
 			updateMessenger.update({
 				type: 'error',
@@ -972,7 +972,7 @@ $(function() {
 	});
 	$labelPicker.on('click', 'button', function(eventObject) {
 		var threadId = $labelPicker.data('threadId');
-		var updateMessenger = Messenger().info("Moving thread "+threadId+" to label...");
+		var updateMessenger = messengerGetter().info("Moving thread "+threadId+" to label...");
 		if (!threadId) {
 			updateMessenger.update({
 				type: 'error',
@@ -1001,7 +1001,7 @@ $(function() {
 		$threads.text($threadDiv.find('.snippet').text());
 		$threadViewer.find('.loading-img').show();
 		$threadViewer.modal('show');
-		var updateMessenger = Messenger().info("Downloading thread data for "+threadId +"...");
+		var updateMessenger = messengerGetter().info("Downloading thread data for "+threadId +"...");
 		function getThreadData(attemptNumber) {
 			return Q.Promise(function(resolve, reject) {
 				$.get('/api/threads/' + threadId +'/messages').done(function(threadData, textStatus, jqXHR) {
