@@ -162,6 +162,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 				res.sendStatus(500);
 			} else {
 				var jsonResponse = {};
+				const now = Date.now();
 				q.all(filenames.map(function(filename) {
 					return models.thread.get(filename).then(function(thread) {
 						const maybeMostRecentSnippetInThread = thread.snippet();
@@ -174,8 +175,9 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
 							messageIds: thread.messageIds(),
 							labelIds: thread.labelIds(),
+							visibility: hideUntils.get({threadId: thread.id(), lastUpdated: thread.lastUpdated()}).getVisibility(thread.lastUpdated(), now),
 							isWhenIHaveTime: hideUntils.get({threadId: thread.id(), lastUpdated: thread.lastUpdated()}).isWhenIHaveTime(),
-							needsRefreshing: lastRefresheds.needsRefreshing(thread.id(), thread.lastUpdated(), Date.now()),
+							needsRefreshing: lastRefresheds.needsRefreshing(thread.id(), thread.lastUpdated(), now),
 						};
 					}, function(e) {
 						//If you couldn't read certain thread files, just keep proceeding.
@@ -183,12 +185,9 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 						return null;
 					});
 				})).then(function (formattedThreads) {
-					var now = Date.now();
 					formattedThreads = formattedThreads
 						.filter(formattedThread => formattedThread !== null)
-						.filter(function hideMessagesForLater(formattedThread) {
-							return hideUntils.get(formattedThread).getVisibility(formattedThread.lastUpdated, now) !== 'hidden';
-						});
+						.filter(formattedThread => formattedThread.visibility !== 'hidden');
 					formattedThreads.sort(hideUntils.comparator());
 					formattedThreads.length = Math.min(formattedThreads.length, 100);
 					res.status(200);

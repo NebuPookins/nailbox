@@ -55,10 +55,13 @@ html(lang="en")
 			.thread {
 				border-bottom: solid 1px black;
 			}
-			.thread:hover {
+			.thread:hover, .thread.visibility-updated:hover, .thread.visibility-when-i-have-time:hover {
+				background: #bbf;
+			}
+			.thread.visibility-updated {
 				background: #ff8;
 			}
-			.thread.when-i-have-time {
+			.thread.visibility-when-i-have-time {
 				background: #8f8;
 			}
 			.message-body {
@@ -185,7 +188,7 @@ html(lang="en")
 		script(type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2014-11-29/FileSaver.min.js")
 		script(type='text/javascript' src='public/clientmain.js')
 		script#handlebar-thread(type='text/x-handlebars-template')
-			.thread(data-thread-id="{{threadId}}" class="{{#if isWhenIHaveTime}}when-i-have-time{{/if}}")
+			.thread(data-thread-id="{{threadId}}" class="visibility-{{visibility}}")
 				.row
 					.col-xs-10
 						strong From&nbsp;

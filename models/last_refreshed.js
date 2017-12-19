@@ -4,6 +4,7 @@
 
 	const assert = require('assert');
 	const fileio = require('../helpers/fileio');
+	const logger = require('nebulog').make({filename: __filename, level: 'debug'});
 	const nodeFs = require('node-fs');
 	const q = require('q');
 
@@ -47,9 +48,15 @@
 		}
 		const noMessagesForAtLeast = threadLastRefreshed - lastMessageAdded;
 		//assert(noMessagesForAtLeast >= 0, `noMessagesForAtLeast ${noMessagesForAtLeast} = threadLastRefreshed ${threadLastRefreshed} - lastMessageAdded ${lastMessageAdded}`);
-		const haventCheckedFor = now - threadLastRefreshed;
-		assert(haventCheckedFor >= 0, `haventCheckedFor ${haventCheckedFor} = now ${now} - threadLastRefreshed ${threadLastRefreshed}`);
-		return haventCheckedFor > noMessagesForAtLeast;
+		const rawHaventCheckedFor = now - threadLastRefreshed;
+		var normalizedHaventCheckedFor;
+		if (rawHaventCheckedFor < 0) {
+			logger.warn(`threadId ${threadId}: haventCheckedFor ${rawHaventCheckedFor} = now ${now} - threadLastRefreshed ${threadLastRefreshed} (now now ${Date.now()})`);
+			normalizedHaventCheckedFor = 0;
+		} else {
+			normalizedHaventCheckedFor = rawHaventCheckedFor;
+		}
+		return normalizedHaventCheckedFor > noMessagesForAtLeast;
 	};
 
 	/**
