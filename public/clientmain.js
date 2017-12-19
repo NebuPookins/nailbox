@@ -232,6 +232,7 @@ $(function() {
 			$main.text('');
 			threads.forEach(function refreshIfNeeded(thread) {
 				if (thread.needsRefreshing) {
+					console.log("Refreshing ", thread);
 					saveThreadFromGmailToServer(fnAuthorizationGetter, thread.threadId);
 				}
 			});
