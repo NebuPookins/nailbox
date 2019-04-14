@@ -29,7 +29,7 @@
     "optional-js": "^1.2.1",
     "pygmentize-bundled": "^2.3.0",
     "q": "^1.4.1",
-    "sanitize-html": "^1.11.3"
+    "sanitize-html": ">1.11.3 <1.19.3"
   },
   "devDependencies": {
     "grunt": "^0.4.5",
