@@ -15,7 +15,7 @@
   "author": "Nebu Pookins <nebupookins@gmail.com>",
   "private": true,
   "dependencies": {
-    "base64url": "^1.0.6",
+    "base64url": "^3.0.1",
     "body-parser": "^1.14.2",
     "express": "^4.13.4",
     "html-entities": "^1.2.0",
