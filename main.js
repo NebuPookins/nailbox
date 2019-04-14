@@ -51,7 +51,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 }).spread(function(config, hideUntils, lastRefresheds) {
 	const app = express();
 	app.set('views', path.join(__dirname, 'views'));
-	app.set('view engine', 'jade');
+	app.set('view engine', 'pug');
 	app.use('/public', express.static('public'));
 	app.use(bodyParser.json({limit: '10mb', parameterLimit: 10000}));
 	app.use(bodyParser.urlencoded({limit: '10mb', parameterLimit: 10000, extended: true }));

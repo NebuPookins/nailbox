@@ -1,0 +1,71 @@
+doctype html
+html(lang="en")
+	head
+		meta(charset="utf-8")
+		meta(http-equiv="X-UA-Compatible" content="IE=edge")
+		meta(name="viewport" content="width=device-width, initial-scale=1")
+		title Nailbox - Setup
+		link(rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous")
+		link(rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous")
+		style(type="text/css").
+	body
+		.container
+			#status.jumbotron
+				h1 Nailbox
+				hr
+				h2 The world's 2nd best e-mail client
+				p.
+					Nailbox is inspired by the world's best e-mail client,
+					#[a(href="https://www.mailboxapp.com/") Mailbox].
+			.alert.alert-danger(role="alert").
+				Nailbox is pre-Beta software and is <strong><s>probably</s> definitely full of bugs</strong>.
+			h1 What's the worst that could happen?
+			ul
+				li There's a bug in the program and it ends up deleting all your mail permanently.
+				li There's a bug in the program and it starts forwarding all your e-mails to everyone on your contact list.
+				li There's a bug in the program and it overwrites all the files on your computer with animated cat gifs.
+				li The program isn't as secure as gmail itself and now everybody in the world can read your e-mails by hacking in via the backdoor created by this program.
+				li A funny little man might take away your first-born son unless you can guess his name.
+			h1 I still want to try it out anyway!
+			p Me too, friend, me too. Here's how:
+			form(method="POST" action="/setup")
+				ol
+					li.
+						Head over to
+						<a href="https://console.developers.google.com/">https://console.developers.google.com/</a>
+						and create a new application named "Nailbox" <small>(or use whatever
+						name you prefer, becuase the app is non-sentient and cannot get offended)</small>.
+					li Go to the "Credentials" panel and click "New credentials" and select "OAuth cleint ID".
+					li Select "Web application" as your application type
+					li.
+						Under "Authorized JavaScript origins", enter in <span id="host">the
+						domain this page is running on</span>.
+					li Click the "Create" button.
+					li Google will give you a "Client ID". It's like this 70+ character string. Copy it and paste it here:
+						input.form-control(name="clientId" placeholder="ClientID-blah-blah-blah.apps.googleusercontent.com" value="#{clientId || ''}")
+					li Click this save button:
+						button.btn.btn-default(type="submit") Save
+					li Return to the <a href="/">main page</a>.
+			h2 Why's it called Nailbox?
+			p Nobody knows for sure. There are several origin myths:
+			ul
+				li Second place comes after first place, and N comes after M.
+				li Nailbox is implemented in Node.js, so take the letter N from Node.js and shove it in front of Mailbox to get Nailbox.
+				li Nailbox was implemented by Nebu, so take the letter N from Nebu and shove it in front of Mailbox to get Nailbox.
+			p.
+				Legend also has it that there was an Rails implementation called
+				"Railbox" or "Railsbox" or something like that, but was abandoned
+				because the name wasn't as catchy and OAuth was significantly harder
+				to get right in Ruby.
+
+		script(type='text/javascript' src='https://apis.google.com/js/client.js?onload=checkAuth')
+		script(type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js')
+			script(src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous")
+		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.0.5/handlebars.js')
+		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.2.1/lodash.js')
+		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.11.2/moment.js')
+		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/q.js/1.4.1/q.js')
+		script(type='text/javascript').
+			$(function() {
+				$('#host').html('<code>' + window.location.origin + '</code>');
+			});
