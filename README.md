@@ -30,7 +30,7 @@ The software is in an extremely early beta.
   host machine. This will create a virtual machine aka your "guest machine".
 * SSH into the newly created guest machine by running `vagrant ssh`
 * Install nodejs on your guest machine by running:
-  * `curl -sL https://deb.nodesource.com/setup_5.x | sudo -E bash -`
+  * `curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -`
   * `sudo apt-get install -y nodejs`
   * If your host machine is running Windows, disable symlinks in npm by running `npm config set bin-links false` in your guest machine.
 * Change into the nailbox directory by running `cd /home/vagrant/nailbox` on your guest machine.
