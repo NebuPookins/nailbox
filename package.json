@@ -21,7 +21,7 @@
     "html-entities": "^1.2.0",
     "lodash": "^4.2.1",
     "mailcomposer": "^4.0.2",
-    "marked": "^0.3.5",
+    "marked": "^0.6.2",
     "mimelib": "^0.2.19",
     "nebulog": "^0.2.1",
     "node-fs": "^0.1.7",
