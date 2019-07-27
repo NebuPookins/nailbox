@@ -40,6 +40,7 @@ $(function() {
 	var $main = $('#main');
 
 	var handlebarsTemplates = {};
+	handlebarsTemplates.group = Handlebars.compile($('#handlebar-group').html());
 	handlebarsTemplates.thread = Handlebars.compile($('#handlebar-thread').html());
 	handlebarsTemplates.message = Handlebars.compile($('#handlebar-message').html());
 	handlebarsTemplates.deletedMessages = Handlebars.compile($('#handlebar-deleted-messages').html());
@@ -225,39 +226,42 @@ $(function() {
 			message: "Downloading threads from local cache..."
 		});
 		$.get({
-			url: '/api/threads',
+			url: '/api/threads/grouped',
 			dataType: 'json'
-		}).done(function(threads, textStatus, jqXHR) {
+		}).done(function(groupsOfThreads, textStatus, jqXHR) {
 			$('#status').hide();
 			$main.text('');
-			threads.forEach(function refreshIfNeeded(thread) {
-				if (thread.needsRefreshing) {
-					console.log("Refreshing ", thread);
-					saveThreadFromGmailToServer(fnAuthorizationGetter, thread.threadId);
-				}
-			});
-			threads.forEach(function(thread) {
-				var filteredThread = thread;
-				filteredThread.mainDisplayedLabelIds = thread.labelIds.filter(function(labelId) {
-					switch (labelId) {
-						/*
-						 * Every e-mail we display is in the INBOX.
-						 */
-						case 'INBOX': return false;
-						/*
-						 * Controversial design choice: We think inbox zero is facilitated
-						 * if we get rid of the distracting concept of a read e-mail vs an
-						 * unread e-mail.
-						 */
-						case 'UNREAD': return false;
-						case 'SENT': return false;
-						case 'TRASH': return false;
-						default: return true;
+			groupsOfThreads.forEach(function(group) {
+				var $group = $(handlebarsTemplates.group(group));
+				$main.append($group);
+				group.threads.forEach(function refreshIfNeeded(thread) {
+					if (thread.needsRefreshing) {
+						console.log("Refreshing ", thread);
+						saveThreadFromGmailToServer(fnAuthorizationGetter, thread.threadId);
 					}
 				});
-				var $thread = $(handlebarsTemplates.thread(filteredThread));
-				$thread.data('labelIds', thread.labelIds);
-				$main.append($thread);
+				group.threads.forEach(function(thread) {
+					thread.mainDisplayedLabelIds = thread.labelIds.filter(function(labelId) {
+						switch (labelId) {
+							/*
+							 * Every e-mail we display is in the INBOX.
+							 */
+							case 'INBOX': return false;
+							/*
+							 * Controversial design choice: We think inbox zero is facilitated
+							 * if we get rid of the distracting concept of a read e-mail vs an
+							 * unread e-mail.
+							 */
+							case 'UNREAD': return false;
+							case 'SENT': return false;
+							case 'TRASH': return false;
+							default: return true;
+						}
+					});
+					var $thread = $(handlebarsTemplates.thread(thread));
+					$thread.data('labelIds', thread.labelIds);
+					$main.append($thread);
+				});
 			});
 			updateMessenger.update({
 				type: 'success',
