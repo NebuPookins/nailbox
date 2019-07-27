@@ -30,6 +30,7 @@ const models = {
 	hideUntils: require('./models/hide_until'),
 	lastRefreshed: require('./models/last_refreshed'),
 };
+const emailGrouper = require('./email-grouper.js');
 
 function readConfigWithDefault(config, strFieldName) {
 	if (config[strFieldName]) {
@@ -153,17 +154,20 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	});
 
 	/**
-	 * Replies with a list of threads to show on the main page.
+	 * Returns a promise with the N most relevant threads (newly received threads,
+	 * and snoozed threads whose snooze have expired, etc.). Specifically, returns
+	 * an array of objects.
 	 */
-	app.get('/api/threads', function(req, res) {
+	function getNMostRelevantThreads(n) {
+		const deferred = q.defer();
 		nodeFs.readdir('data/threads', function(err, filenames) {
 			if (err) {
-				logger.error(util.inspect(err));
-				res.sendStatus(500);
+				deferred.reject(new Error(err));
+				return;
 			} else {
 				var jsonResponse = {};
 				const now = Date.now();
-				q.all(filenames.map(function(filename) {
+				return q.all(filenames.map(function(filename) {
 					return models.thread.get(filename).then(function(thread) {
 						const maybeMostRecentSnippetInThread = thread.snippet();
 						return {
@@ -190,12 +194,81 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 						.filter(formattedThread => formattedThread.visibility !== 'hidden');
 					formattedThreads.sort(hideUntils.comparator());
 					formattedThreads.length = Math.min(formattedThreads.length, 100);
-					res.status(200);
-					res.type('json');
-					res.send(formattedThreads);
+					deferred.resolve(formattedThreads);
 				}).done();
 			}
 		});
+		return deferred.promise;
+	}
+
+	/**
+	 * Replies with a list of threads to show on the main page.
+	 */
+	app.get('/api/threads', function(req, res) {
+		getNMostRelevantThreads(100).then(function(formattedThreads) {
+			res.status(200);
+			res.type('application/json');
+			res.send(formattedThreads);
+		}).catch(function(err) {
+			logger.error(util.inspect(err));
+			res.sendStatus(500);
+		}).done();
+	});
+
+	/**
+	 * Replies with a list of threads to show on the main page, but grouped by
+	 * categories
+	 */
+	app.get('/api/threads/grouped', function(req, res) {
+		const groupPredicates = emailGrouper.predicateMap;
+		getNMostRelevantThreads(100).then(function(allThreads) {
+			var groupedThreads = {
+				"Others": []
+			};
+			const groupNames = Object.keys(groupPredicates);
+			groupNames.forEach((group) => {
+				groupedThreads[group] = [];
+			});
+			allThreads.forEach((thread) => {
+				var foundAGroup = false;
+				for (let name of groupNames) {
+					if (typeof groupPredicates[name] !== 'function') {
+						logger.error(`groupPredicates[${name}] was a ${groupPredicates[name]} instead of a function.`);
+					}
+					if ((groupPredicates[name])(thread)) {
+						groupedThreads[name].push(thread);
+						foundAGroup = true;
+						break;
+					}
+				}
+				if (!foundAGroup) {
+					groupedThreads["Others"].push(thread);
+				}
+			});
+			var orderedGroupThreads = [];
+			Object.keys(groupedThreads).forEach((group) => {
+				if (groupedThreads[group].length > 0) {
+					orderedGroupThreads.push({
+						label: group,
+						threads: groupedThreads[group]
+					});
+				}
+			});
+			/*
+			 * Sort groups by their "newest" message; threads is guaranteed non-empty
+			 * from previous step.
+			 */
+			const hideUntilComparator = hideUntils.comparator();
+			orderedGroupThreads.sort((groupA, groupB) => {
+				return hideUntilComparator(groupA.threads[0], groupB.threads[0]);
+			});
+			res.status(200);
+			res.type('application/json');
+			res.send(orderedGroupThreads);
+		}).catch(function(err) {
+			logger.error(util.inspect(err));
+			res.sendStatus(500);
+		}).done();
 	});
 
 	app.delete(/^\/api\/threads\/([a-z0-9]+)$/, function(req, res) {
