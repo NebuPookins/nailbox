@@ -200,7 +200,7 @@ html(lang="en")
 					.col-xs-10
 						strong From&nbsp;
 						span.senders(title="{{#each senders}} {{this.name}} {{/each}}")
-							| {{senders.0.name}}
+							| {{senders.0.name}} ({{senders.0.email}})
 							| {{#if senders.1.name}}
 							| (and {{nMore senders.length}} more)
 							| {{/if}}

@@ -75,9 +75,9 @@
 	 * representing the sender of this message. Returns null if there was no sender
 	 */
 	Message.prototype.sender = function() {
-		const senders = this.emailAddresses(header => header.name === 'From');
+		const senders = this.emailAddresses(header => ['From', 'from'].some(expectedHeaderName => header.name === expectedHeaderName));
 		if (senders.length !== 1) {
-			logger.warn(`Expected to have exactly 1 sender, but found ${senders.length} senders. Data was ${util.inspect(this._data)} and senders were ${senders}.`);
+			logger.warn(`Expected to have exactly 1 sender, but found ${senders.length} senders. Data was ${util.inspect(this._data)} and senders were ${senders}. Headers where ${util.inspect(this._data.payload.headers)}`);
 		}
 		return senders.length === 0 ? null : senders[0];
 	};

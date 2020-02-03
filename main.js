@@ -172,8 +172,8 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 						const maybeMostRecentSnippetInThread = thread.snippet();
 						return {
 							threadId: thread.id(),
-							senders: thread.people(header => header.name === 'From'),
-							receivers: thread.people(header => header.name === 'To'),
+							senders: thread.senders(),
+							receivers: thread.recipients(),
 							lastUpdated: thread.lastUpdated(),
 							subject: thread.subject(),
 							snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
