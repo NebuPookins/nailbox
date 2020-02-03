@@ -184,8 +184,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 							needsRefreshing: lastRefresheds.needsRefreshing(thread.id(), thread.lastUpdated(), now),
 						};
 					}, function(e) {
-						//If you couldn't read certain thread files, just keep proceeding.
-						logger.warn(util.inspect(e));
+						logger.warn("Couldn't read certain threads in getNMostrElevantThreads. Ignoring and continuing. ", util.inspect(e));
 						return null;
 					});
 				})).then(function (formattedThreads) {
@@ -398,8 +397,12 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 				res.sendStatus(404);
 			}
 		}, function(err) {
-			logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
-			res.sendStatus(500);
+			if (err.code === 'ENOENT') {
+				res.sendStatus(404);
+			} else {
+				logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
+				res.sendStatus(500);
+			}
 		}).done();
 	});
 
