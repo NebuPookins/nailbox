@@ -221,13 +221,15 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	app.get('/api/threads/grouped', function(req, res) {
 		const groupPredicates = emailGrouper.predicateMap;
 		getNMostRelevantThreads(100).then(function(allThreads) {
-			var groupedThreads = {
-				"Others": []
-			};
+			var groupedThreads = {};
 			const groupNames = Object.keys(groupPredicates);
-			groupNames.forEach((group) => {
-				groupedThreads[group] = [];
-			});
+			function addToGroupedThreads(group, thread) {
+				const key = (thread.visibility === 'when-i-have-time') ? `${group} - When I Have Time` : group;
+				if (!Array.isArray(groupedThreads[key])) {
+					groupedThreads[key] = [];
+				}
+				groupedThreads[key].push(thread);
+			}
 			allThreads.forEach((thread) => {
 				var foundAGroup = false;
 				for (let name of groupNames) {
@@ -235,23 +237,21 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 						logger.error(`groupPredicates[${name}] was a ${groupPredicates[name]} instead of a function.`);
 					}
 					if ((groupPredicates[name])(thread)) {
-						groupedThreads[name].push(thread);
+						addToGroupedThreads(name, thread);
 						foundAGroup = true;
 						break;
 					}
 				}
 				if (!foundAGroup) {
-					groupedThreads["Others"].push(thread);
+					addToGroupedThreads("Others", thread);
 				}
 			});
 			var orderedGroupThreads = [];
 			Object.keys(groupedThreads).forEach((group) => {
-				if (groupedThreads[group].length > 0) {
-					orderedGroupThreads.push({
-						label: group,
-						threads: groupedThreads[group]
-					});
-				}
+				orderedGroupThreads.push({
+					label: group,
+					threads: groupedThreads[group]
+				});
 			});
 			/*
 			 * Sort groups by their "newest" message; threads is guaranteed non-empty
