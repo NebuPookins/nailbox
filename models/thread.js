@@ -29,6 +29,32 @@
 	};
 
 	/**
+	 * @return an array that looks like:
+	 * [
+	 *   { name: 'Alfred Alpha', email: 'aa@gmail.com'},
+	 *   { name: '"Beta, Betty"', email: 'bb@gmail.com'}
+	 * ]
+	 */
+	Thread.prototype.senders = function() {
+		const people = this._messages.map(m => m.sender())
+			.filter(person => person != null);
+		return _.uniqBy(people, people => people.email);
+	}
+
+	/**
+	 * @return an array that looks like:
+	 * [
+	 *   { name: 'Alfred Alpha', email: 'aa@gmail.com'},
+	 *   { name: '"Beta, Betty"', email: 'bb@gmail.com'}
+	 * ]
+	 */
+	Thread.prototype.recipients = function() {
+		const people = this._messages.map(m => m.recipients())
+			.reduce((a, b) => a.concat(b)); //Flatten the array of arrays.
+		return _.uniqBy(people, people => people.email);
+	}
+
+	/**
 	 * @return [Number] milliseconds since the epoch, representing the last time
 	 * a message got added to this thread.
 	 */
