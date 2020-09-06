@@ -636,7 +636,7 @@ $(function() {
 						} else {
 							updateMessenger.update({
 								type: 'error',
-								message: "Failed to send message."
+								message: "Failed to send message: " + resp.message
 							});
 							console.log("Failed to send message:", resp);
 							debugger;
