@@ -19,7 +19,8 @@ const entities = new Entities();
 const mailcomposer = require("mailcomposer");
 const marked = require('marked');
 const base64url = require('base64url');
-const pygmentizeBundled = require('pygmentize-bundled');
+const hljs = require('highlight.js');
+const posthtml = require('posthtml');
 const Optional = require('optional-js');
 const helpers = {
 	fileio: require('./helpers/fileio')
@@ -436,24 +437,78 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 					tables: true,
 					breaks: true,
 					smartLists: true,
-					smartypants: true,
-					highlight: (code, lang, callback) => {
-						pygmentizeBundled({
-							lang: lang,
-							format: 'html',
-							options: {
-								noclasses: true,
-								nowrap: true //marked already adds a <pre> tag; no need to double wrap it.
-							}
-						}, code, (err, result) => {
-							callback(err, result.toString());
-						});
+					smartypants: true, //smart quotes, dashes, etc.
+					highlight: (code, lang) => {
+						const ignore_illegals = true;
+						const htmlWithClasses = hljs.highlight(lang, code, ignore_illegals).value;
+						return posthtml()
+							.use((tree) => {
+								//Convert HLJS's CSS classes into inline styles.
+								for (const [key, value] of Object.entries({
+									'hljs-comment': 'color:#586e75',
+									'hljs-quote': 'color:#586e75',
+									'hljs-addition': 'color:#859900',
+									'hljs-keyword': 'color:#859900',
+									'hljs-selector-tag': 'color:#859900',
+									'hljs-doctag': 'color:#2aa198',
+									'hljs-literal'              : 'color:#2aa198',
+									'hljs-meta hljs-meta-string': 'color:#2aa198', //TODO
+									'hljs-number'               : 'color:#2aa198',
+									'hljs-regexp'               : 'color:#2aa198',
+									'hljs-string'               : 'color:#2aa198',
+									'hljs-name' : 'color:#268bd2',
+									'hljs-section' : 'color:#268bd2',
+									'hljs-selector-class' : 'color:#268bd2',
+									'hljs-selector-id' : 'color:#268bd2',
+									'hljs-title' : 'color:#268bd2',
+									'hljs-attr' : 'color:#b58900',
+									'hljs-attribute' : 'color:#b58900',
+									'hljs-class hljs-title' : 'color:#b58900', //TODO
+									'hljs-template-variable' : 'color:#b58900',
+									'hljs-type' : 'color:#b58900',
+									'hljs-variable' : 'color:#b58900',
+									'hljs-bullet' : 'color:#cb4b16',
+									'hljs-link' : 'color:#cb4b16',
+									'hljs-meta' : 'color:#cb4b16',
+									'hljs-meta hljs-keyword' : 'color:#cb4b16',
+									'hljs-selector-attr' : 'color:#cb4b16',
+									'hljs-selector-pseudo' : 'color:#cb4b16',
+									'hljs-subst' : 'color:#cb4b16',
+									'hljs-symbol' : 'color:#cb4b16',
+									'hljs-built_in' : 'color:#dc322f',
+									'hljs-deletion' : 'color:#dc322f',
+									'hljs-formula' : 'background:#073642',
+									'hljs-emphasis' : 'font-style:italic',
+									'hljs-strong' : 'font-weight:700',
+								})) {
+									tree.match({'attrs': { 'class': key}}, (node) => {
+										node.attrs.style = value;
+										return node;
+									});
+								}
+							})
+							.process(htmlWithClasses, {sync: true})
+							.html;
 					}
 				}, (err, content) => {
 					if (err) {
 						reject(err);
 					} else {
-						resolve([thread, content]);
+						// Add background to pre tag
+						const contentWithPreBackground = posthtml()
+							.use((tree) => {
+								tree.match({'tag':'pre'}, (node) => {
+									Object.assign(node, {
+										attrs: {
+											style: 'background:#002b36; color:#839496'
+										}
+									});
+									return node;
+								});
+							})
+							.process(content, {sync: true})
+							.html;
+						resolve([thread, contentWithPreBackground]);
 					}
 				});
 			});
