@@ -459,10 +459,17 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			});
 		}).spread((thread, htmlizedMarkdown) => {
 			const mostRecentMessage = thread.mostRecentMessageSatisfying(() => true);
-			const receivers = mostRecentMessage.recipients();
+			const replyTo = mostRecentMessage.replyTo();
+			if (replyTo == null) {
+				throw "TODO: How should we handle the case where we can't find a reply to?";
+			}
+			const threadParticipants = mostRecentMessage.recipients().concat(replyTo);
+			if (threadParticipants.some(person => person == null)) {
+				logger.warn(`Got null receiver in ${util.inspect(threadParticipants)} from thread ${util.inspect(thread)}`);
+			}
 			const peopleOtherThanYourself = _.uniqBy(
-				receivers.concat(mostRecentMessage.replyTo())
-					.filter(person => person.email !== req.body.myEmail),
+				threadParticipants
+					.filter(person => person != null && person.email !== req.body.myEmail),
 				recipient => recipient.email
 			);
 			const toLine = peopleOtherThanYourself.map(person => util.format("%s <%s>", person.name, person.email));
