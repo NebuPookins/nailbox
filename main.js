@@ -90,7 +90,10 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	app.get('/api/clientId', function(req, res) {
 		const clientId = readConfigWithDefault(config, 'clientId');
 		if (typeof clientId === 'string') {
-			res.status(200).send(config.clientId);
+			res
+				.status(200)
+				.set('Content-Type', 'text/plain')
+				.send(config.clientId);
 		} else {
 			res.sendStatus(404);
 		}
