@@ -286,7 +286,7 @@
 			assert.fail("Can't reach this line.");
 		};
 		return retVal;
-	}
+	};
 
 	/**
 	 * Returns a comparator (function) that sorts messages so that "newer" ones

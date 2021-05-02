@@ -5,8 +5,6 @@
 	const assert = require('assert');
 	const fileio = require('../helpers/fileio');
 	const logger = require('nebulog').make({filename: __filename, level: 'debug'});
-	const nodeFs = require('node-fs');
-	const q = require('q');
 
 	/**
 	 * @param jsonData [Hash]

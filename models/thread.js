@@ -39,7 +39,7 @@
 		const people = this._messages.map(m => m.sender())
 			.filter(person => person != null);
 		return _.uniqBy(people, people => people.email);
-	}
+	};
 
 	/**
 	 * @return an array that looks like:
@@ -52,7 +52,7 @@
 		const people = this._messages.map(m => m.recipients())
 			.reduce((a, b) => a.concat(b)); //Flatten the array of arrays.
 		return _.uniqBy(people, people => people.email);
-	}
+	};
 
 	/**
 	 * @return [Number] milliseconds since the epoch, representing the last time

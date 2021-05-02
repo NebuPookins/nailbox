@@ -396,7 +396,7 @@ $(function() {
 	(function() {
 		var fnScheduledUpdate = () => {
 			var updateMessenger = messengerGetter().info("Downloading new threads from gmail...");
-			var promiseThreadsUpdatedFromGmail = promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
+			promisedFnAuthorizationGetter.then(function(fnAuthorizationGetter) {
 				return saveThreadsFromGmailToServer(fnAuthorizationGetter, updateMessenger).then(function() {
 					return fnAuthorizationGetter;
 				});
