@@ -10,9 +10,7 @@ const path = require('path');
 const logger = require('nebulog').make({filename: __filename, level: 'debug'});
 const nodeFs = require('node-fs');
 const q = require('q');
-const assert = require('assert');
 const _ = require('lodash');
-const mimelib = require("mimelib");
 const sanitizeHtml = require('sanitize-html');
 const Entities = require('html-entities').AllHtmlEntities;
 const entities = new Entities();
@@ -169,7 +167,6 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 				deferred.reject(new Error(err));
 				return;
 			} else {
-				var jsonResponse = {};
 				const now = Date.now();
 				return q.all(filenames.map(function(filename) {
 					return models.thread.get(filename).then(function(thread) {
@@ -534,10 +531,10 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			const toLine = peopleOtherThanYourself.map(person => util.format("%s <%s>", person.name, person.email));
 			const inReplyToId = Optional.ofNullable(mostRecentMessage.header('Message-ID'))
 				.map((header) => header.value)
-				.orElse(null)
+				.orElse(null);
 			const mail = mailcomposer({
 				from: req.body.myEmail,
-				to: peopleOtherThanYourself.map(person => util.format("%s <%s>", person.name, person.email)),
+				to: toLine,
 				inReplyTo: inReplyToId,
 				subject: thread.subject(),
 				text: bodyPlusSignature,

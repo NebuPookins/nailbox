@@ -213,9 +213,7 @@
 	}
 	(function test_selectedBestPart() {
 		console.log("Running tests on selectedBestPart...");
-		const badDecoded = "bad";
 		const goodDecoded = "good";
-		const badEncoded = mimelib.encodeBase64(badDecoded);
 		const goodEncoded = mimelib.encodeBase64(goodDecoded);
 		(() => {
 			// If the part is text/html, just return it.
