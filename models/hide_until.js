@@ -152,19 +152,9 @@
 		if (data) {
 			switch (data.type) {
 				case 'timestamp':
-					if (data.hiddenOn < thread.lastUpdated && false) {
-						return new EmptyHideUntil();
-					} else {
-						return new HideUntilTimestamp(data);
-					}
-					break;
+					return new HideUntilTimestamp(data);
 				case 'when-i-have-time':
-					if (data.hiddenOn < thread.lastUpdated && false) {
-						return new EmptyHideUntil();
-					} else {
-						return new HideUntilIHaveTime(data);
-					}
-					break;
+					return new HideUntilIHaveTime(data);
 				default:
 					throw `Don't know how to handle type ${data.type}`;
 			}
