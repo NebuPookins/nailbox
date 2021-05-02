@@ -442,8 +442,9 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 					smartLists: true,
 					smartypants: true, //smart quotes, dashes, etc.
 					highlight: (code, lang) => {
-						const ignore_illegals = true;
-						const htmlWithClasses = hljs.highlight(lang, code, ignore_illegals).value;
+						const htmlWithClasses = lang ?
+							hljs.highlight(code, {language: lang, ignoreIllegals: true}).value :
+							hljs.highlightAuto(code).value ;
 						return posthtml()
 							.use((tree) => {
 								//Convert HLJS's CSS classes into inline styles.
