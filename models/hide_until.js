@@ -14,7 +14,7 @@
 
 	/**
 	 * @param threadLastUpdated [Number] number of milliseconds since the epoch.
-	 * @param now [Number, Undefined] number of milliseconds since the epoch.
+	 * @param now [Number] number of milliseconds since the epoch.
 	 * @return [String]
 	 *   'updated' if the thread was updated since the last time it was hidden
 	 *             (or if the thread was never hidden)
@@ -57,9 +57,6 @@
 	 * @override
 	 */
 	HideUntilTimestamp.prototype.getVisibility = function(threadLastUpdated, now) {
-		if (now === undefined) {
-			now = Date.now();
-		}
 		if (threadLastUpdated > this._data.hiddenOn) {
 			return 'updated';
 		}
@@ -91,9 +88,6 @@
 	 * @override
 	 */
 	HideUntilIHaveTime.prototype.getVisibility = function(threadLastUpdated, now) {
-		if (now === undefined) {
-			now = Date.now();
-		}
 		if (threadLastUpdated > this._data.hiddenOn) {
 			return 'updated';
 		}
