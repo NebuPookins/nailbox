@@ -443,9 +443,9 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 				};
 			}
 			return q.Promise((resolve, reject) => {
-				marked(bodyPlusSignature, {
+				marked.parse(bodyPlusSignature, {
 					gfm: true,
-					tables: true,
+					tables: true, //TODO: This no longer works as of marked 4?
 					breaks: true,
 					smartLists: true,
 					smartypants: true, //smart quotes, dashes, etc.
