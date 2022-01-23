@@ -31,6 +31,17 @@ const models = {
 };
 const emailGrouper = require('./email-grouper.js');
 
+/*
+ * Set up graceful exit, because otherwise there's a race condition
+ * where the process might be killed in the middle of IO, which will
+ * result in corrupt JSON files.
+ */
+process.on('SIGINT', () => {
+	console.log("\n"); //Print newline because CTRL-C usually causes "^C" to get printed to the terminal, and we want the next log message to be on its own line.
+	logger.info("Gracefully shutting down from SIGINT (Ctrl-C)...");
+	process.exit( );
+});
+
 function readConfigWithDefault(config, strFieldName) {
 	if (config[strFieldName]) {
 		return config[strFieldName];
