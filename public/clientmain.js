@@ -132,14 +132,14 @@ $(function() {
 					type: 'info',
 					message: "Waiting for Google API to load..."
 				});
-				if (gapi && gapi.auth && gapi.auth.authorize) {
+				if (gapi && gapi.client) {
 					updateMessenger.update({
 						type: 'success',
 						message: "Google API to loaded!"
 					});
 					resolve(gapi);
 				} else {
-					setTimeout(_waitForGapiToLoad, 500);
+					gapi.load('client', _waitForGapiToLoad);
 				}
 			}
 			_waitForGapiToLoad();
@@ -305,22 +305,32 @@ $(function() {
 					needToRequestAuthorization = false;
 				}
 			}
+			console.log("needToRequestAuthorization", needToRequestAuthorization);
 			if (needToRequestAuthorization) {
 				/*
 				 * If we need to request, then immediately put a promise into our cache so that it's sharable.
 				 */
 				alreadyPromisedScopes[scope] = Q.Promise(function(resolve, reject) {
-					gapi.auth.authorize({client_id: clientId, scope: scope}, function(authResult) {
-						if (authResult.error) {
-							reject(authResult);
-						} else {
-							gapi.client.load('gmail', 'v1', function() {
-								resolve({
-									expiresAt: moment().add(authResult.expires_in, 'seconds')
+					console.log("initializing google token client for scope", scope);
+					var googleTokenClient = google.accounts.oauth2.initTokenClient({
+						client_id: clientId,
+						scope: scope,
+						callback: (authResult) => {
+							if (authResult.error) {
+								console.log("Failed to get token for scope", scope, authResult);
+								reject(authResult);
+							} else {
+								console.log("Got token for scope", scope, authResult, "loading gmail.");
+								gapi.client.load('gmail', 'v1', function() {
+									resolve({
+										expiresAt: moment().add(authResult.expires_in, 'seconds')
+									});
 								});
-							});
-						}
+							}
+						},
 					});
+					console.log("Requesting access token for scope", scope);
+					googleTokenClient.requestAccessToken();
 				});
 			}
 			/*
