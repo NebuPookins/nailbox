@@ -250,7 +250,7 @@ html(lang="en")
 				.panel-heading
 					.panel-title
 						.row
-							.col-xs-10
+							.col-xs-6
 								strong From
 								| {{#each from}}
 								| {{name}}
@@ -263,6 +263,8 @@ html(lang="en")
 								| {{/if}}
 							.col-xs-2
 								| {{prettyTimestamp date}}
+							.col-xs-4
+								| {{wordcount}} words: {{duration}}
 				.panel-body
 					.row
 						.col-xs-12.message-body

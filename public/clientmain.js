@@ -1062,6 +1062,7 @@ $(function() {
 					}));
 				}
 				nonDeletedMessages.forEach(function(message) {
+					message['duration'] = moment.duration(message.timeToReadSeconds, 'seconds').humanize();
 					$threads.append(handlebarsTemplates.message(message));
 				});
 				updateMessenger.update({

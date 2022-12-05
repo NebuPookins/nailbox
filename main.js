@@ -321,6 +321,12 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	function loadRelevantDataFromMessage(objMessage) {
 		const originalBody = objMessage.bestBody();
 		const attachments = objMessage.getAttachments();
+		const plainTextBody = sanitizeHtml(originalBody, {
+			allowedTags: [],
+			allowedAttributes: {}
+		});
+		const wordCount = plainTextBody.split(' ').length;
+		const timeToReadSeconds = wordCount * 60 / 200;
 		const sanitizedBody = sanitizeHtml(originalBody, {
 			transformTags: {
 				'body': 'div',
@@ -376,8 +382,11 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			date: objMessage.timestamp(),
 			body: {
 				original: originalBody,
-				sanitized: sanitizedBody
+				sanitized: sanitizedBody,
+				plainText: plainTextBody,
 			},
+			wordcount: plainTextBody.split(' ').length,
+			timeToReadSeconds: timeToReadSeconds,
 			attachments: attachments
 		};
 	}
