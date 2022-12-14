@@ -234,9 +234,10 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 		const groupPredicates = emailGrouper.predicateMap;
 		getNMostRelevantThreads(100).then(function(allThreads) {
 			var groupedThreads = {};
+			const whenIHaveTimeSuffix = " - When I Have Time";
 			const groupNames = Object.keys(groupPredicates);
 			function addToGroupedThreads(group, thread) {
-				const key = (thread.visibility === 'when-i-have-time') ? `${group} - When I Have Time` : group;
+				const key = (thread.visibility === 'when-i-have-time') ? `${group}${whenIHaveTimeSuffix}` : group;
 				if (!Array.isArray(groupedThreads[key])) {
 					groupedThreads[key] = [];
 				}
@@ -272,6 +273,35 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			const hideUntilComparator = hideUntils.comparator();
 			orderedGroupThreads.sort((groupA, groupB) => {
 				return hideUntilComparator(groupA.threads[0], groupB.threads[0]);
+			});
+			const groupPriority = emailGrouper.groupPriority || {};
+			orderedGroupThreads.sort((groupA, groupB) => {
+				const BFirst = 1;
+				const AFirst = -1;
+				let labelA = groupA.label.replace(whenIHaveTimeSuffix, "");
+				let labelB = groupB.label.replace(whenIHaveTimeSuffix, "");
+				let whenIHaveTimeA = labelA != groupA.label;
+				let whenIHaveTimeB = labelB != groupB.label;
+				if (whenIHaveTimeA && !whenIHaveTimeB) {
+					return BFirst;
+				}
+				if (!whenIHaveTimeA && whenIHaveTimeB) {
+					return AFirst;
+				}
+				//assert whenIHaveTimeA == whenIHaveTimeB;
+				if (groupPriority[labelA]) {
+					if (groupPriority[labelB]) {
+						return groupPriority[labelA] - groupPriority[labelB];
+					} else {
+						return BFirst;
+					}
+				} else {
+					if (groupPriority[labelB]) {
+						return AFirst;
+					} else {
+						return 0;
+					}
+				}
 			});
 			res.status(200);
 			res.type('application/json');
