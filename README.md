@@ -30,7 +30,7 @@ The software is in an extremely early beta.
   host machine. This will create a virtual machine aka your "guest machine".
 * SSH into the newly created guest machine by running `vagrant ssh`
 * Install nodejs on your guest machine by running:
-  * `curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -`
+  * `curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -`
   * `sudo apt-get install -y nodejs`
 * Install yarn (an alternative to npm that works better in VirtualBox because
   it handles symlinks differently) by running:
