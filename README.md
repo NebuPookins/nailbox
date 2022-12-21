@@ -42,6 +42,6 @@ The software is in an extremely early beta.
 * Install all of Nailbox's dependencies by running `yarn install`
   (or `yarn install --no-bin-links` if your host OS is Windows or otherwise has
   problems with symlinks) on your guest machine.
-* Start the server by running `node main.js` on your guest machine.
+* Start the server by running `node main.mjs` on your guest machine.
 * Open http://localhost:3000 in your webbrowser on your host machine (or
   whatever port you chose if you changed the setting in the vagrant file).

@@ -3,33 +3,33 @@ const DEFAULT_CONFIG = {
 };
 const PATH_TO_CONFIG = 'data/config.json';
 
-const util = require('util');
-const express = require('express');
-const bodyParser = require('body-parser');
-const path = require('path');
-const logger = require('nebulog').make({filename: __filename, level: 'debug'});
-const nodeFs = require('node-fs');
-const q = require('q');
-const _ = require('lodash');
-const sanitizeHtml = require('sanitize-html');
-const Entities = require('html-entities').AllHtmlEntities;
+import util from 'util';
+import express from 'express';
+import bodyParser from 'body-parser';
+import path from 'path';
+import nebulog from 'nebulog';
+const logger = nebulog.make({filename: 'main.mjs', level: 'debug'});
+import nodeFs from 'node-fs';
+import q from 'q';
+import _ from 'lodash';
+import sanitizeHtml from 'sanitize-html';
+import htmlEntities from 'html-entities';
+const Entities = htmlEntities.AllHtmlEntities;
 const entities = new Entities();
-const mailcomposer = require("mailcomposer");
-const marked = require('marked');
-const base64url = require('base64url');
-const hljs = require('highlight.js');
-const posthtml = require('posthtml');
-const Optional = require('optional-js');
-const helpers = {
-	fileio: require('./helpers/fileio')
-};
-const models = {
-	thread: require('./models/thread'),
-	message: require('./models/message'),
-	hideUntils: require('./models/hide_until'),
-	lastRefreshed: require('./models/last_refreshed'),
-};
-const emailGrouper = require('./email-grouper.js');
+import mailcomposer from 'mailcomposer';
+import { marked } from 'marked';
+import base64url from 'base64url';
+import hljs from 'highlight.js';
+import posthtml from 'posthtml';
+import Optional from 'optional-js';
+import helpers_fileio from './helpers/fileio.js';
+
+import models_thread from './models/thread.js';
+import models_message from './models/message.js';
+import models_hideUntils from './models/hide_until.js';
+import models_lastRefreshed from './models/last_refreshed.js';
+
+import emailGrouper from './email-grouper.js';
 
 /*
  * Set up graceful exit, because otherwise there's a race condition
@@ -51,17 +51,15 @@ function readConfigWithDefault(config, strFieldName) {
 }
 
 logger.info("Checking directory structure...");
-helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
-	return logger.info("Directory structure looks fine.");
-}).then(function() {
-	return q.all([
-		helpers.fileio.readJsonFromOptionalFile(PATH_TO_CONFIG),
-		models.hideUntils.load(),
-		models.lastRefreshed.load(),
-	]);
-}).spread(function(config, hideUntils, lastRefresheds) {
+await helpers_fileio.ensureDirectoryExists('data/threads');
+logger.info("Directory structure looks fine.");
+q.all([
+	helpers_fileio.readJsonFromOptionalFile(PATH_TO_CONFIG),
+	models_hideUntils.load(),
+	models_lastRefreshed.load(),
+]).spread(function(config, hideUntils, lastRefresheds) {
 	const app = express();
-	app.set('views', path.join(__dirname, 'views'));
+	app.set('views', path.join(process.cwd(), 'views'));
 	app.set('view engine', 'pug');
 	app.use('/public', express.static('public'));
 	app.use(bodyParser.json({limit: '10mb', parameterLimit: 10000}));
@@ -88,7 +86,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	app.post('/setup', function(req, res) {
 		logger.info(util.format("Updating client ID to '%s'.", req.body.clientId));
 		config.clientId = req.body.clientId;
-		helpers.fileio.saveJsonToFile(config, PATH_TO_CONFIG).then(function() {
+		helpers_fileio.saveJsonToFile(config, PATH_TO_CONFIG).then(function() {
 			res.redirect('/setup');
 		}, function(err) {
 			logger.error(util.format("Failed to save config file: %s", util.inspect(err)));
@@ -180,7 +178,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 			} else {
 				const now = Date.now();
 				return q.all(filenames.map(function(filename) {
-					return models.thread.get(filename).then(function(thread) {
+					return models_thread.get(filename).then(function(thread) {
 						const maybeMostRecentSnippetInThread = thread.snippet();
 						return {
 							threadId: thread.id(),
@@ -423,7 +421,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 
 	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, function(req, res) {
 		const threadId = req.params[0];
-		models.thread.get(threadId).then(function(thread) {
+		models_thread.get(threadId).then(function(thread) {
 			res.status(200).send({
 				messages: thread.messages().map(loadRelevantDataFromMessage)
 			});
@@ -440,7 +438,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)$/, function(req, res) {
 		const threadId = req.params[0];
 		const messageId = req.params[1];
-		models.thread.get(threadId).then(function(thread) {
+		models_thread.get(threadId).then(function(thread) {
 			const matchingMessage = thread.message(messageId);
 			if (matchingMessage) {
 				res.status(200).send(loadRelevantDataFromMessage(matchingMessage));
@@ -474,7 +472,7 @@ helpers.fileio.ensureDirectoryExists('data/threads').then(function() {
 		}
 		logger.info(util.format("/api/rfc2822 received for thread %s", req.body.threadId));
 		const bodyPlusSignature = req.body.body + "\n\n---\nSent using [Nailbox](https://github.com/NebuPookins/nailbox/).";
-		models.thread.get(req.body.threadId).then(thread => {
+		models_thread.get(req.body.threadId).then(thread => {
 			if (!thread.message(req.body.inReplyTo)) {
 				throw {
 					status: 400,
