@@ -180,7 +180,7 @@ $(function() {
 								reject(deleteOnLocalCache(threadId, updateMessenger));
 								return;
 							default:
-								messengerGetter().error("Failed to save thread " + threadId + " due to HTTP " + resp.code);
+								messengerGetter().error("Failed to get thread " + threadId + " because Gmail responded HTTP " + resp.code);
 								reject(resp);
 						}
 					}
