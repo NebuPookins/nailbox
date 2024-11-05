@@ -8,6 +8,7 @@
 	const nodeFs = require('node-fs');
 	const q = require('q');
 	const util = require('util');
+	const MESSAGE_IS_STALE_AFTER = 7 * 24 * 60 * 60 * 1000; //1 week in milliseconds
 
 	function HideUntil() {
 	}
@@ -58,7 +59,11 @@
 	 */
 	HideUntilTimestamp.prototype.getVisibility = function(threadLastUpdated, now) {
 		if (threadLastUpdated > this._data.hiddenOn) {
-			return 'updated';
+			if (now - threadLastUpdated > MESSAGE_IS_STALE_AFTER) {
+				return 'stale';
+			}  else {
+				return 'updated';
+			}
 		}
 		if (now > Number.parseInt(this._data.value)) {
 			return 'visible';
@@ -89,7 +94,11 @@
 	 */
 	HideUntilIHaveTime.prototype.getVisibility = function(threadLastUpdated, now) {
 		if (threadLastUpdated > this._data.hiddenOn) {
-			return 'updated';
+			if (now - threadLastUpdated > MESSAGE_IS_STALE_AFTER) {
+				return 'stale';
+			}  else {
+				return 'updated';
+			}
 		}
 		return 'when-i-have-time';
 	};
@@ -112,7 +121,11 @@
 	 * @override
 	 */
 	EmptyHideUntil.prototype.getVisibility = function(threadLastUpdated, now) {
-		return 'updated';
+		if (now - threadLastUpdated > MESSAGE_IS_STALE_AFTER) {
+			return 'stale';
+		}  else {
+			return 'updated';
+		}
 	};
 
 	/**
