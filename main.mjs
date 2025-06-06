@@ -195,21 +195,19 @@ async function getNMostRelevantThreads(n) {
 			let totalTimeToReadSecondsForThread = 0;
 			const messagesInThread = thread.messages();
 			messagesInThread.forEach(message => {
-				if (message.calculatedTimeToReadSeconds && typeof message.calculatedTimeToReadSeconds === 'number') {
-					totalTimeToReadSecondsForThread += message.calculatedTimeToReadSeconds;
-				}
+				totalTimeToReadSecondsForThread += message.getCalculatedTimeToReadSeconds();
 			});
 
 			let recentMessageReadTime = 0;
 			if (messagesInThread && messagesInThread.length > 0) {
 				let mostRecentMessage = messagesInThread[0];
 				for (let i = 1; i < messagesInThread.length; i++) {
-					if (parseInt(messagesInThread[i].internalDate, 10) > parseInt(mostRecentMessage.internalDate, 10)) {
+					if (parseInt(messagesInThread[i].getInternalDate(), 10) > parseInt(mostRecentMessage.getInternalDate(), 10)) {
 						mostRecentMessage = messagesInThread[i];
 					}
 				}
-				if (mostRecentMessage && typeof mostRecentMessage.calculatedTimeToReadSeconds === 'number') {
-					recentMessageReadTime = mostRecentMessage.calculatedTimeToReadSeconds;
+				if (mostRecentMessage) {
+					recentMessageReadTime = mostRecentMessage.getCalculatedTimeToReadSeconds();
 				}
 			}
 

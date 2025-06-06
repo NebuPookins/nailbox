@@ -19,7 +19,7 @@
 	 *   { name: 'Alfred Alpha', email: 'aa@gmail.com'},
 	 *   { name: 'Beta, Betty', email: 'bb@gmail.com'}
 	 * ]
-	 */ 
+	 */
 	function parseEmailToString(str) {
 		return mimelib.parseAddresses(str).map(entry => {
 			var name = entry.name ? entry.name : entry.address;
@@ -386,6 +386,14 @@
 
 	Message.prototype.getAttachments = function() {
 		return getAttachments(this._data.payload);
+	};
+
+	Message.prototype.getCalculatedTimeToReadSeconds = function() {
+		return this._data.calculatedTimeToReadSeconds || 0;
+	};
+
+	Message.prototype.getInternalDate = function() {
+		return this._data.internalDate;
 	};
 
 	exports.Message = Message;
