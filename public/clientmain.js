@@ -80,6 +80,27 @@ $(function() {
 		}
 	});
 
+	Handlebars.registerHelper('formatReadTime', function(totalSeconds) {
+		if (typeof totalSeconds !== 'number' || totalSeconds < 0) {
+			return ''; // Or some default like 'N/A'
+		}
+		if (totalSeconds === 0) {
+			return '0 sec read';
+		}
+		if (totalSeconds < 60) {
+			return totalSeconds + ' sec read';
+		}
+		var minutes = Math.round(totalSeconds / 60);
+		if (minutes === 0) { // e.g. 30 seconds / 60 = 0.5, rounds to 1, but if it was 20 seconds, rounds to 0.
+			// This case should be caught by totalSeconds < 60, but as a safeguard.
+			return totalSeconds + ' sec read';
+		}
+		if (minutes === 1) {
+			return '1 min read';
+		}
+		return minutes + ' min read';
+	});
+
 	Handlebars.registerHelper('pluralize', function(number, singular, plural) {
 		return number === 1 ? singular : plural;
 	});
@@ -422,7 +443,7 @@ $(function() {
 		};
 		fnScheduledUpdate();
 	})();
-	
+
 
 	function deleteThreadFromUI(threadId) {
 		var $uiElemToDelete = $main.find('.thread[data-thread-id="'+threadId+'"]');
@@ -868,7 +889,7 @@ $(function() {
 		}).done();
 		return false;
 	});
-	
+
 	$main.on('click', 'button.later', function(eventObject) {
 		return mainClickerShowPicker($(eventObject.currentTarget), $laterPicker);
 	});
@@ -1004,7 +1025,7 @@ $(function() {
 			});
 		}).done();
 	});
-	
+
 	$main.on('click', 'div.thread', function(eventObject) {
 		var $threadDiv = $(eventObject.currentTarget);
 		var threadId = $threadDiv.data('threadId');
@@ -1071,5 +1092,5 @@ $(function() {
 				});
 			}).done();
 	});
-	
+
 });

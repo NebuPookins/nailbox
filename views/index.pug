@@ -222,6 +222,14 @@ html(lang="en")
 						span.glyphicon.glyphicon-envelope
 						| &nbsp;
 						| {{prettyTimestamp lastUpdated}}
+						br
+						small Total:
+						span.glyphicon.glyphicon-time
+						|  {{formatReadTime totalTimeToReadSeconds}}
+						br
+						small Recent:
+						span.glyphicon.glyphicon-time
+						|  {{formatReadTime recentMessageReadTimeSeconds}}
 				.row
 					.col-xs-10
 						strong.subject {{subject}}
