@@ -235,6 +235,14 @@ html(lang="en")
 							| {{/each}}
 						p.snippet {{snippet}}
 					.col-xs-2
+						small Total:
+						span.glyphicon.glyphicon-time
+						|  {{formatReadTime totalTimeToReadSeconds}}
+						br
+						small Recent:
+						span.glyphicon.glyphicon-time
+						|  {{formatReadTime recentMessageReadTimeSeconds}}
+						br
 						button.btn.btn-xs.btn-success.archive-thread(title="Done")
 							span.glyphicon.glyphicon-ok
 						button.btn.btn-xs.btn-danger.delete(title="Delete")

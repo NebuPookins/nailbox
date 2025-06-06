@@ -152,6 +152,17 @@ app.post('/api/threads', function(req, res) {
 				res.sendStatus(isSuccessful ? 200 : 500);
 			});
 		} else {
+			// Calculate wordCount and timeToReadSeconds for each message
+			req.body.messages.forEach(messageData => {
+				const messageInstance = new models_message.Message(messageData);
+				const originalBody = messageInstance.bestBody();
+				const plainTextBody = sanitizeHtml(originalBody, { allowedTags: [], allowedAttributes: {} });
+				const wordCount = plainTextBody.split(' ').filter(word => word.length > 0).length;
+				const timeToReadSeconds = Math.round((wordCount * 60) / 200);
+				messageData.calculatedWordCount = wordCount;
+				messageData.calculatedTimeToReadSeconds = timeToReadSeconds;
+			});
+
 			nodeFs.writeFile('data/threads/' + threadId, JSON.stringify(req.body), function(err) {
 			if (err) {
 				logger.error(util.inspect(err));
@@ -180,6 +191,26 @@ async function getNMostRelevantThreads(n) {
 			const thread = await models_thread.get(filename);
 			const maybeMostRecentSnippetInThread = thread.snippet();
 			assert((typeof thread.id()) === 'string', `Expected thread.id() to be a string but was ${typeof thread.threadId} for file ${filename}.`);
+
+			let totalTimeToReadSecondsForThread = 0;
+			const messagesInThread = thread.messages();
+			messagesInThread.forEach(message => {
+				totalTimeToReadSecondsForThread += message.getCalculatedTimeToReadSeconds();
+			});
+
+			let recentMessageReadTime = 0;
+			if (messagesInThread && messagesInThread.length > 0) {
+				let mostRecentMessage = messagesInThread[0];
+				for (let i = 1; i < messagesInThread.length; i++) {
+					if (parseInt(messagesInThread[i].getInternalDate(), 10) > parseInt(mostRecentMessage.getInternalDate(), 10)) {
+						mostRecentMessage = messagesInThread[i];
+					}
+				}
+				if (mostRecentMessage) {
+					recentMessageReadTime = mostRecentMessage.getCalculatedTimeToReadSeconds();
+				}
+			}
+
 			return {
 				threadId: thread.id(),
 				senders: thread.senders(),
@@ -192,6 +223,8 @@ async function getNMostRelevantThreads(n) {
 				visibility: hideUntils.get({threadId: thread.id(), lastUpdated: thread.lastUpdated()}).getVisibility(thread.lastUpdated(), now),
 				isWhenIHaveTime: hideUntils.get({threadId: thread.id(), lastUpdated: thread.lastUpdated()}).isWhenIHaveTime(),
 				needsRefreshing: lastRefresheds.needsRefreshing(thread.id(), thread.lastUpdated(), now),
+				totalTimeToReadSeconds: totalTimeToReadSecondsForThread,
+				recentMessageReadTimeSeconds: recentMessageReadTime,
 			};
 		} catch (e) {
 			logger.warn("Couldn't read certain threads in getNMostrElevantThreads. Ignoring and continuing. ", util.inspect(e));
