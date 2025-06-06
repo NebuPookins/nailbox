@@ -7,6 +7,17 @@ $(function() {
 	if (!console.log) {
 		console.log = function() {};
 	}
+
+	// Set default options for Messenger
+	if (typeof Messenger !== 'undefined') {
+		Messenger({
+			messageDefaults: {
+				showCloseButton: true,
+				closeButtonText: '×'
+			}
+		});
+	}
+
 	var messengerGetter = (function() {
 		var mockMessenger = {
 			info: function() {
