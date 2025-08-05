@@ -1140,11 +1140,17 @@ $(function() {
 		var ruleHtml = `
 			<div class="panel-heading">
 				<div class="row">
-					<div class="col-xs-4">
+					<div class="col-xs-3">
 						<input type="text" class="form-control rule-name" placeholder="Rule Name" value="${rule.name || ''}">
 					</div>
 					<div class="col-xs-2">
 						<input type="number" class="form-control rule-priority" placeholder="Priority" value="${rule.priority || 50}">
+					</div>
+					<div class="col-xs-3">
+						<select class="form-control rule-sort-type">
+							<option value="mostRecent" ${(rule.sortType || 'mostRecent') === 'mostRecent' ? 'selected' : ''}>Most Recent</option>
+							<option value="shortest" ${(rule.sortType || 'mostRecent') === 'shortest' ? 'selected' : ''}>Shortest</option>
+						</select>
 					</div>
 					<div class="col-xs-2">
 						<button class="btn btn-xs btn-danger remove-rule-btn">
@@ -1185,6 +1191,10 @@ $(function() {
 		
 		$ruleDiv.on('change', '.rule-priority', function() {
 			currentRules[index].priority = parseInt($(this).val()) || 50;
+		});
+		
+		$ruleDiv.on('change', '.rule-sort-type', function() {
+			currentRules[index].sortType = $(this).val();
 		});
 		
 		$ruleDiv.on('change', '.condition-type, .condition-value', function() {
@@ -1278,6 +1288,7 @@ $(function() {
 		currentRules.push({
 			name: 'New Rule',
 			priority: 50,
+			sortType: 'mostRecent',
 			conditions: []
 		});
 		renderRules();

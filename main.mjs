@@ -355,9 +355,32 @@ app.get('/api/threads/grouped', async function(req, res) {
 
 		var orderedGroupThreads = [];
 		Object.keys(groupedThreads).forEach((group) => {
+			// Find the rule that created this group to get its sortType
+			let sortType = "mostRecent"; // default
+			for (let rule of groupingRules.rules) {
+				if (rule.name === group || group.endsWith(whenIHaveTimeSuffix) && rule.name === group.replace(whenIHaveTimeSuffix, "")) {
+					sortType = rule.sortType || "mostRecent";
+					break;
+				}
+			}
+			
+			// Sort threads within the group based on sortType
+			let sortedThreads = [...groupedThreads[group]];
+			if (sortType === "shortest") {
+				sortedThreads.sort((a, b) => {
+					// Sort by total word count (ascending - shortest first)
+					return a.totalTimeToReadSeconds - b.totalTimeToReadSeconds;
+				});
+			} else {
+				// Default "mostRecent" sorting
+				const hideUntilComparator = hideUntils.comparator();
+				sortedThreads.sort(hideUntilComparator);
+			}
+			
 			orderedGroupThreads.push({
 				label: group,
-				threads: groupedThreads[group]
+				threads: sortedThreads,
+				sortType: sortType
 			});
 		});
 
