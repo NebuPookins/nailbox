@@ -31,8 +31,6 @@ import models_message from './models/message.js';
 import models_hideUntils from './models/hide_until.js';
 import models_lastRefreshed from './models/last_refreshed.js';
 
-import emailGrouper from './email-grouper.js';
-
 /*
  * Set up graceful exit, because otherwise there's a race condition
  * where the process might be killed in the middle of IO, which will
@@ -255,16 +253,84 @@ app.get('/api/threads', async function(req, res) {
 });
 
 /**
+ * Get email grouping rules from config
+ */
+function getEmailGroupingRules(config) {
+	if (!config.emailGroupingRules) {
+		return { rules: [] };
+	}
+	return config.emailGroupingRules;
+}
+
+/**
+ * Check if a thread matches a grouping rule
+ */
+function threadMatchesRule(thread, rule) {
+	return rule.conditions.some(condition => {
+		switch (condition.type) {
+			case 'sender_name':
+				return thread.senders.some(sender => 
+					sender.name && sender.name.includes(condition.value)
+				);
+			case 'sender_email':
+				return thread.senders.some(sender => 
+					sender.email && sender.email.includes(condition.value)
+				);
+			case 'subject':
+				return thread.subject && thread.subject.includes(condition.value);
+			default:
+				return false;
+		}
+	});
+}
+
+/**
+ * Get email grouping rules
+ */
+app.get('/api/email-grouping-rules', function(req, res) {
+	try {
+		const rules = getEmailGroupingRules(config);
+		res.status(200);
+		res.type('application/json');
+		res.send(rules);
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+/**
+ * Update email grouping rules
+ */
+app.post('/api/email-grouping-rules', function(req, res) {
+	try {
+		logger.info("Updating email grouping rules");
+		config.emailGroupingRules = req.body;
+		helpers_fileio.saveJsonToFile(config, PATH_TO_CONFIG).then(function() {
+			res.sendStatus(200);
+		}, function(err) {
+			logger.error(util.format("Failed to save config file: %s", util.inspect(err)));
+			res.sendStatus(500);
+		}).done();
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+/**
  * Replies with a list of threads to show on the main page, but grouped by
  * categories
  */
 app.get('/api/threads/grouped', async function(req, res) {
-	const groupPredicates = emailGrouper.predicateMap;
 	try {
 		const allThreads = await getNMostRelevantThreads(100);
 		var groupedThreads = {};
 		const whenIHaveTimeSuffix = " - When I Have Time";
-		const groupNames = Object.keys(groupPredicates);
+		
+		// Get grouping rules from config
+		const groupingRules = getEmailGroupingRules(config);
+
 		function addToGroupedThreads(group, thread) {
 			const key = (thread.visibility === 'when-i-have-time') ? `${group}${whenIHaveTimeSuffix}` : group;
 			if (!Array.isArray(groupedThreads[key])) {
@@ -272,14 +338,12 @@ app.get('/api/threads/grouped', async function(req, res) {
 			}
 			groupedThreads[key].push(thread);
 		}
+
 		allThreads.forEach((thread) => {
 			var foundAGroup = false;
-			for (let name of groupNames) {
-				if (typeof groupPredicates[name] !== 'function') {
-					logger.error(`groupPredicates[${name}] was a ${groupPredicates[name]} instead of a function.`);
-				}
-				if ((groupPredicates[name])(thread)) {
-					addToGroupedThreads(name, thread);
+			for (let rule of groupingRules.rules) {
+				if (threadMatchesRule(thread, rule)) {
+					addToGroupedThreads(rule.name, thread);
 					foundAGroup = true;
 					break;
 				}
@@ -288,6 +352,7 @@ app.get('/api/threads/grouped', async function(req, res) {
 				addToGroupedThreads("Others", thread);
 			}
 		});
+
 		var orderedGroupThreads = [];
 		Object.keys(groupedThreads).forEach((group) => {
 			orderedGroupThreads.push({
@@ -295,6 +360,7 @@ app.get('/api/threads/grouped', async function(req, res) {
 				threads: groupedThreads[group]
 			});
 		});
+
 		/*
 			* Sort groups by their "newest" message; threads is guaranteed non-empty
 			* from previous step.
@@ -303,7 +369,13 @@ app.get('/api/threads/grouped', async function(req, res) {
 		orderedGroupThreads.sort((groupA, groupB) => {
 			return hideUntilComparator(groupA.threads[0], groupB.threads[0]);
 		});
-		const groupPriority = emailGrouper.groupPriority || {};
+		
+		// Create priority map from rules
+		const groupPriority = {};
+		groupingRules.rules.forEach(rule => {
+			groupPriority[rule.name] = rule.priority;
+		});
+		
 		orderedGroupThreads.sort((groupA, groupB) => {
 			const BFirst = 1;
 			const AFirst = -1;

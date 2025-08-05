@@ -1104,4 +1104,209 @@ $(function() {
 			}).done();
 	});
 
+	// Email Grouping Rules Management
+	var $settingsBtn = $('#settings-btn');
+	var $settingsModal = $('#settings-modal');
+	var $rulesContainer = $('#rules-container');
+	var $addRuleBtn = $('#add-rule-btn');
+	var $saveRulesBtn = $('#save-rules-btn');
+	var currentRules = [];
+
+	// Load rules when settings modal is opened
+	$settingsBtn.on('click', function() {
+		loadEmailGroupingRules();
+		$settingsModal.modal('show');
+	});
+
+	function loadEmailGroupingRules() {
+		$.get('/api/email-grouping-rules').done(function(data) {
+			currentRules = data.rules || [];
+			renderRules();
+		}).fail(function() {
+			messengerGetter().error("Failed to load email grouping rules");
+		});
+	}
+
+	function renderRules() {
+		$rulesContainer.empty();
+		currentRules.forEach(function(rule, index) {
+			$rulesContainer.append(createRuleElement(rule, index));
+		});
+	}
+
+	function createRuleElement(rule, index) {
+		var $ruleDiv = $('<div class="rule-item panel panel-default" data-rule-index="' + index + '"></div>');
+		
+		var ruleHtml = `
+			<div class="panel-heading">
+				<div class="row">
+					<div class="col-xs-4">
+						<input type="text" class="form-control rule-name" placeholder="Rule Name" value="${rule.name || ''}">
+					</div>
+					<div class="col-xs-2">
+						<input type="number" class="form-control rule-priority" placeholder="Priority" value="${rule.priority || 50}">
+					</div>
+					<div class="col-xs-2">
+						<button class="btn btn-xs btn-danger remove-rule-btn">
+							<span class="glyphicon glyphicon-trash"></span>
+						</button>
+					</div>
+				</div>
+			</div>
+			<div class="panel-body">
+				<div class="conditions-container">
+					${renderConditions(rule.conditions || [])}
+				</div>
+				<button class="btn btn-xs btn-info add-condition-btn">
+					<span class="glyphicon glyphicon-plus"></span> Add Condition
+				</button>
+			</div>
+		`;
+		
+		$ruleDiv.html(ruleHtml);
+		
+		// Bind events
+		$ruleDiv.on('click', '.remove-rule-btn', function() {
+			currentRules.splice(index, 1);
+			renderRules();
+		});
+		
+		$ruleDiv.on('click', '.add-condition-btn', function() {
+			addCondition($ruleDiv);
+		});
+		
+		$ruleDiv.on('click', '.remove-condition-btn', function() {
+			$(this).closest('.condition-item').remove();
+		});
+		
+		$ruleDiv.on('change', '.rule-name', function() {
+			currentRules[index].name = $(this).val();
+		});
+		
+		$ruleDiv.on('change', '.rule-priority', function() {
+			currentRules[index].priority = parseInt($(this).val()) || 50;
+		});
+		
+		$ruleDiv.on('change', '.condition-type, .condition-value', function() {
+			updateRuleConditions(index, $ruleDiv);
+		});
+		
+		return $ruleDiv;
+	}
+
+	function renderConditions(conditions) {
+		if (conditions.length === 0) {
+			return '<p class="text-muted">No conditions defined</p>';
+		}
+		
+		var html = '';
+		conditions.forEach(function(condition) {
+			html += `
+				<div class="condition-item row" style="margin-bottom: 10px;">
+					<div class="col-xs-3">
+						<select class="form-control condition-type">
+							<option value="sender_name" ${condition.type === 'sender_name' ? 'selected' : ''}>Sender Name</option>
+							<option value="sender_email" ${condition.type === 'sender_email' ? 'selected' : ''}>Sender Email</option>
+							<option value="subject" ${condition.type === 'subject' ? 'selected' : ''}>Subject</option>
+						</select>
+					</div>
+					<div class="col-xs-8">
+						<input type="text" class="form-control condition-value" placeholder="Value to match" value="${condition.value || ''}">
+					</div>
+					<div class="col-xs-1">
+						<button class="btn btn-xs btn-danger remove-condition-btn">
+							<span class="glyphicon glyphicon-remove"></span>
+						</button>
+					</div>
+				</div>
+			`;
+		});
+		return html;
+	}
+
+	function addCondition($ruleDiv) {
+		var $conditionsContainer = $ruleDiv.find('.conditions-container');
+		var newConditionHtml = `
+			<div class="condition-item row" style="margin-bottom: 10px;">
+				<div class="col-xs-3">
+					<select class="form-control condition-type">
+						<option value="sender_name">Sender Name</option>
+						<option value="sender_email">Sender Email</option>
+						<option value="subject">Subject</option>
+					</select>
+				</div>
+				<div class="col-xs-8">
+					<input type="text" class="form-control condition-value" placeholder="Value to match">
+				</div>
+				<div class="col-xs-1">
+					<button class="btn btn-xs btn-danger remove-condition-btn">
+						<span class="glyphicon glyphicon-remove"></span>
+					</button>
+				</div>
+			</div>
+		`;
+		$conditionsContainer.append(newConditionHtml);
+		
+		// Bind events for the new condition
+		var $newCondition = $conditionsContainer.find('.condition-item').last();
+		$newCondition.on('click', '.remove-condition-btn', function() {
+			$(this).closest('.condition-item').remove();
+		});
+		$newCondition.on('change', '.condition-type, .condition-value', function() {
+			var ruleIndex = $ruleDiv.data('rule-index');
+			updateRuleConditions(ruleIndex, $ruleDiv);
+		});
+	}
+
+	function updateRuleConditions(ruleIndex, $ruleDiv) {
+		var conditions = [];
+		$ruleDiv.find('.condition-item').each(function() {
+			var $condition = $(this);
+			var type = $condition.find('.condition-type').val();
+			var value = $condition.find('.condition-value').val();
+			if (value.trim()) {
+				conditions.push({
+					type: type,
+					value: value.trim()
+				});
+			}
+		});
+		currentRules[ruleIndex].conditions = conditions;
+	}
+
+	$addRuleBtn.on('click', function() {
+		currentRules.push({
+			name: 'New Rule',
+			priority: 50,
+			conditions: []
+		});
+		renderRules();
+	});
+
+	$saveRulesBtn.on('click', function() {
+		var updateMessenger = messengerGetter().info("Saving email grouping rules...");
+		
+		$.ajax({
+			url: '/api/email-grouping-rules',
+			method: 'POST',
+			contentType: 'application/json',
+			data: JSON.stringify({
+				rules: currentRules
+			})
+		}).done(function() {
+			updateMessenger.update({
+				type: 'success',
+				message: 'Email grouping rules saved successfully'
+			});
+			$settingsModal.modal('hide');
+			// Refresh the main view to show updated grouping
+			updateUiWithThreadsFromServer(promisedFnAuthorizationGetter, messengerGetter());
+		}).fail(function() {
+			updateMessenger.update({
+				type: 'error',
+				message: 'Failed to save email grouping rules'
+			});
+		});
+	});
+
 });
