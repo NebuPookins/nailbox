@@ -193,7 +193,11 @@ async function getNMostRelevantThreads(n) {
 			let totalTimeToReadSecondsForThread = 0;
 			const messagesInThread = thread.messages();
 			messagesInThread.forEach(message => {
-				totalTimeToReadSecondsForThread += message.getCalculatedTimeToReadSeconds();
+				if (typeof message._data.fullBodyWordCount === 'number') {
+					totalTimeToReadSecondsForThread += Math.round((message._data.fullBodyWordCount * 60) / 200);
+				} else {
+					totalTimeToReadSecondsForThread += message.getCalculatedTimeToReadSeconds();
+				}
 			});
 
 			let recentMessageReadTime = 0;
@@ -205,7 +209,11 @@ async function getNMostRelevantThreads(n) {
 					}
 				}
 				if (mostRecentMessage) {
-					recentMessageReadTime = mostRecentMessage.getCalculatedTimeToReadSeconds();
+					if (typeof mostRecentMessage._data.fullBodyWordCount === 'number') {
+						recentMessageReadTime = Math.round((mostRecentMessage._data.fullBodyWordCount * 60) / 200);
+					} else {
+						recentMessageReadTime = mostRecentMessage.getCalculatedTimeToReadSeconds();
+					}
 				}
 			}
 
@@ -551,6 +559,38 @@ app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, function(req, res) {
 		res.status(200).send({
 			messages: thread.messages().map(loadRelevantDataFromMessage)
 		});
+	}, function(err) {
+		if (err.code === 'ENOENT') {
+			res.sendStatus(404);
+		} else {
+			logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
+			res.sendStatus(500);
+		}
+	}).done();
+});
+
+app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/, function(req, res) {
+	const threadId = req.params[0];
+	const messageId = req.params[1];
+	const wordcount = req.body.wordcount;
+	if (typeof wordcount !== 'string' && typeof wordcount !== 'number') {
+		res.status(400).send({ humanErrorMessage: "invalid wordcount" });
+		return;
+	}
+	models_thread.get(threadId).then(async function(thread) {
+		const message = thread.message(messageId);
+		if (message) {
+			message._data.fullBodyWordCount = parseInt(wordcount);
+			try {
+				await helpers_fileio.saveJsonToFile(thread._data, 'data/threads/' + threadId);
+				res.sendStatus(200);
+			} catch (err) {
+				logger.error(`Failed to save thread data with word count: ${err}`);
+				res.sendStatus(500);
+			}
+		} else {
+			res.sendStatus(404);
+		}
 	}, function(err) {
 		if (err.code === 'ENOENT') {
 			res.sendStatus(404);
