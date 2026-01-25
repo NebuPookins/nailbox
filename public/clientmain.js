@@ -261,35 +261,41 @@ $(function() {
 					return Q.allSettled([]);
 				}
 				return batchGetThreads(fnAuthorizationGetter, threadIds).then(function(batchResp) {
+					var threadsToSave = [];
 					var promises = [];
+
 					for (var threadId in batchResp) {
 						if (batchResp.hasOwnProperty(threadId)) {
-							(function(currentThreadId) {
-								var individualResp = batchResp[currentThreadId];
-								var promise;
-								if (individualResp.result) {
-									promise = Q($.post(
-										'/api/threads',
-										individualResp.result
-									)).fail(function(jqXHR, textStatus, errorThrown) {
-										messengerGetter().error("Failed to save thread " + currentThreadId);
-										console.log("Failed to save thread", individualResp.result, jqXHR, textStatus, errorThrown);
-									});
-								} else { // It's an error
-									switch (individualResp.code) {
-										case 404:
-											var updateMessenger = messengerGetter().info("Deleting thread " + currentThreadId + " because it's no longer on gmail...");
-											promise = deleteOnLocalCache(currentThreadId, updateMessenger);
-											break;
-										default:
-											messengerGetter().error("Failed to get thread " + currentThreadId + " because Gmail responded HTTP " + individualResp.code);
-											promise = Q.reject(individualResp);
-									}
+							var individualResp = batchResp[threadId];
+							if (individualResp.result) {
+								threadsToSave.push(individualResp.result);
+							} else {
+								switch (individualResp.code) {
+									case 404:
+										var updateMessenger = messengerGetter().info("Deleting thread " + threadId + " because it's no longer on gmail...");
+										promises.push(deleteOnLocalCache(threadId, updateMessenger));
+										break;
+									default:
+										messengerGetter().error("Failed to get thread " + threadId + " because Gmail responded HTTP " + individualResp.code);
+										promises.push(Q.reject(individualResp));
 								}
-								promises.push(promise);
-							})(threadId);
+							}
 						}
 					}
+
+					if (threadsToSave.length > 0) {
+						var savePromise = Q($.ajax({
+							url: '/api/threads/batch',
+							type: 'POST',
+							contentType: 'application/json',
+							data: JSON.stringify(threadsToSave)
+						})).fail(function(jqXHR, textStatus, errorThrown) {
+							messengerGetter().error("Failed to save a batch of threads.");
+							console.log("Failed to save a batch of threads.", jqXHR, textStatus, errorThrown);
+						});
+						promises.push(savePromise);
+					}
+
 					return Q.allSettled(promises);
 				});
 			});
