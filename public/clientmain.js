@@ -1096,6 +1096,11 @@ $(function() {
 				nonDeletedMessages.forEach(function(message) {
 					message['duration'] = moment.duration(message.timeToReadSeconds, 'seconds').humanize();
 					$threads.append(handlebarsTemplates.message(message));
+					$.post('/api/threads/' + threadId + '/messages/' + message.messageId + '/wordcount', {
+						wordcount: message.wordcount
+					}).fail(function() {
+						console.log("Failed to cache wordcount for message " + message.messageId);
+					});
 				});
 				updateMessenger.update({
 					type: 'success',
