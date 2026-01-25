@@ -178,6 +178,25 @@ $(function() {
 		});
 	}
 
+	function batchGetThreads(fnAuthorizationGetter, threadIds) {
+		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly').then(function(gapi) {
+			var batch = gapi.client.newBatch();
+			threadIds.forEach(function(threadId) {
+				batch.add(gapi.client.gmail.users.threads.get({
+					userId: 'me',
+					id: threadId
+				}), {id: threadId});
+			});
+			return Q.promise(function(resolve, reject) {
+				batch.then(function(resp) {
+					resolve(resp.result);
+				}, function(err) {
+					reject(err);
+				});
+			});
+		});
+	}
+
 	function saveThreadFromGmailToServer(fnAuthorizationGetter, threadId) {
 		if (!threadId) {
 			debugger;
@@ -233,15 +252,46 @@ $(function() {
 					'labelIds': labelIds
 				}).execute(resolve); //TODO: Handle errors
 			}).then(function(resp) {
+				var threadIds = resp.threads.map(function(item) { return item.id; });
 				updateMessenger.update({
 					type: 'info',
-					message: "Downloading "+resp.threads.length+" threads from Gmail..."
+					message: "Downloading " + threadIds.length + " threads from Gmail..."
 				});
-				return resp.threads.map(function(item) {
-					return saveThreadFromGmailToServer(fnAuthorizationGetter, item.id);
+				if (threadIds.length === 0) {
+					return Q.allSettled([]);
+				}
+				return batchGetThreads(fnAuthorizationGetter, threadIds).then(function(batchResp) {
+					var promises = [];
+					for (var threadId in batchResp) {
+						if (batchResp.hasOwnProperty(threadId)) {
+							(function(currentThreadId) {
+								var individualResp = batchResp[currentThreadId];
+								var promise;
+								if (individualResp.result) {
+									promise = Q($.post(
+										'/api/threads',
+										individualResp.result
+									)).fail(function(jqXHR, textStatus, errorThrown) {
+										messengerGetter().error("Failed to save thread " + currentThreadId);
+										console.log("Failed to save thread", individualResp.result, jqXHR, textStatus, errorThrown);
+									});
+								} else { // It's an error
+									switch (individualResp.code) {
+										case 404:
+											var updateMessenger = messengerGetter().info("Deleting thread " + currentThreadId + " because it's no longer on gmail...");
+											promise = deleteOnLocalCache(currentThreadId, updateMessenger);
+											break;
+										default:
+											messengerGetter().error("Failed to get thread " + currentThreadId + " because Gmail responded HTTP " + individualResp.code);
+											promise = Q.reject(individualResp);
+									}
+								}
+								promises.push(promise);
+							})(threadId);
+						}
+					}
+					return Q.allSettled(promises);
 				});
-			}).then(function(arrOfPromises) {
-				return Q.allSettled(arrOfPromises);
 			});
 		});
 	}
