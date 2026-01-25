@@ -161,20 +161,37 @@ app.post('/api/threads', function(req, res) {
 				messageData.calculatedTimeToReadSeconds = timeToReadSeconds;
 			});
 
-			nodeFs.writeFile('data/threads/' + threadId, JSON.stringify(req.body), function(err) {
-			if (err) {
+			const filePath = 'data/threads/' + threadId;
+			helpers_fileio.readJsonFromOptionalFile(filePath).then(existingData => {
+				const newData = req.body;
+				if (existingData && existingData.messages) {
+					newData.messages.forEach(newMessage => {
+						const existingMessage = existingData.messages.find(m => m.id === newMessage.id);
+						if (existingMessage && existingMessage.fullBodyWordCount) {
+							newMessage.fullBodyWordCount = existingMessage.fullBodyWordCount;
+						}
+					});
+				}
+
+				nodeFs.writeFile(filePath, JSON.stringify(newData), function(err) {
+					if (err) {
+						logger.error(util.inspect(err));
+						res.sendStatus(500);
+					} else {
+						res.sendStatus(200);
+						lastRefresheds.markRefreshed(threadId).done();
+					}
+				});
+			}).catch(err => {
 				logger.error(util.inspect(err));
 				res.sendStatus(500);
-			} else {
-				res.sendStatus(200);
-				lastRefresheds.markRefreshed(threadId).done();
-			}
-		});
+			});
 		}
 	} else {
 		res.status(400).send({ humanErrorMessage: "invalid threadId" });
 	}
 });
+
 
 /**
  * Returns a promise with the N most relevant threads (newly received threads,
@@ -193,11 +210,7 @@ async function getNMostRelevantThreads(n) {
 			let totalTimeToReadSecondsForThread = 0;
 			const messagesInThread = thread.messages();
 			messagesInThread.forEach(message => {
-				if (typeof message._data.fullBodyWordCount === 'number') {
-					totalTimeToReadSecondsForThread += Math.round((message._data.fullBodyWordCount * 60) / 200);
-				} else {
-					totalTimeToReadSecondsForThread += message.getCalculatedTimeToReadSeconds();
-				}
+				totalTimeToReadSecondsForThread += message.getBestReadTimeSeconds();
 			});
 
 			let recentMessageReadTime = 0;
@@ -209,11 +222,7 @@ async function getNMostRelevantThreads(n) {
 					}
 				}
 				if (mostRecentMessage) {
-					if (typeof mostRecentMessage._data.fullBodyWordCount === 'number') {
-						recentMessageReadTime = Math.round((mostRecentMessage._data.fullBodyWordCount * 60) / 200);
-					} else {
-						recentMessageReadTime = mostRecentMessage.getCalculatedTimeToReadSeconds();
-					}
+					recentMessageReadTime = mostRecentMessage.getBestReadTimeSeconds();
 				}
 			}
 
@@ -568,6 +577,7 @@ app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, function(req, res) {
 		}
 	}).done();
 });
+
 
 app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/, function(req, res) {
 	const threadId = req.params[0];
