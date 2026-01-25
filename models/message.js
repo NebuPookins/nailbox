@@ -388,8 +388,12 @@
 		return getAttachments(this._data.payload);
 	};
 
-	Message.prototype.getCalculatedTimeToReadSeconds = function() {
-		return this._data.calculatedTimeToReadSeconds || 0;
+	Message.prototype.getBestReadTimeSeconds = function() {
+		if (this._data.fullBodyWordCount) {
+			return Math.round((this._data.fullBodyWordCount * 60) / 200);
+		} else {
+			return this._data.calculatedTimeToReadSeconds || 0;
+		}
 	};
 
 	Message.prototype.getInternalDate = function() {

@@ -161,20 +161,37 @@ app.post('/api/threads', function(req, res) {
 				messageData.calculatedTimeToReadSeconds = timeToReadSeconds;
 			});
 
-			nodeFs.writeFile('data/threads/' + threadId, JSON.stringify(req.body), function(err) {
-			if (err) {
+			const filePath = 'data/threads/' + threadId;
+			helpers_fileio.readJsonFromOptionalFile(filePath).then(existingData => {
+				const newData = req.body;
+				if (existingData && existingData.messages) {
+					newData.messages.forEach(newMessage => {
+						const existingMessage = existingData.messages.find(m => m.id === newMessage.id);
+						if (existingMessage && existingMessage.fullBodyWordCount) {
+							newMessage.fullBodyWordCount = existingMessage.fullBodyWordCount;
+						}
+					});
+				}
+
+				nodeFs.writeFile(filePath, JSON.stringify(newData), function(err) {
+					if (err) {
+						logger.error(util.inspect(err));
+						res.sendStatus(500);
+					} else {
+						res.sendStatus(200);
+						lastRefresheds.markRefreshed(threadId).done();
+					}
+				});
+			}).catch(err => {
 				logger.error(util.inspect(err));
 				res.sendStatus(500);
-			} else {
-				res.sendStatus(200);
-				lastRefresheds.markRefreshed(threadId).done();
-			}
-		});
+			});
 		}
 	} else {
 		res.status(400).send({ humanErrorMessage: "invalid threadId" });
 	}
 });
+
 
 /**
  * Returns a promise with the N most relevant threads (newly received threads,
@@ -193,7 +210,7 @@ async function getNMostRelevantThreads(n) {
 			let totalTimeToReadSecondsForThread = 0;
 			const messagesInThread = thread.messages();
 			messagesInThread.forEach(message => {
-				totalTimeToReadSecondsForThread += message.getCalculatedTimeToReadSeconds();
+				totalTimeToReadSecondsForThread += message.getBestReadTimeSeconds();
 			});
 
 			let recentMessageReadTime = 0;
@@ -205,7 +222,7 @@ async function getNMostRelevantThreads(n) {
 					}
 				}
 				if (mostRecentMessage) {
-					recentMessageReadTime = mostRecentMessage.getCalculatedTimeToReadSeconds();
+					recentMessageReadTime = mostRecentMessage.getBestReadTimeSeconds();
 				}
 			}
 
@@ -551,6 +568,39 @@ app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, function(req, res) {
 		res.status(200).send({
 			messages: thread.messages().map(loadRelevantDataFromMessage)
 		});
+	}, function(err) {
+		if (err.code === 'ENOENT') {
+			res.sendStatus(404);
+		} else {
+			logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
+			res.sendStatus(500);
+		}
+	}).done();
+});
+
+
+app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/, function(req, res) {
+	const threadId = req.params[0];
+	const messageId = req.params[1];
+	const wordcount = req.body.wordcount;
+	if (typeof wordcount !== 'string' && typeof wordcount !== 'number') {
+		res.status(400).send({ humanErrorMessage: "invalid wordcount" });
+		return;
+	}
+	models_thread.get(threadId).then(async function(thread) {
+		const message = thread.message(messageId);
+		if (message) {
+			message._data.fullBodyWordCount = parseInt(wordcount);
+			try {
+				await helpers_fileio.saveJsonToFile(thread._data, 'data/threads/' + threadId);
+				res.sendStatus(200);
+			} catch (err) {
+				logger.error(`Failed to save thread data with word count: ${err}`);
+				res.sendStatus(500);
+			}
+		} else {
+			res.sendStatus(404);
+		}
 	}, function(err) {
 		if (err.code === 'ENOENT') {
 			res.sendStatus(404);
