@@ -268,8 +268,14 @@ $(function() {
 						if (batchResp.hasOwnProperty(threadId)) {
 							var individualResp = batchResp[threadId];
 							if (individualResp.result) {
-								threadsToSave.push(individualResp.result);
+								var threadData = individualResp.result;
+								// Ensure the ID from the request is present on the object.
+								if (!threadData.id) {
+									threadData.id = threadId;
+								}
+								threadsToSave.push(threadData);
 							} else {
+								// It's an error, use the key as the threadId
 								switch (individualResp.code) {
 									case 404:
 										var updateMessenger = messengerGetter().info("Deleting thread " + threadId + " because it's no longer on gmail...");
