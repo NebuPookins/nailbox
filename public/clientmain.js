@@ -184,7 +184,8 @@ $(function() {
 			threadIds.forEach(function(threadId) {
 				batch.add(gapi.client.gmail.users.threads.get({
 					userId: 'me',
-					id: threadId
+					id: threadId,
+					format: 'FULL'
 				}), {id: threadId});
 			});
 			return Q.promise(function(resolve, reject) {

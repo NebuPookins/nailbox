@@ -140,7 +140,9 @@ async function saveOrUpdateThread(thread) {
 		return Promise.resolve();
 	}
 
-	const allMessagesInTrash = thread.messages.every(
+	const messages = thread.messages || [];
+
+	const allMessagesInTrash = messages.length > 0 && messages.every(
 		(message) => message.labelIds.indexOf('TRASH') !== -1
 	);
 
@@ -157,7 +159,7 @@ async function saveOrUpdateThread(thread) {
 	}
 
 	// Calculate wordCount and timeToReadSeconds for each message
-	thread.messages.forEach(messageData => {
+	messages.forEach(messageData => {
 		const messageInstance = new models_message.Message(messageData);
 		const originalBody = messageInstance.bestBody();
 		const plainTextBody = sanitizeHtml(originalBody, { allowedTags: [], allowedAttributes: {} });
