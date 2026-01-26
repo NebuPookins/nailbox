@@ -261,7 +261,31 @@ $(function() {
 				if (threadIds.length === 0) {
 					return Q.allSettled([]);
 				}
-				return batchGetThreads(fnAuthorizationGetter, threadIds).then(function(batchResp) {
+
+				var chunks = [];
+				var chunkSize = 50;
+				for (var i = 0; i < threadIds.length; i += chunkSize) {
+					chunks.push(threadIds.slice(i, i + chunkSize));
+				}
+
+				var promise = Q.when(true);
+				var allBatchResps = [];
+
+				chunks.forEach(function(chunk) {
+					promise = promise.then(function() {
+						return batchGetThreads(fnAuthorizationGetter, chunk).then(function(batchResp) {
+							allBatchResps.push(batchResp);
+						});
+					});
+				});
+
+				return promise.then(function() {
+					var mergedBatchResp = {};
+					allBatchResps.forEach(function(batchResp) {
+						Object.assign(mergedBatchResp, batchResp);
+					});
+					return mergedBatchResp;
+				}).then(function(batchResp) {
 					var threadsToSave = [];
 					var promises = [];
 
