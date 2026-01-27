@@ -133,62 +133,95 @@ function deleteThread(threadId, resultCallback) {
 	});
 }
 
+async function saveOrUpdateThread(thread) {
+	const threadId = thread.id;
+	if (typeof threadId !== 'string' || !threadId.match(/^[0-9a-z]+$/)) {
+		logger.warn(`Skipping thread with invalid ID: ${threadId}`);
+		return Promise.resolve();
+	}
+
+	const messages = thread.messages || [];
+
+	const allMessagesInTrash = messages.length > 0 && messages.every(
+		(message) => message.labelIds.indexOf('TRASH') !== -1
+	);
+
+	if (allMessagesInTrash) {
+		logger.info(`Deleting thread ${threadId} because all messages are in trash.`);
+		return new Promise(resolve => {
+			deleteThread(threadId, isSuccessful => {
+				if (!isSuccessful) {
+					logger.error(`Failed to delete thread ${threadId}.`);
+				}
+				resolve();
+			});
+		});
+	}
+
+	// Calculate wordCount and timeToReadSeconds for each message
+	messages.forEach(messageData => {
+		const messageInstance = new models_message.Message(messageData);
+		const originalBody = messageInstance.bestBody();
+		const plainTextBody = sanitizeHtml(originalBody, { allowedTags: [], allowedAttributes: {} });
+		const wordCount = plainTextBody.split(' ').filter(word => word.length > 0).length;
+		const timeToReadSeconds = Math.round((wordCount * 60) / 200);
+		messageData.calculatedWordCount = wordCount;
+		messageData.calculatedTimeToReadSeconds = timeToReadSeconds;
+	});
+
+	const filePath = 'data/threads/' + threadId;
+	try {
+		const existingData = await helpers_fileio.readJsonFromOptionalFile(filePath);
+		const newData = thread;
+		if (existingData && existingData.messages) {
+			newData.messages.forEach(newMessage => {
+				const existingMessage = existingData.messages.find(m => m.id === newMessage.id);
+				if (existingMessage && existingMessage.fullBodyWordCount) {
+					newMessage.fullBodyWordCount = existingMessage.fullBodyWordCount;
+				}
+			});
+		}
+
+		await nodeFsPromises.writeFile(filePath, JSON.stringify(newData));
+		await lastRefresheds.markRefreshed(threadId);
+	} catch (err) {
+		logger.error(`Failed to save thread ${threadId}: ${util.inspect(err)}`);
+		throw err;
+	}
+}
+
 /**
  * Records the existence of a thread. The client-side code periodically checks
  * gmail for the 100 most recent threads, and performs a POST to this route
  * to inform the backend the contents of those threads.
  */
-app.post('/api/threads', function(req, res) {
-	const threadId = req.body.id;
-	if (typeof threadId === 'string' && threadId.match(/^[0-9a-z]+$/)) {
-		const allMessagesInTrash = req.body.messages.every(
-			(message) => message.labelIds.indexOf('TRASH') !== -1
-		);
-		if (allMessagesInTrash) {
-			logger.info(`Deleting thread ${threadId} because all messages in thread are in trash.`);
-			deleteThread(threadId, function(isSuccessful) {
-				res.sendStatus(isSuccessful ? 200 : 500);
-			});
-		} else {
-			// Calculate wordCount and timeToReadSeconds for each message
-			req.body.messages.forEach(messageData => {
-				const messageInstance = new models_message.Message(messageData);
-				const originalBody = messageInstance.bestBody();
-				const plainTextBody = sanitizeHtml(originalBody, { allowedTags: [], allowedAttributes: {} });
-				const wordCount = plainTextBody.split(' ').filter(word => word.length > 0).length;
-				const timeToReadSeconds = Math.round((wordCount * 60) / 200);
-				messageData.calculatedWordCount = wordCount;
-				messageData.calculatedTimeToReadSeconds = timeToReadSeconds;
-			});
+app.post('/api/threads', async function(req, res) {
+	try {
+		await saveOrUpdateThread(req.body);
+		res.sendStatus(200);
+	} catch (err) {
+		res.sendStatus(500);
+	}
+});
 
-			const filePath = 'data/threads/' + threadId;
-			helpers_fileio.readJsonFromOptionalFile(filePath).then(existingData => {
-				const newData = req.body;
-				if (existingData && existingData.messages) {
-					newData.messages.forEach(newMessage => {
-						const existingMessage = existingData.messages.find(m => m.id === newMessage.id);
-						if (existingMessage && existingMessage.fullBodyWordCount) {
-							newMessage.fullBodyWordCount = existingMessage.fullBodyWordCount;
-						}
-					});
-				}
+app.post('/api/threads/batch', async (req, res) => {
+	const threads = req.body;
+	if (!Array.isArray(threads)) {
+		return res.status(400).send({ humanErrorMessage: "Request body must be an array of threads." });
+	}
 
-				nodeFs.writeFile(filePath, JSON.stringify(newData), function(err) {
-					if (err) {
-						logger.error(util.inspect(err));
-						res.sendStatus(500);
-					} else {
-						res.sendStatus(200);
-						lastRefresheds.markRefreshed(threadId).done();
-					}
-				});
-			}).catch(err => {
-				logger.error(util.inspect(err));
-				res.sendStatus(500);
-			});
-		}
-	} else {
-		res.status(400).send({ humanErrorMessage: "invalid threadId" });
+	const promises = threads.map(thread => saveOrUpdateThread(thread).catch(err => {
+		// Log the error but don't fail the entire batch
+		logger.error(`Error saving thread ${thread.id} in batch: ${util.inspect(err)}`);
+	}));
+
+	try {
+		await Promise.all(promises);
+		res.sendStatus(200);
+	} catch (err) {
+		// This part should ideally not be reached if individual errors are caught
+		logger.error(`Unexpected error processing batch of threads: ${util.inspect(err)}`);
+		res.sendStatus(500);
 	}
 });
 

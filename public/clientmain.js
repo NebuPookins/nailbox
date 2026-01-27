@@ -178,6 +178,26 @@ $(function() {
 		});
 	}
 
+	function batchGetThreads(fnAuthorizationGetter, threadIds) {
+		return fnAuthorizationGetter('https://www.googleapis.com/auth/gmail.readonly').then(function(gapi) {
+			var batch = gapi.client.newBatch();
+			threadIds.forEach(function(threadId) {
+				batch.add(gapi.client.gmail.users.threads.get({
+					userId: 'me',
+					id: threadId,
+					format: 'FULL'
+				}), {id: threadId});
+			});
+			return Q.promise(function(resolve, reject) {
+				batch.then(function(resp) {
+					resolve(resp.result);
+				}, function(err) {
+					reject(err);
+				});
+			});
+		});
+	}
+
 	function saveThreadFromGmailToServer(fnAuthorizationGetter, threadId) {
 		if (!threadId) {
 			debugger;
@@ -233,15 +253,82 @@ $(function() {
 					'labelIds': labelIds
 				}).execute(resolve); //TODO: Handle errors
 			}).then(function(resp) {
+				var threadIds = resp.threads.map(function(item) { return item.id; });
 				updateMessenger.update({
 					type: 'info',
-					message: "Downloading "+resp.threads.length+" threads from Gmail..."
+					message: "Downloading " + threadIds.length + " threads from Gmail..."
 				});
-				return resp.threads.map(function(item) {
-					return saveThreadFromGmailToServer(fnAuthorizationGetter, item.id);
+				if (threadIds.length === 0) {
+					return Q.allSettled([]);
+				}
+
+				var chunks = [];
+				var chunkSize = 50;
+				for (var i = 0; i < threadIds.length; i += chunkSize) {
+					chunks.push(threadIds.slice(i, i + chunkSize));
+				}
+
+				var promise = Q.when(true);
+				var allBatchResps = [];
+
+				chunks.forEach(function(chunk) {
+					promise = promise.then(function() {
+						return batchGetThreads(fnAuthorizationGetter, chunk).then(function(batchResp) {
+							allBatchResps.push(batchResp);
+						});
+					});
 				});
-			}).then(function(arrOfPromises) {
-				return Q.allSettled(arrOfPromises);
+
+				return promise.then(function() {
+					var mergedBatchResp = {};
+					allBatchResps.forEach(function(batchResp) {
+						Object.assign(mergedBatchResp, batchResp);
+					});
+					return mergedBatchResp;
+				}).then(function(batchResp) {
+					var threadsToSave = [];
+					var promises = [];
+
+					for (var threadId in batchResp) {
+						if (batchResp.hasOwnProperty(threadId)) {
+							var individualResp = batchResp[threadId];
+							if (individualResp.result) {
+								var threadData = individualResp.result;
+								// Ensure the ID from the request is present on the object.
+								if (!threadData.id) {
+									threadData.id = threadId;
+								}
+								threadsToSave.push(threadData);
+							} else {
+								// It's an error, use the key as the threadId
+								switch (individualResp.code) {
+									case 404:
+										var updateMessenger = messengerGetter().info("Deleting thread " + threadId + " because it's no longer on gmail...");
+										promises.push(deleteOnLocalCache(threadId, updateMessenger));
+										break;
+									default:
+										messengerGetter().error("Failed to get thread " + threadId + " because Gmail responded HTTP " + individualResp.code);
+										promises.push(Q.reject(individualResp));
+								}
+							}
+						}
+					}
+
+					if (threadsToSave.length > 0) {
+						var savePromise = Q($.ajax({
+							url: '/api/threads/batch',
+							type: 'POST',
+							contentType: 'application/json',
+							data: JSON.stringify(threadsToSave)
+						})).fail(function(jqXHR, textStatus, errorThrown) {
+							messengerGetter().error("Failed to save a batch of threads.");
+							console.log("Failed to save a batch of threads.", jqXHR, textStatus, errorThrown);
+						});
+						promises.push(savePromise);
+					}
+
+					return Q.allSettled(promises);
+				});
 			});
 		});
 	}
