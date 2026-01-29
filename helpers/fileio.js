@@ -4,6 +4,7 @@
 	const logger = require('nebulog').make({filename: __filename, level: 'info'});
 	const q = require('q');
 	const nodeFs = require('node-fs');
+	const util = require('util');
 
 	/**
 	 * Returns a promise of a JSON structure representing the parsed contents of
@@ -21,7 +22,12 @@
 						reject(err);
 					}
 				} else {
-					resolve(JSON.parse(strFileContents));
+					try {
+						resolve(JSON.parse(strFileContents));
+					} catch (exception) {
+						logger.warn(`Failed parsing JSON at ${path} ${util.inspect(exception)}`);
+						reject(err);
+					}
 				}
 			});
 		});
