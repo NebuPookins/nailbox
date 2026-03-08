@@ -116,6 +116,7 @@ html(lang="en")
 				h1 Welcome to Nailbox!
 				p Waiting for JavaScript engine to initialize...
 			#main-container
+				#auth-controls.pull-right
 				button.btn.btn-default#settings-btn
 					span.glyphicon.glyphicon-cog
 					|  Email Grouping Settings
@@ -231,8 +232,6 @@ html(lang="en")
 					.modal-footer
 						button.btn.btn-primary#save-rules-btn Save Rules
 						button.btn.btn-default(type="button" data-dismiss="modal") Cancel
-		script(type='text/javascript' src='https://apis.google.com/js/api.js')
-		script(type='text/javascript' src='https://accounts.google.com/gsi/client')
 		script(type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js')
 		script(type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/js/bootstrap.min.js")
 		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.0.5/handlebars.js')
@@ -341,4 +340,3 @@ html(lang="en")
 			| <button class="btn {{#if isSystem}}btn-warning{{else}}{{/if}}" {{#if isSystem}}{{else}}style="background-image: linear-gradient(to bottom,hsl({{hue}},84%,40%),hsl({{hue}},84%,38%) 100%); border-color: hsl({{hue}},85%,26%); color:#fff; text-shadow: 0 -1px 0 rgba(0,0,0,.2);"{{/if}}" data-label-id="{{id}}")>
 			| {{labelIdToName id}}
 			| </button>
-

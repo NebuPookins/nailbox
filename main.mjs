@@ -8,6 +8,7 @@ import util from 'util';
 import express from 'express';
 import bodyParser from 'body-parser';
 import path from 'path';
+import crypto from 'node:crypto';
 import nebulog from 'nebulog';
 const logger = nebulog.make({filename: 'main.mjs', level: 'debug'});
 import nodeFs from 'node-fs';
@@ -30,6 +31,16 @@ import models_thread from './models/thread.js';
 import models_message from './models/message.js';
 import models_hideUntils from './models/hide_until.js';
 import models_lastRefreshed from './models/last_refreshed.js';
+import {
+	GOOGLE_SCOPE,
+	clearGoogleTokens,
+	exchangeCodeForTokens,
+	getAuthorizationUrl,
+	getGoogleAuthStatus,
+	getGoogleOAuthConfig,
+	gmailApiRequest,
+	isGoogleOAuthConfigured,
+} from './services/google_oauth.mjs';
 
 /*
  * Set up graceful exit, because otherwise there's a race condition
@@ -47,6 +58,104 @@ function readConfigWithDefault(config, strFieldName) {
 		return config[strFieldName];
 	} else {
 		return DEFAULT_CONFIG[strFieldName];
+	}
+}
+
+function getDefaultRedirectUri(req) {
+	return `${req.protocol}://${req.get('host')}/auth/google/callback`;
+}
+
+function saveConfig() {
+	return helpers_fileio.saveJsonToFile(config, PATH_TO_CONFIG);
+}
+
+function getSetupViewModel(req, overrides = {}) {
+	const googleOAuth = getGoogleOAuthConfig(config);
+	return Object.assign({
+		googleOAuth: googleOAuth,
+		authStatus: getGoogleAuthStatus(config),
+		defaultRedirectUri: getDefaultRedirectUri(req),
+		errorMessage: null,
+		successMessage: null,
+	}, overrides);
+}
+
+function setCookie(res, name, value, options = {}) {
+	const parts = [`${name}=${encodeURIComponent(value)}`];
+	parts.push(`Path=${options.path || '/'}`);
+	parts.push(`SameSite=${options.sameSite || 'Lax'}`);
+	if (options.httpOnly !== false) {
+		parts.push('HttpOnly');
+	}
+	if (options.maxAgeSeconds !== undefined) {
+		parts.push(`Max-Age=${options.maxAgeSeconds}`);
+	}
+	if (options.secure) {
+		parts.push('Secure');
+	}
+	res.append('Set-Cookie', parts.join('; '));
+}
+
+function clearCookie(res, name, options = {}) {
+	setCookie(res, name, '', Object.assign({}, options, {maxAgeSeconds: 0}));
+}
+
+function parseCookies(req) {
+	const rawCookieHeader = req.headers.cookie;
+	if (typeof rawCookieHeader !== 'string' || rawCookieHeader.length === 0) {
+		return {};
+	}
+	return rawCookieHeader.split(';').reduce((cookies, chunk) => {
+		const trimmedChunk = chunk.trim();
+		const equalsIndex = trimmedChunk.indexOf('=');
+		if (equalsIndex === -1) {
+			return cookies;
+		}
+		const key = trimmedChunk.substring(0, equalsIndex);
+		const value = trimmedChunk.substring(equalsIndex + 1);
+		cookies[key] = decodeURIComponent(value);
+		return cookies;
+	}, {});
+}
+
+function makeGoogleAuthErrorResponse(res, code, message, status = 401) {
+	return res.status(status).send({
+		code: code,
+		message: message,
+	});
+}
+
+async function withGmailApi(res, fnCallback) {
+	if (!isGoogleOAuthConfigured(config)) {
+		makeGoogleAuthErrorResponse(res, 'GOOGLE_AUTH_MISCONFIGURED', 'Google OAuth is not configured.', 503);
+		return null;
+	}
+	const authStatus = getGoogleAuthStatus(config);
+	if (!authStatus.connected) {
+		makeGoogleAuthErrorResponse(res, 'GOOGLE_REAUTH_REQUIRED', 'Google authorization is required.');
+		return null;
+	}
+	try {
+		const result = await fnCallback(async (options) => {
+			const gmailResult = await gmailApiRequest(config, options);
+			if (gmailResult.didUpdateCredentials) {
+				await saveConfig();
+			}
+			return gmailResult.data;
+		});
+		return result;
+	} catch (error) {
+		if (error.code === 'GOOGLE_REAUTH_REQUIRED') {
+			clearGoogleTokens(config);
+			await saveConfig();
+			makeGoogleAuthErrorResponse(res, 'GOOGLE_REAUTH_REQUIRED', 'Google authorization expired or was revoked.');
+			return null;
+		}
+		if (error.status === 401) {
+			makeGoogleAuthErrorResponse(res, 'GOOGLE_REAUTH_REQUIRED', 'Google authorization failed.');
+			return null;
+		}
+		throw error;
 	}
 }
 
@@ -72,8 +181,7 @@ app.use(function (req, res, next) {
 });
 
 app.get('/', function(req, res) {
-	const clientId = readConfigWithDefault(config, 'clientId');
-	if (typeof clientId === 'string') {
+	if (isGoogleOAuthConfigured(config)) {
 		res.render('index');
 	} else {
 		res.redirect('/setup');
@@ -81,14 +189,19 @@ app.get('/', function(req, res) {
 });
 
 app.get('/setup', function(req, res) {
-	res.render('setup', {clientId: config.clientId});
+	res.render('setup', getSetupViewModel(req));
 });
 
 app.post('/setup', function(req, res) {
-	logger.info(util.format("Updating client ID to '%s'.", req.body.clientId));
-	config.clientId = req.body.clientId;
-	helpers_fileio.saveJsonToFile(config, PATH_TO_CONFIG).then(function() {
-		res.redirect('/setup');
+	const googleOAuth = getGoogleOAuthConfig(config);
+	googleOAuth.clientId = (req.body.clientId || '').trim();
+	googleOAuth.clientSecret = (req.body.clientSecret || '').trim();
+	googleOAuth.redirectUri = (req.body.redirectUri || getDefaultRedirectUri(req)).trim();
+	logger.info('Updating Google OAuth configuration.');
+	saveConfig().then(function() {
+		res.render('setup', getSetupViewModel(req, {
+			successMessage: 'Google OAuth configuration saved.',
+		}));
 	}, function(err) {
 		logger.error(util.format("Failed to save config file: %s", util.inspect(err)));
 		res.sendStatus(500);
@@ -96,15 +209,93 @@ app.post('/setup', function(req, res) {
 });
 
 app.get('/api/clientId', function(req, res) {
-	const clientId = readConfigWithDefault(config, 'clientId');
+	const clientId = getGoogleOAuthConfig(config).clientId;
 	if (typeof clientId === 'string') {
 		res
 			.status(200)
 			.set('Content-Type', 'text/plain')
-			.send(config.clientId);
+			.send(clientId);
 	} else {
 		res.sendStatus(404);
 	}
+});
+
+app.get('/api/auth/status', function(req, res) {
+	res.status(200).send(getGoogleAuthStatus(config));
+});
+
+app.get('/auth/google/start', function(req, res) {
+	if (!isGoogleOAuthConfigured(config)) {
+		res.redirect('/setup');
+		return;
+	}
+	const state = crypto.randomBytes(24).toString('hex');
+	setCookie(res, 'google_oauth_state', state, {
+		path: '/auth/google/callback',
+		maxAgeSeconds: 10 * 60,
+	});
+	const authStatus = getGoogleAuthStatus(config);
+	const prompt = authStatus.connected ? null : 'consent';
+	res.redirect(getAuthorizationUrl(config, state, prompt));
+});
+
+app.get('/auth/google/callback', async function(req, res) {
+	const cookies = parseCookies(req);
+	clearCookie(res, 'google_oauth_state', {path: '/auth/google/callback'});
+	if (!req.query.state || req.query.state !== cookies.google_oauth_state) {
+		res.status(400).render('setup', getSetupViewModel(req, {
+			errorMessage: 'Google OAuth state validation failed. Please try connecting again.',
+		}));
+		return;
+	}
+	if (req.query.error) {
+		res.status(400).render('setup', getSetupViewModel(req, {
+			errorMessage: `Google authorization failed: ${req.query.error}`,
+		}));
+		return;
+	}
+	try {
+		const tokenResponse = await exchangeCodeForTokens(config, req.query.code);
+		const googleOAuth = getGoogleOAuthConfig(config);
+		googleOAuth.accessToken = tokenResponse.access_token;
+		googleOAuth.accessTokenExpiresAt = new Date(Date.now() + ((tokenResponse.expires_in || 3600) * 1000)).toISOString();
+		if (typeof tokenResponse.refresh_token === 'string' && tokenResponse.refresh_token.length > 0) {
+			googleOAuth.refreshToken = tokenResponse.refresh_token;
+		}
+		if (typeof tokenResponse.scope === 'string' && tokenResponse.scope.length > 0) {
+			googleOAuth.scope = tokenResponse.scope;
+		} else {
+			googleOAuth.scope = GOOGLE_SCOPE;
+		}
+		if (typeof googleOAuth.refreshToken !== 'string' || googleOAuth.refreshToken.length === 0) {
+			throw new Error('Google did not return a refresh token. Reconnect after removing prior grants or ensure consent is forced.');
+		}
+		const profile = await gmailApiRequest(config, {
+			path: '/profile',
+		});
+		googleOAuth.connectedEmailAddress = profile.data.emailAddress;
+		await saveConfig();
+		res.redirect('/?googleAuth=success');
+	} catch (error) {
+		logger.error(util.format('Failed during Google OAuth callback: %s', util.inspect(error)));
+		res.status(500).render('setup', getSetupViewModel(req, {
+			errorMessage: 'Failed to complete Google OAuth setup. Verify client ID, client secret, and redirect URI.',
+		}));
+	}
+});
+
+app.post('/auth/google/disconnect', function(req, res) {
+	clearGoogleTokens(config);
+	saveConfig().then(function() {
+		if ((req.get('accept') || '').indexOf('text/html') !== -1) {
+			res.redirect('/setup');
+			return;
+		}
+		res.sendStatus(204);
+	}, function(err) {
+		logger.error(util.format('Failed to clear Google OAuth config: %s', util.inspect(err)));
+		res.sendStatus(500);
+	}).done();
 });
 
 /**
@@ -138,20 +329,24 @@ function deleteThread(threadId, resultCallback) {
  * gmail for the 100 most recent threads, and performs a POST to this route
  * to inform the backend the contents of those threads.
  */
-app.post('/api/threads', function(req, res) {
-	const threadId = req.body.id;
+async function saveThreadPayload(threadPayload) {
+	const threadId = threadPayload.id;
 	if (typeof threadId === 'string' && threadId.match(/^[0-9a-z]+$/)) {
-		const allMessagesInTrash = req.body.messages.every(
+		const allMessagesInTrash = threadPayload.messages.every(
 			(message) => message.labelIds.indexOf('TRASH') !== -1
 		);
 		if (allMessagesInTrash) {
 			logger.info(`Deleting thread ${threadId} because all messages in thread are in trash.`);
-			deleteThread(threadId, function(isSuccessful) {
-				res.sendStatus(isSuccessful ? 200 : 500);
+			return await new Promise((resolve) => {
+				deleteThread(threadId, function(isSuccessful) {
+					resolve({
+						status: isSuccessful ? 200 : 500,
+					});
+				});
 			});
 		} else {
 			// Calculate wordCount and timeToReadSeconds for each message
-			req.body.messages.forEach(messageData => {
+			threadPayload.messages.forEach(messageData => {
 				const messageInstance = new models_message.Message(messageData);
 				const originalBody = messageInstance.bestBody();
 				const plainTextBody = sanitizeHtml(originalBody, { allowedTags: [], allowedAttributes: {} });
@@ -162,33 +357,372 @@ app.post('/api/threads', function(req, res) {
 			});
 
 			const filePath = 'data/threads/' + threadId;
-			helpers_fileio.readJsonFromOptionalFile(filePath).then(existingData => {
-				const newData = req.body;
-				if (existingData && existingData.messages) {
-					newData.messages.forEach(newMessage => {
-						const existingMessage = existingData.messages.find(m => m.id === newMessage.id);
-						if (existingMessage && existingMessage.fullBodyWordCount) {
-							newMessage.fullBodyWordCount = existingMessage.fullBodyWordCount;
-						}
-					});
-				}
-
+			const existingData = await helpers_fileio.readJsonFromOptionalFile(filePath);
+			const newData = threadPayload;
+			if (existingData && existingData.messages) {
+				newData.messages.forEach(newMessage => {
+					const existingMessage = existingData.messages.find(m => m.id === newMessage.id);
+					if (existingMessage && existingMessage.fullBodyWordCount) {
+						newMessage.fullBodyWordCount = existingMessage.fullBodyWordCount;
+					}
+				});
+			}
+			await new Promise((resolve, reject) => {
 				nodeFs.writeFile(filePath, JSON.stringify(newData), function(err) {
 					if (err) {
 						logger.error(util.inspect(err));
-						res.sendStatus(500);
+						reject(err);
 					} else {
-						res.sendStatus(200);
 						lastRefresheds.markRefreshed(threadId).done();
+						resolve();
 					}
 				});
-			}).catch(err => {
-				logger.error(util.inspect(err));
-				res.sendStatus(500);
 			});
+			return {status: 200};
 		}
 	} else {
-		res.status(400).send({ humanErrorMessage: "invalid threadId" });
+		return {
+			status: 400,
+			body: { humanErrorMessage: "invalid threadId" },
+		};
+	}
+}
+
+app.post('/api/threads', async function(req, res) {
+	try {
+		const result = await saveThreadPayload(req.body);
+		if (result.body) {
+			res.status(result.status).send(result.body);
+			return;
+		}
+		res.sendStatus(result.status);
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+async function listThreadIdsByLabel(gmailRequest, labelId) {
+	const response = await gmailRequest({
+		path: '/threads',
+		query: {
+			labelIds: [labelId],
+			maxResults: '100',
+		},
+	});
+	return Array.isArray(response.threads) ? response.threads.map((thread) => thread.id) : [];
+}
+
+async function refreshSingleThreadFromGmail(gmailRequest, threadId) {
+	try {
+		const gmailThread = await gmailRequest({
+			path: `/threads/${threadId}`,
+			query: {
+				format: 'full',
+			},
+		});
+		return saveThreadPayload(gmailThread);
+	} catch (error) {
+		if (error.status === 404) {
+			return await new Promise((resolve) => {
+				deleteThread(threadId, function(isSuccessful) {
+					resolve({status: isSuccessful ? 200 : 500});
+				});
+			});
+		}
+		throw error;
+	}
+}
+
+async function syncRecentThreadsFromGmail(gmailRequest) {
+	const [inboxThreadIds, trashThreadIds] = await Promise.all([
+		listThreadIdsByLabel(gmailRequest, 'INBOX'),
+		listThreadIdsByLabel(gmailRequest, 'TRASH'),
+	]);
+	const uniqueThreadIds = _.uniq(inboxThreadIds.concat(trashThreadIds));
+	const threadSaveResults = await Promise.all(uniqueThreadIds.map(async (threadId) => {
+		const saveResult = await refreshSingleThreadFromGmail(gmailRequest, threadId);
+		return {
+			threadId: threadId,
+			status: saveResult.status,
+		};
+	}));
+	return {
+		threadIds: uniqueThreadIds,
+		results: threadSaveResults,
+	};
+}
+
+app.get('/api/gmail/profile', async function(req, res) {
+	try {
+		const profile = await withGmailApi(res, async (gmailRequest) => {
+			return gmailRequest({
+				path: '/profile',
+			});
+		});
+		// TODO: Refactor withGmailApi so this contract is explicit.
+		// Today, a null result here means withGmailApi already sent the HTTP error
+		// response (for example 401/503), so returning without sending again is correct.
+		if (profile == null) {
+			return;
+		}
+		res.status(200).send(profile);
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+app.get('/api/gmail/labels', async function(req, res) {
+	try {
+		const labelsResponse = await withGmailApi(res, async (gmailRequest) => {
+			return gmailRequest({
+				path: '/labels',
+			});
+		});
+		if (labelsResponse == null) {
+			return;
+		}
+		const labels = Array.isArray(labelsResponse.labels) ? labelsResponse.labels : [];
+		res.status(200).send(_.sortBy(labels, function(label) {
+			return (label.type === 'system' ? 'A' : 'B') + label.name.toLowerCase();
+		}));
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+app.post('/api/gmail/sync', async function(req, res) {
+	try {
+		const syncResult = await withGmailApi(res, async (gmailRequest) => {
+			return syncRecentThreadsFromGmail(gmailRequest);
+		});
+		if (syncResult == null) {
+			return;
+		}
+		res.status(200).send({
+			syncedThreadCount: syncResult.threadIds.length,
+			results: syncResult.results,
+		});
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+app.post(/^\/api\/gmail\/threads\/([a-z0-9]+)\/refresh$/, async function(req, res) {
+	const threadId = req.params[0];
+	try {
+		const refreshResult = await withGmailApi(res, async (gmailRequest) => {
+			return refreshSingleThreadFromGmail(gmailRequest, threadId);
+		});
+		if (refreshResult == null) {
+			return;
+		}
+		res.sendStatus(refreshResult.status);
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+app.post(/^\/api\/threads\/([a-z0-9]+)\/trash$/, async function(req, res) {
+	const threadId = req.params[0];
+	try {
+		const gmailResponse = await withGmailApi(res, async (gmailRequest) => {
+			return gmailRequest({
+				method: 'POST',
+				path: `/threads/${threadId}/trash`,
+			});
+		});
+		if (gmailResponse == null) {
+			return;
+		}
+		deleteThread(threadId, function(isSuccessful) {
+			if (isSuccessful) {
+				res.status(200).send(gmailResponse);
+			} else {
+				res.sendStatus(500);
+			}
+		});
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+app.post(/^\/api\/threads\/([a-z0-9]+)\/archive$/, async function(req, res) {
+	const threadId = req.params[0];
+	try {
+		const gmailResponse = await withGmailApi(res, async (gmailRequest) => {
+			return gmailRequest({
+				method: 'POST',
+				path: `/threads/${threadId}/modify`,
+				json: {
+					removeLabelIds: ['INBOX'],
+				},
+			});
+		});
+		if (gmailResponse == null) {
+			return;
+		}
+		deleteThread(threadId, function(isSuccessful) {
+			if (isSuccessful) {
+				res.status(200).send(gmailResponse);
+			} else {
+				res.sendStatus(500);
+			}
+		});
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+app.post(/^\/api\/threads\/([a-z0-9]+)\/move$/, async function(req, res) {
+	const threadId = req.params[0];
+	if (typeof req.body.labelId !== 'string' || req.body.labelId.length === 0) {
+		res.status(400).send({humanErrorMessage: 'invalid labelId'});
+		return;
+	}
+	try {
+		const gmailResponse = await withGmailApi(res, async (gmailRequest) => {
+			return gmailRequest({
+				method: 'POST',
+				path: `/threads/${threadId}/modify`,
+				json: {
+					removeLabelIds: ['INBOX', 'UNREAD'],
+					addLabelIds: [req.body.labelId],
+				},
+			});
+		});
+		if (gmailResponse == null) {
+			return;
+		}
+		deleteThread(threadId, function(isSuccessful) {
+			if (isSuccessful) {
+				res.status(200).send(gmailResponse);
+			} else {
+				res.sendStatus(500);
+			}
+		});
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+app.post(/^\/api\/gmail\/threads\/([a-z0-9]+)\/trash$/, async function(req, res) {
+	const threadId = req.params[0];
+	try {
+		const gmailResponse = await withGmailApi(res, async (gmailRequest) => {
+			return gmailRequest({
+				method: 'POST',
+				path: `/threads/${threadId}/trash`,
+			});
+		});
+		if (gmailResponse == null) {
+			return;
+		}
+		res.status(200).send(gmailResponse);
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+app.post(/^\/api\/gmail\/threads\/([a-z0-9]+)\/archive$/, async function(req, res) {
+	const threadId = req.params[0];
+	try {
+		const gmailResponse = await withGmailApi(res, async (gmailRequest) => {
+			return gmailRequest({
+				method: 'POST',
+				path: `/threads/${threadId}/modify`,
+				json: {
+					removeLabelIds: ['INBOX'],
+				},
+			});
+		});
+		if (gmailResponse == null) {
+			return;
+		}
+		res.status(200).send(gmailResponse);
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+app.post(/^\/api\/gmail\/threads\/([a-z0-9]+)\/move$/, async function(req, res) {
+	const threadId = req.params[0];
+	if (typeof req.body.labelId !== 'string' || req.body.labelId.length === 0) {
+		res.status(400).send({humanErrorMessage: 'invalid labelId'});
+		return;
+	}
+	try {
+		const gmailResponse = await withGmailApi(res, async (gmailRequest) => {
+			return gmailRequest({
+				method: 'POST',
+				path: `/threads/${threadId}/modify`,
+				json: {
+					removeLabelIds: ['INBOX', 'UNREAD'],
+					addLabelIds: [req.body.labelId],
+				},
+			});
+		});
+		if (gmailResponse == null) {
+			return;
+		}
+		res.status(200).send(gmailResponse);
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+app.post('/api/gmail/messages/send', async function(req, res) {
+	if (typeof req.body.threadId !== 'string' || typeof req.body.raw !== 'string') {
+		res.status(400).send({humanErrorMessage: 'invalid message payload'});
+		return;
+	}
+	try {
+		const gmailResponse = await withGmailApi(res, async (gmailRequest) => {
+			return gmailRequest({
+				method: 'POST',
+				path: '/messages/send',
+				json: {
+					threadId: req.body.threadId,
+					raw: req.body.raw,
+				},
+			});
+		});
+		if (gmailResponse == null) {
+			return;
+		}
+		res.status(200).send(gmailResponse);
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
+	}
+});
+
+app.get(/^\/api\/gmail\/messages\/([a-z0-9]+)\/attachments\/([a-zA-Z0-9_-]+)$/, async function(req, res) {
+	const messageId = req.params[0];
+	const attachmentId = req.params[1];
+	try {
+		const attachment = await withGmailApi(res, async (gmailRequest) => {
+			return gmailRequest({
+				path: `/messages/${messageId}/attachments/${attachmentId}`,
+			});
+		});
+		if (attachment == null) {
+			return;
+		}
+		res.status(200).send(attachment);
+	} catch (err) {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
 	}
 });
 
