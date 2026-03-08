@@ -19,6 +19,10 @@ html(lang="en")
 					#[a(href="https://www.mailboxapp.com/") Mailbox].
 			.alert.alert-danger(role="alert").
 				Nailbox is pre-Beta software and is <strong><s>probably</s> definitely full of bugs</strong>.
+			if errorMessage
+				.alert.alert-danger(role="alert")= errorMessage
+			if successMessage
+				.alert.alert-success(role="alert")= successMessage
 			h1 What's the worst that could happen?
 			ul
 				li There's a bug in the program and it ends up deleting all your mail permanently.
@@ -27,25 +31,50 @@ html(lang="en")
 				li The program isn't as secure as gmail itself and now everybody in the world can read your e-mails by hacking in via the backdoor created by this program.
 				li A funny little man might take away your first-born son unless you can guess his name.
 			h1 I still want to try it out anyway!
-			p Me too, friend, me too. Here's how:
+			p Configure a Google OAuth Web Application credential so Nailbox can refresh Gmail tokens server-side.
 			form(method="POST" action="/setup")
 				ol
 					li.
 						Head over to
 						<a href="https://console.developers.google.com/">https://console.developers.google.com/</a>
-						and create a new application named "Nailbox" <small>(or use whatever
-						name you prefer, becuase the app is non-sentient and cannot get offended)</small>.
-					li Go to the "Credentials" panel and click "New credentials" and select "OAuth cleint ID".
-					li Select "Web application" as your application type
-					li.
-						Under "Authorized JavaScript origins", enter in <span id="host">the
-						domain this page is running on</span>.
-					li Click the "Create" button.
-					li Google will give you a "Client ID". It's like this 70+ character string. Copy it and paste it here:
-						input.form-control(name="clientId" placeholder="ClientID-blah-blah-blah.apps.googleusercontent.com" value="#{clientId || ''}")
-					li Click this save button:
+						and create or open a project for Nailbox.
+					li Go to the "Credentials" panel and create an "OAuth client ID".
+					li Select "Web application" as the application type.
+					li If there is an "Authorized JavaScript origin", remove it.
+					li
+						| Add this exact redirect URI under "Authorized redirect URIs":
+						|  
+						code#redirect-uri= defaultRedirectUri
+					li Copy the Client ID here:
+						input.form-control(name="clientId" placeholder="ClientID-blah-blah-blah.apps.googleusercontent.com" value=googleOAuth.clientId || '')
+					li Copy the Client Secret here:
+						input.form-control(name="clientSecret" placeholder="GOCSPX-..." value=googleOAuth.clientSecret || '')
+					li Confirm or override the redirect URI here:
+						input.form-control(name="redirectUri" placeholder=defaultRedirectUri value=googleOAuth.redirectUri || defaultRedirectUri)
+					li Save the configuration in the Google console.
+					li Wait 5 minutes for the updates to propagate.
+					li Click this button to save the configuration here.
 						button.btn.btn-default(type="submit") Save
-					li Return to the <a href="/">main page</a>.
+					li Complete the Google connect flow:
+						if authStatus.connected
+							a.btn.btn-success(href="/auth/google/start") Reconnect Gmail
+						else
+							a.btn.btn-primary(href="/auth/google/start") Connect Gmail
+			if authStatus.connected
+				.panel.panel-success
+					.panel-heading Connected Account
+					.panel-body
+						p
+							strong Gmail Account:
+							|  #{authStatus.emailAddress || 'Connected'}
+						form(method="POST" action="/auth/google/disconnect")
+							button.btn.btn-warning(type="submit") Disconnect Gmail
+			else
+				.panel.panel-default
+					.panel-heading Connection Status
+					.panel-body
+						p Gmail is not connected yet.
+			p Return to the <a href="/">main page</a> after Gmail is connected.
 			h2 Why's it called Nailbox?
 			p Nobody knows for sure. There are several origin myths:
 			ul
@@ -58,14 +87,11 @@ html(lang="en")
 				because the name wasn't as catchy and OAuth was significantly harder
 				to get right in Ruby.
 
-		script(type='text/javascript' src='https://apis.google.com/js/client.js?onload=checkAuth')
 		script(type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js')
-			script(src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous")
-		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.0.5/handlebars.js')
-		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.2.1/lodash.js')
-		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.11.2/moment.js')
-		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/q.js/1.4.1/q.js')
 		script(type='text/javascript').
 			$(function() {
-				$('#host').html('<code>' + window.location.origin + '</code>');
+				var origin = window.location.origin;
+				var redirectUri = origin + '/auth/google/callback';
+				$('#host').text(origin);
+				$('#redirect-uri').text(redirectUri);
 			});
