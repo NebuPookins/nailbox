@@ -25,6 +25,21 @@ export interface PersistedThread {
 	messages: PersistedMessage[];
 }
 
+export interface HideUntilRequestDto {
+	type: 'timestamp';
+	value: number;
+}
+
+export interface WhenIHaveTimeRequestDto {
+	type: 'when-i-have-time';
+}
+
+export type HideUntilDto = HideUntilRequestDto | WhenIHaveTimeRequestDto;
+
+export interface WordcountUpdateDto {
+	wordcount: number;
+}
+
 export interface ThreadSummaryDto {
 	threadId: string;
 	senders: PersonDto[];
@@ -59,4 +74,37 @@ export interface ThreadMessageDto {
 		size: number;
 		attachmentId: string;
 	}>;
+}
+
+export interface ThreadGroupDto {
+	label: string;
+	threads: ThreadSummaryDto[];
+	sortType: 'mostRecent' | 'shortest';
+}
+
+export interface ThreadModelLike {
+	_data: PersistedThread;
+	id(): string;
+	snippet(): string;
+	messages(): Array<{
+		getBestReadTimeSeconds(): number;
+		getInternalDate(): string | number;
+	}>;
+	senders(): PersonDto[];
+	recipients(): PersonDto[];
+	lastUpdated(): number;
+	subject(): string;
+	messageIds(): string[];
+	labelIds(): string[];
+	message(messageId: string): {
+		_data: PersistedMessage;
+	} | null;
+}
+
+export interface ThreadRepository {
+	deleteThread(threadId: string): Promise<boolean>;
+	listThreadIds(): Promise<string[]>;
+	readThread(threadId: string): Promise<ThreadModelLike>;
+	readThreadJson(threadId: string): Promise<Partial<PersistedThread>>;
+	saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<unknown>;
 }

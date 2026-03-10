@@ -3,7 +3,11 @@ import util from 'util';
 import threadRepository from '../repositories/thread_repository.js';
 import threadService from '../services/thread_service.js';
 import { getEmailGroupingRules, groupThreads } from '../domain/grouping_rules.js';
-import { normalizeGroupingRulesConfig } from '../validation/contracts.js';
+import {
+	normalizeGroupingRulesConfig,
+	normalizeHideUntilDto,
+	normalizeWordcountUpdateDto,
+} from '../validation/contracts.js';
 
 export default function registerThreadRoutes(app, dependencies) {
 	const {
@@ -63,6 +67,10 @@ export default function registerThreadRoutes(app, dependencies) {
 			await helpersFileio.saveJsonToFile(config, pathToConfig);
 			res.sendStatus(200);
 		} catch (error) {
+			if (error.code === 'INVALID_CONTRACT') {
+				res.status(400).send({humanErrorMessage: error.message});
+				return;
+			}
 			logger.error(util.inspect(error));
 			res.sendStatus(500);
 		}
@@ -101,13 +109,13 @@ export default function registerThreadRoutes(app, dependencies) {
 
 	app.put(/^\/api\/threads\/([a-z0-9]+)\/hideUntil$/, async function(req, res) {
 		const threadId = req.params[0];
-		const hideUntil = req.body;
+		let hideUntil;
 		try {
+			hideUntil = normalizeHideUntilDto(req.body);
 			switch (hideUntil.type) {
 				case 'timestamp': {
-					const hideUntilTimestamp = parseInt(hideUntil.value, 10);
-					logger.info(`Hiding thread ${threadId} until timestamp ${hideUntilTimestamp}.`);
-					await hideUntils.hideUntilTimestamp(threadId, hideUntilTimestamp);
+					logger.info(`Hiding thread ${threadId} until timestamp ${hideUntil.value}.`);
+					await hideUntils.hideUntilTimestamp(threadId, hideUntil.value);
 					break;
 				}
 				case 'when-i-have-time':
@@ -121,6 +129,10 @@ export default function registerThreadRoutes(app, dependencies) {
 			}
 			res.sendStatus(200);
 		} catch (error) {
+			if (error.code === 'INVALID_CONTRACT') {
+				res.status(400).send({humanErrorMessage: error.message});
+				return;
+			}
 			logger.error(util.format('Failed to save hideUntils: %j', error));
 			res.sendStatus(500);
 		}
@@ -144,12 +156,8 @@ export default function registerThreadRoutes(app, dependencies) {
 	app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/, async function(req, res) {
 		const threadId = req.params[0];
 		const messageId = req.params[1];
-		const wordcount = req.body.wordcount;
-		if (typeof wordcount !== 'string' && typeof wordcount !== 'number') {
-			res.status(400).send({humanErrorMessage: 'invalid wordcount'});
-			return;
-		}
 		try {
+			const { wordcount } = normalizeWordcountUpdateDto(req.body);
 			const result = await threadService.updateMessageWordCount({
 				threadId,
 				messageId,
