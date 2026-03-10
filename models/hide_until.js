@@ -1,14 +1,13 @@
-(() => {
-	'use strict';
-	const PATH_TO_HIDE_UNTILS = 'data/hideUntils.json';
+import assert from 'assert';
+import util from 'util';
 
-	const assert = require('assert');
-	const fileio = require('../helpers/fileio');
-	const logger = require('nebulog').make({filename: __filename, level: 'debug'});
-	const nodeFs = require('node-fs');
-	const q = require('q');
-	const util = require('util');
-	const MESSAGE_IS_STALE_AFTER = 7 * 24 * 60 * 60 * 1000; //1 week in milliseconds
+import nebulog from 'nebulog';
+
+import fileio from '../helpers/fileio.js';
+
+const PATH_TO_HIDE_UNTILS = 'data/hideUntils.json';
+const logger = nebulog.make({filename: 'models/hide_until.js', level: 'debug'});
+const MESSAGE_IS_STALE_AFTER = 7 * 24 * 60 * 60 * 1000; //1 week in milliseconds
 
 	function HideUntil() {
 	}
@@ -569,17 +568,14 @@
 	/**
 	 * @return [Promise<HideUntilData>]
 	 */
-	exports.load = () => {
-		return q.Promise((resolve, reject) => {
-			nodeFs.readFile(PATH_TO_HIDE_UNTILS, (err, strFileContents) => {
-				if (err) {
-					return reject(err);
-				} else {
-					return resolve(new HideUntilData(JSON.parse(strFileContents)));
-				}
-			});
-		});
-	};
+export async function load() {
+	const fileContents = await fileio.readJsonFromOptionalFile(PATH_TO_HIDE_UNTILS);
+	return new HideUntilData(fileContents);
+}
+
+export default {
+	load,
+};
 
 	//////////////////////////////////////////////////////////////////////////////
 	(function test() {
@@ -591,4 +587,3 @@
 		const now = 3;
 		assert.equal(underTest.getVisibility(lastUpdated, now), 'visible');
 	})();
-})();

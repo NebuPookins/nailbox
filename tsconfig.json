@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.js",
+    "main.mjs",
+    "models/**/*.js",
+    "helpers/**/*.js",
+    "services/**/*.mjs"
+  ],
+  "exclude": [
+    "node_modules",
+    "data",
+    "data-backup-20260308",
+    "public"
+  ]
+}
