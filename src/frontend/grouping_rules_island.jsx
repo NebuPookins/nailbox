@@ -1,5 +1,5 @@
-const { useEffect, useState } = React;
-const { createRoot } = ReactDOM;
+import React, { useEffect, useState } from 'react';
+import { createRoot } from 'react-dom/client';
 
 function createEmptyRule() {
 	return {
@@ -42,12 +42,15 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }) {
 				const nextRules = Array.isArray(data?.rules) ? data.rules.map(normalizeRule) : [];
 				setRules(nextRules);
 			})
-			.catch(() => {
+			.catch((error) => {
 				if (isCancelled) {
 					return;
 				}
-				setErrorMessage('Failed to load email grouping rules.');
-				notify?.error?.('Failed to load email grouping rules');
+				const message = error instanceof Error && error.message
+					? error.message
+					: 'Failed to load email grouping rules.';
+				setErrorMessage(message);
+				notify?.error?.(message);
 			})
 			.finally(() => {
 				if (!isCancelled) {
@@ -104,9 +107,12 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }) {
 				notify?.success?.('Email grouping rules saved successfully');
 				onSaved?.();
 			})
-			.catch(() => {
-				setErrorMessage('Failed to save email grouping rules.');
-				notify?.error?.('Failed to save email grouping rules');
+			.catch((error) => {
+				const message = error instanceof Error && error.message
+					? error.message
+					: 'Failed to save email grouping rules.';
+				setErrorMessage(message);
+				notify?.error?.(message);
 			})
 			.finally(() => {
 				setSaving(false);
