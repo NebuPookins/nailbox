@@ -140,7 +140,7 @@ $(function() {
 	};
 
 	function apiRequest(options) {
-		return Q.Promise(function(resolve, reject) {
+		return new Promise(function(resolve, reject) {
 			$.ajax(options).done(function(data) {
 				resolve(data);
 			}).fail(function(jqXHR, textStatus, errorThrown) {
@@ -148,6 +148,12 @@ $(function() {
 				reject(jqXHR);
 			});
 		});
+	}
+
+	function reportAsyncError(error) {
+		if (error) {
+			console.log(error);
+		}
 	}
 
 	function handleApiFailure(jqXHR, fallbackMessage) {
@@ -292,7 +298,7 @@ $(function() {
 		return apiRequest({
 			url: '/api/gmail/threads/' + threadId + '/refresh',
 			method: 'POST'
-		}).then(null, function() {
+		}).catch(function() {
 			console.log('Failed to refresh thread', threadId);
 		});
 	}
@@ -339,7 +345,7 @@ $(function() {
 				type: 'success',
 				message: 'GUI updated with cached threads.'
 			});
-		}).then(null, function(err) {
+		}).catch(function(err) {
 			$status.show().html(
 				'<h1>Failed to load cached mail</h1>' +
 				'<p>Check the server logs, then try syncing Gmail again.</p>'
@@ -401,24 +407,23 @@ $(function() {
 	}
 
 	function getThreadData(threadId, attemptNumber, updateMessenger) {
-		return Q.Promise(function(resolve, reject) {
-			$.get('/api/threads/' + threadId + '/messages').done(function(threadData) {
-				resolve(threadData);
-			}).fail(function() {
-				if (attemptNumber < 60) {
-					updateMessenger.update({
-						type: 'info',
-						message: 'Failed to get thread data, retrying...'
-					});
-					resolve(getThreadData(threadId, attemptNumber + 1, updateMessenger));
-				} else {
-					updateMessenger.update({
-						type: 'error',
-						message: 'Failed to get thread data after too many retries.'
-					});
-					reject('Failed after too many retries');
-				}
+		return apiRequest({
+			url: '/api/threads/' + threadId + '/messages',
+			method: 'GET',
+			dataType: 'json'
+		}).catch(function(error) {
+			if (attemptNumber < 60) {
+				updateMessenger.update({
+					type: 'info',
+					message: 'Failed to get thread data, retrying...'
+				});
+				return getThreadData(threadId, attemptNumber + 1, updateMessenger);
+			}
+			updateMessenger.update({
+				type: 'error',
+				message: 'Failed to get thread data after too many retries.'
 			});
+			throw error;
 		});
 	}
 
@@ -493,7 +498,7 @@ $(function() {
 			notify: createGroupingRulesNotify(),
 			onSaved: function() {
 				$settingsModal.modal('hide');
-				updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...')).done();
+				updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...')).catch(reportAsyncError);
 			}
 		});
 		return {
@@ -506,7 +511,7 @@ $(function() {
 		renderConnectedState();
 		updateUiWithThreadsFromServer(messengerGetter().info('Loading cached threads...'))
 			.then(function() {
-				return loadLabels().then(null, function() {
+				return loadLabels().catch(function() {
 					messengerGetter().error('Failed to load Gmail labels. Continuing with cached mail.');
 					return [];
 				});
@@ -517,14 +522,13 @@ $(function() {
 			.then(function() {
 				return updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...'));
 			})
-			.then(null, function() {
+			.catch(function() {
 				messengerGetter().error('Failed to refresh Gmail. Cached mail is still available.');
-			})
-			.done();
+			});
 
 		setInterval(function() {
 			if (authStatus.connected) {
-				updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...')).done();
+				updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...')).catch(reportAsyncError);
 			}
 		}, moment.duration(5, 'minutes').as('milliseconds'));
 
@@ -533,7 +537,8 @@ $(function() {
 				syncThreadsFromGoogle(messengerGetter().info('Downloading new threads from Gmail...'))
 					.then(function() {
 						return updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...'));
-					}).done();
+					})
+					.catch(reportAsyncError);
 			}
 		}, moment.duration(30, 'minutes').as('milliseconds'));
 	}
@@ -548,7 +553,7 @@ $(function() {
 			return;
 		}
 		bootstrapConnectedApp();
-	}).done();
+	}).catch(reportAsyncError);
 
 	$authControls.on('click', '#disconnect-gmail-btn', function() {
 		apiRequest({
@@ -558,14 +563,14 @@ $(function() {
 			authStatus.connected = false;
 			authStatus.emailAddress = null;
 			renderDisconnectedState('Gmail disconnected.');
-		}).done();
+		}).catch(reportAsyncError);
 	});
 
 	$authControls.on('click', '#refresh-now-btn', function() {
 		syncThreadsFromGoogle(messengerGetter().info('Syncing Gmail...'))
 			.then(function() {
 				return updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...'));
-			}).done();
+			}).catch(reportAsyncError);
 	});
 
 	$main.on('click', 'button.delete', function(eventObject) {
@@ -577,7 +582,7 @@ $(function() {
 				type: 'success',
 				message: 'Successfully deleted message ' + threadId
 			});
-		}).done();
+		}).catch(reportAsyncError);
 		return false;
 	});
 
@@ -590,7 +595,7 @@ $(function() {
 				type: 'success',
 				message: 'Successfully archived thread ' + threadId + '.'
 			});
-		}).done();
+		}).catch(reportAsyncError);
 		return false;
 	});
 
@@ -633,15 +638,19 @@ $(function() {
 			nonDeletedMessages.forEach(function(message) {
 				message.duration = moment.duration(message.timeToReadSeconds, 'seconds').humanize();
 				$threads.append(handlebarsTemplates.message(message));
-				$.post('/api/threads/' + threadId + '/messages/' + message.messageId + '/wordcount', {
-					wordcount: message.wordcount
-				});
+				apiRequest({
+					url: '/api/threads/' + threadId + '/messages/' + message.messageId + '/wordcount',
+					method: 'POST',
+					data: {
+						wordcount: message.wordcount
+					}
+				}).catch(reportAsyncError);
 			});
 			updateMessenger.update({
 				type: 'success',
 				message: 'Successfully downloaded thread data for ' + threadId + '.'
 			});
-		}).done();
+		}).catch(reportAsyncError);
 	});
 
 	$threadViewer.find('button.reply-all').on('click', function() {
@@ -680,7 +689,7 @@ $(function() {
 			});
 			$threadViewer.find('.reply textarea').val('');
 			$threadViewer.modal('hide');
-		}).done();
+		}).catch(reportAsyncError);
 	});
 
 	$threadViewer.on('click', 'button.dl-attachment', function(eventObj) {
@@ -697,7 +706,7 @@ $(function() {
 				return char === '-' ? '+' : '/';
 			});
 			saveAs(b64toBlob(base64Version), attachmentName);
-		}).done();
+		}).catch(reportAsyncError);
 	});
 
 	$threadViewer.find('button.delete').on('click', function() {
@@ -716,7 +725,7 @@ $(function() {
 				message: 'Successfully deleted message ' + threadId
 			});
 			$threadViewer.modal('hide');
-		}).done();
+		}).catch(reportAsyncError);
 		return false;
 	});
 
@@ -736,7 +745,7 @@ $(function() {
 				type: 'success',
 				message: 'Successfully archived thread ' + threadId + '.'
 			});
-		}).done();
+		}).catch(reportAsyncError);
 		return false;
 	});
 
@@ -773,7 +782,7 @@ $(function() {
 					message: 'Successfully deleted message ' + threadId
 				});
 				$threadViewer.modal('hide');
-			}).done();
+			}).catch(reportAsyncError);
 		}
 	});
 
@@ -854,18 +863,18 @@ $(function() {
 				});
 				return;
 		}
-		$.ajax({
+		apiRequest({
 			url: '/api/threads/' + threadId + '/hideUntil',
 			data: hideUntil,
 			method: 'PUT'
-		}).done(function() {
+		}).then(function() {
 			updateMessenger.update({
 				type: 'success',
 				message: 'Successfully hid thread ' + threadId + '.'
 			});
 			$laterPicker.modal('hide');
 			deleteThreadFromUI(threadId);
-		}).fail(function() {
+		}).catch(function() {
 			updateMessenger.update({
 				type: 'error',
 				message: 'Failed to hide thread.'
@@ -891,7 +900,7 @@ $(function() {
 				type: 'success',
 				message: 'Successfully moved thread ' + threadId + ' to label.'
 			});
-		}).done();
+		}).catch(reportAsyncError);
 	});
 
 	$settingsBtn.on('click', function() {

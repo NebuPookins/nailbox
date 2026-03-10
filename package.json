@@ -34,7 +34,6 @@
     "optional-js": "^1.2.1",
     "posthtml": "^0.13.3",
     "pug": "^3.0.0",
-    "q": "^1.4.1",
     "sanitize-html": "^2.7.0"
   },
   "devDependencies": {
