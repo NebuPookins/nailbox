@@ -14,7 +14,7 @@
     "start": "node main.mjs",
     "dev": "node --watch main.mjs",
     "test": "node --test",
-    "build:frontend": "esbuild src/frontend/index.js --bundle --format=iife --global-name=NailboxFrontend --outfile=public/frontend.js",
+    "build:frontend": "esbuild src/frontend/index.js --bundle --format=iife --global-name=NailboxFrontend --define:process.env.NODE_ENV=\\\"production\\\" --minify --outfile=public/frontend.js",
     "dev:frontend": "npm run build:frontend -- --watch"
   },
   "author": "Nebu Pookins <nebupookins@gmail.com>",
