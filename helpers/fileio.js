@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import crypto from 'node:crypto';
 
 import nebulog from 'nebulog';
 
@@ -41,7 +42,7 @@ export async function ensureDirectoryExists(dir) {
  */
 export async function saveJsonToFile(json, filePath) {
 	const directory = path.dirname(filePath);
-	const tempPath = `${filePath}.tmp`;
+	const tempPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
 	await ensureDirectoryExists(directory);
 	await writeFile(tempPath, JSON.stringify(json));
 	await rename(tempPath, filePath);
