@@ -3,7 +3,6 @@ const DEFAULT_CONFIG = {
 };
 const PATH_TO_CONFIG = 'data/config.json';
 
-import assert from 'assert';
 import util from 'util';
 import express from 'express';
 import bodyParser from 'body-parser';
@@ -11,13 +10,7 @@ import path from 'path';
 import crypto from 'node:crypto';
 import nebulog from 'nebulog';
 const logger = nebulog.make({filename: 'main.mjs', level: 'debug'});
-import nodeFs from 'node-fs';
-import nodeFsPromises from 'node:fs/promises';
 import _ from 'lodash';
-import sanitizeHtml from 'sanitize-html';
-import htmlEntities from 'html-entities';
-const Entities = htmlEntities.AllHtmlEntities;
-const entities = new Entities();
 import mailcomposer from 'mailcomposer';
 import { marked } from 'marked';
 import base64url from 'base64url';
@@ -27,7 +20,6 @@ import Optional from 'optional-js';
 import helpers_fileio from './helpers/fileio.js';
 
 import models_thread from './models/thread.js';
-import models_message from './models/message.js';
 import models_hideUntils from './models/hide_until.js';
 import models_lastRefreshed from './models/last_refreshed.js';
 import {
@@ -44,6 +36,12 @@ import {
 	getEmailGroupingRules,
 	groupThreads,
 } from './src/server/domain/grouping_rules.js';
+import threadRepository from './src/server/repositories/thread_repository.js';
+import threadService from './src/server/services/thread_service.js';
+import {
+	normalizeAppConfig,
+	normalizeGroupingRulesConfig,
+} from './src/server/validation/contracts.js';
 
 /*
  * Set up graceful exit, because otherwise there's a race condition
@@ -165,11 +163,12 @@ async function withGmailApi(res, fnCallback) {
 logger.info("Checking directory structure...");
 await helpers_fileio.ensureDirectoryExists('data/threads');
 logger.info("Directory structure looks fine.");
-const [config, hideUntils, lastRefresheds] = await Promise.all([
+const [rawConfig, hideUntils, lastRefresheds] = await Promise.all([
 	helpers_fileio.readJsonFromOptionalFile(PATH_TO_CONFIG),
 	models_hideUntils.load(),
 	models_lastRefreshed.load(),
 ]);
+const config = normalizeAppConfig(rawConfig);
 
 const app = express();
 app.set('views', path.join(process.cwd(), 'views'));
@@ -301,101 +300,12 @@ app.post('/auth/google/disconnect', function(req, res) {
 	});
 });
 
-/**
- * @param threadId [String] the thread to delete
- * @param resultCallback [function] Callback function receive a boolean. True
- * indicates that the deletion was successful, false indicates the deletion was
- * unsuccessful.
- */
-function deleteThread(threadId, resultCallback) {
-	const pathToDelete = 'data/threads/' + threadId;
-	nodeFs.unlink(pathToDelete, function(err) {
-		if (err) {
-			if (err.code === 'ENOENT') {
-				//Files is already deleted; that's okay, delete is idempotent.
-				logger.info(`File ${pathToDelete} already deleted.`);
-				resultCallback(true);
-			} else {
-				logger.error(util.format("Error deleting %s. Code: %s. Stack: %s",
-					pathToDelete, err.code, err.stack));
-				resultCallback(false);
-			}
-		} else {
-			logger.info(util.format("Deleted file %s", pathToDelete));
-			resultCallback(true);
-		}
-	});
-}
-
-/**
- * Records the existence of a thread. The client-side code periodically checks
- * gmail for the 100 most recent threads, and performs a POST to this route
- * to inform the backend the contents of those threads.
- */
-async function saveThreadPayload(threadPayload) {
-	const threadId = threadPayload.id;
-	if (typeof threadId === 'string' && threadId.match(/^[0-9a-z]+$/)) {
-		const allMessagesInTrash = threadPayload.messages.every(
-			(message) => message.labelIds.indexOf('TRASH') !== -1
-		);
-		if (allMessagesInTrash) {
-			logger.info(`Deleting thread ${threadId} because all messages in thread are in trash.`);
-			return await new Promise((resolve) => {
-				deleteThread(threadId, function(isSuccessful) {
-					resolve({
-						status: isSuccessful ? 200 : 500,
-					});
-				});
-			});
-		} else {
-			// Calculate wordCount and timeToReadSeconds for each message
-			threadPayload.messages.forEach(messageData => {
-				const messageInstance = new models_message.Message(messageData);
-				const originalBody = messageInstance.bestBody();
-				const plainTextBody = sanitizeHtml(originalBody, { allowedTags: [], allowedAttributes: {} });
-				const wordCount = plainTextBody.split(' ').filter(word => word.length > 0).length;
-				const timeToReadSeconds = Math.round((wordCount * 60) / 200);
-				messageData.calculatedWordCount = wordCount;
-				messageData.calculatedTimeToReadSeconds = timeToReadSeconds;
-			});
-
-			const filePath = 'data/threads/' + threadId;
-			const existingData = await helpers_fileio.readJsonFromOptionalFile(filePath);
-			const newData = threadPayload;
-			if (existingData && existingData.messages) {
-				newData.messages.forEach(newMessage => {
-					const existingMessage = existingData.messages.find(m => m.id === newMessage.id);
-					if (existingMessage && existingMessage.fullBodyWordCount) {
-						newMessage.fullBodyWordCount = existingMessage.fullBodyWordCount;
-					}
-				});
-			}
-			await new Promise((resolve, reject) => {
-				nodeFs.writeFile(filePath, JSON.stringify(newData), function(err) {
-						if (err) {
-							logger.error(util.inspect(err));
-							reject(err);
-						} else {
-							lastRefresheds.markRefreshed(threadId).catch((saveError) => {
-								logger.error(util.format('Failed to save last refreshed for %s: %s', threadId, util.inspect(saveError)));
-							});
-							resolve();
-						}
-					});
-			});
-			return {status: 200};
-		}
-	} else {
-		return {
-			status: 400,
-			body: { humanErrorMessage: "invalid threadId" },
-		};
-	}
-}
-
 app.post('/api/threads', async function(req, res) {
 	try {
-		const result = await saveThreadPayload(req.body);
+		const result = await threadService.saveThreadPayload({
+			threadPayload: req.body,
+			lastRefresheds,
+		});
 		if (result.body) {
 			res.status(result.status).send(result.body);
 			return;
@@ -426,14 +336,15 @@ async function refreshSingleThreadFromGmail(gmailRequest, threadId) {
 				format: 'full',
 			},
 		});
-		return saveThreadPayload(gmailThread);
+		return threadService.saveThreadPayload({
+			threadPayload: gmailThread,
+			lastRefresheds,
+		});
 	} catch (error) {
 		if (error.status === 404) {
-			return await new Promise((resolve) => {
-				deleteThread(threadId, function(isSuccessful) {
-					resolve({status: isSuccessful ? 200 : 500});
-				});
-			});
+			return {
+				status: await threadRepository.deleteThread(threadId) ? 200 : 500,
+			};
 		}
 		throw error;
 	}
@@ -544,13 +455,12 @@ app.post(/^\/api\/threads\/([a-z0-9]+)\/trash$/, async function(req, res) {
 		if (gmailResponse == null) {
 			return;
 		}
-		deleteThread(threadId, function(isSuccessful) {
-			if (isSuccessful) {
-				res.status(200).send(gmailResponse);
-			} else {
-				res.sendStatus(500);
-			}
-		});
+		const isSuccessful = await threadRepository.deleteThread(threadId);
+		if (isSuccessful) {
+			res.status(200).send(gmailResponse);
+		} else {
+			res.sendStatus(500);
+		}
 	} catch (err) {
 		logger.error(util.inspect(err));
 		res.sendStatus(500);
@@ -572,13 +482,12 @@ app.post(/^\/api\/threads\/([a-z0-9]+)\/archive$/, async function(req, res) {
 		if (gmailResponse == null) {
 			return;
 		}
-		deleteThread(threadId, function(isSuccessful) {
-			if (isSuccessful) {
-				res.status(200).send(gmailResponse);
-			} else {
-				res.sendStatus(500);
-			}
-		});
+		const isSuccessful = await threadRepository.deleteThread(threadId);
+		if (isSuccessful) {
+			res.status(200).send(gmailResponse);
+		} else {
+			res.sendStatus(500);
+		}
 	} catch (err) {
 		logger.error(util.inspect(err));
 		res.sendStatus(500);
@@ -605,13 +514,12 @@ app.post(/^\/api\/threads\/([a-z0-9]+)\/move$/, async function(req, res) {
 		if (gmailResponse == null) {
 			return;
 		}
-		deleteThread(threadId, function(isSuccessful) {
-			if (isSuccessful) {
-				res.status(200).send(gmailResponse);
-			} else {
-				res.sendStatus(500);
-			}
-		});
+		const isSuccessful = await threadRepository.deleteThread(threadId);
+		if (isSuccessful) {
+			res.status(200).send(gmailResponse);
+		} else {
+			res.sendStatus(500);
+		}
 	} catch (err) {
 		logger.error(util.inspect(err));
 		res.sendStatus(500);
@@ -737,68 +645,16 @@ app.get(/^\/api\/gmail\/messages\/([a-z0-9]+)\/attachments\/([a-zA-Z0-9_-]+)$/, 
  * and snoozed threads whose snooze have expired, etc.). Specifically, returns
  * an array of objects.
  */
-async function getNMostRelevantThreads(n) {
-	const filenames = await nodeFsPromises.readdir('data/threads');
-	const now = Date.now();
-	let formattedThreads = await Promise.all(filenames.map(async (filename) => {
-		try {
-			const thread = await models_thread.get(filename);
-			const maybeMostRecentSnippetInThread = thread.snippet();
-			assert((typeof thread.id()) === 'string', `Expected thread.id() to be a string but was ${typeof thread.threadId} for file ${filename}.`);
-
-			let totalTimeToReadSecondsForThread = 0;
-			const messagesInThread = thread.messages();
-			messagesInThread.forEach(message => {
-				totalTimeToReadSecondsForThread += message.getBestReadTimeSeconds();
-			});
-
-			let recentMessageReadTime = 0;
-			if (messagesInThread && messagesInThread.length > 0) {
-				let mostRecentMessage = messagesInThread[0];
-				for (let i = 1; i < messagesInThread.length; i++) {
-					if (parseInt(messagesInThread[i].getInternalDate(), 10) > parseInt(mostRecentMessage.getInternalDate(), 10)) {
-						mostRecentMessage = messagesInThread[i];
-					}
-				}
-				if (mostRecentMessage) {
-					recentMessageReadTime = mostRecentMessage.getBestReadTimeSeconds();
-				}
-			}
-
-			return {
-				threadId: thread.id(),
-				senders: thread.senders(),
-				receivers: thread.recipients(),
-				lastUpdated: thread.lastUpdated(),
-				subject: thread.subject(),
-				snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
-				messageIds: thread.messageIds(),
-				labelIds: thread.labelIds(),
-				visibility: hideUntils.get({threadId: thread.id(), lastUpdated: thread.lastUpdated()}).getVisibility(thread.lastUpdated(), now),
-				isWhenIHaveTime: hideUntils.get({threadId: thread.id(), lastUpdated: thread.lastUpdated()}).isWhenIHaveTime(),
-				needsRefreshing: lastRefresheds.needsRefreshing(thread.id(), thread.lastUpdated(), now),
-				totalTimeToReadSeconds: totalTimeToReadSecondsForThread,
-				recentMessageReadTimeSeconds: recentMessageReadTime,
-			};
-		} catch (e) {
-			logger.warn("Couldn't read certain threads in getNMostrElevantThreads. Ignoring and continuing. ", util.inspect(e));
-			return null;
-		}
-	}));
-	formattedThreads = formattedThreads
-		.filter(formattedThread => formattedThread !== null)
-		.filter(formattedThread => formattedThread.visibility !== 'hidden');
-	formattedThreads.sort(hideUntils.comparator());
-	formattedThreads.length = Math.min(formattedThreads.length, 100);
-	return formattedThreads;
-}
-
 /**
  * Replies with a list of threads to show on the main page.
  */
 app.get('/api/threads', async function(req, res) {
 	try {
-		const formattedThreads = await getNMostRelevantThreads(100);
+		const formattedThreads = await threadService.getMostRelevantThreads({
+			hideUntils,
+			lastRefresheds,
+			limit: 100,
+		});
 		res.status(200);
 		res.type('application/json');
 		res.send(formattedThreads);
@@ -829,7 +685,7 @@ app.get('/api/email-grouping-rules', function(req, res) {
 app.post('/api/email-grouping-rules', function(req, res) {
 	try {
 		logger.info("Updating email grouping rules");
-		config.emailGroupingRules = req.body;
+		config.emailGroupingRules = normalizeGroupingRulesConfig(req.body);
 		helpers_fileio.saveJsonToFile(config, PATH_TO_CONFIG).then(function() {
 			res.sendStatus(200);
 		}, function(err) {
@@ -848,7 +704,11 @@ app.post('/api/email-grouping-rules', function(req, res) {
  */
 app.get('/api/threads/grouped', async function(req, res) {
 	try {
-		const allThreads = await getNMostRelevantThreads(100);
+		const allThreads = await threadService.getMostRelevantThreads({
+			hideUntils,
+			lastRefresheds,
+			limit: 100,
+		});
 		const groupingRules = getEmailGroupingRules(config);
 		const orderedGroupThreads = groupThreads({
 			threads: allThreads,
@@ -867,8 +727,11 @@ app.get('/api/threads/grouped', async function(req, res) {
 app.delete(/^\/api\/threads\/([a-z0-9]+)$/, function(req, res) {
 	const threadId = req.params[0];
 	logger.info(util.format("Receive request to delete thread %s.", threadId));
-	deleteThread(threadId, function(isSuccessful) {
+	threadRepository.deleteThread(threadId).then((isSuccessful) => {
 		res.sendStatus(isSuccessful ? 200 : 500);
+	}).catch((err) => {
+		logger.error(util.inspect(err));
+		res.sendStatus(500);
 	});
 });
 
@@ -900,85 +763,10 @@ app.put(/^\/api\/threads\/([a-z0-9]+)\/hideUntil$/, function(req, res) {
 	return;
 });
 
-function loadRelevantDataFromMessage(objMessage) {
-	const originalBody = objMessage.bestBody();
-	const attachments = objMessage.getAttachments();
-	const plainTextBody = sanitizeHtml(originalBody, {
-		allowedTags: [],
-		allowedAttributes: {}
-	});
-	const wordCount = plainTextBody.split(' ').length;
-	const timeToReadSeconds = wordCount * 60 / 200;
-	const sanitizedBody = sanitizeHtml(originalBody, {
-		transformTags: {
-			'body': 'div',
-			'a': function(tagName, attribs) {
-				//All links in messages should open in a new tab.
-				if (attribs.href) {
-					attribs.target = '_blank';
-				}
-				return {
-					tagName: 'a',
-					attribs: attribs
-				};
-			},
-			'*': function(tagName, attribs) {
-				if ((typeof attribs.style) === 'string') {
-					attribs.style = attribs.style.replace(/position: *absolute;/, '');
-					return {
-						tagName: tagName,
-						attribs: attribs
-					};
-				} else {
-					return {
-						tagName: tagName,
-						attribs: attribs
-					};
-				}
-			}
-		},
-		allowedTags: [
-			"a", "area", "b", "blockquote", "br", "caption", "center", "code",
-			"div", "em",
-			"h1", "h2", "h3", "h4", "h5", "h6",
-			"hr", "i", "img", "li", "map", "nl", "ol", "p", "pre", 'span',
-			"strike", "strong", "table", "tbody", "td", "th", "thead", "tr", "ul"],
-		allowedAttributes: {
-			a: [ 'href', 'name', 'style', 'target' ],
-			area: ['href', 'shape', 'coords', 'style', 'target'],
-			div: ['style'],
-			img: [ 'alt', 'border', 'height', 'src', 'style', 'usemap', 'width' ],
-			map: ['name'],
-			p: ['style'],
-			span: ['style'],
-			table: ['align', 'bgcolor', 'border', 'cellpadding', 'cellspacing', 'style', 'width'],
-			td: ['align', 'background', 'bgcolor', 'colspan', 'height', 'rowspan', 'style', 'valign', 'width'],
-		},
-		nonTextTags: [ 'style', 'script', 'textarea', 'title' ]
-	});
-	return {
-		deleted: objMessage.labelIds().indexOf('TRASH') !== -1,
-		messageId: objMessage.id(),
-		from: [objMessage.sender()], //TODO: Fix contract so this is no longer an array
-		to: objMessage.recipients(),
-		date: objMessage.timestamp(),
-		body: {
-			original: originalBody,
-			sanitized: sanitizedBody,
-			plainText: plainTextBody,
-		},
-		wordcount: plainTextBody.split(' ').length,
-		timeToReadSeconds: timeToReadSeconds,
-		attachments: attachments
-	};
-}
-
 app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, function(req, res) {
 	const threadId = req.params[0];
-	models_thread.get(threadId).then(function(thread) {
-		res.status(200).send({
-			messages: thread.messages().map(loadRelevantDataFromMessage)
-		});
+	threadService.getThreadMessages(threadId).then(function(result) {
+		res.status(200).send(result.data);
 	}, function(err) {
 		if (err.code === 'ENOENT') {
 			res.sendStatus(404);
@@ -998,21 +786,21 @@ app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/, func
 		res.status(400).send({ humanErrorMessage: "invalid wordcount" });
 		return;
 	}
-	models_thread.get(threadId).then(async function(thread) {
-		const message = thread.message(messageId);
-		if (message) {
-			message._data.fullBodyWordCount = parseInt(wordcount);
-			try {
-				await helpers_fileio.saveJsonToFile(thread._data, 'data/threads/' + threadId);
-				res.sendStatus(200);
-			} catch (err) {
-				logger.error(`Failed to save thread data with word count: ${err}`);
-				res.sendStatus(500);
-			}
-		} else {
+	threadService.updateMessageWordCount({
+		threadId,
+		messageId,
+		wordcount,
+	}).then(function(result) {
+		if (result.status === 404) {
 			res.sendStatus(404);
+			return;
 		}
+		res.sendStatus(200);
 	}, function(err) {
+		if (err.code === 'INVALID_CONTRACT') {
+			res.status(400).send({humanErrorMessage: err.message});
+			return;
+		}
 		if (err.code === 'ENOENT') {
 			res.sendStatus(404);
 		} else {
@@ -1025,13 +813,12 @@ app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/, func
 app.get(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)$/, function(req, res) {
 	const threadId = req.params[0];
 	const messageId = req.params[1];
-	models_thread.get(threadId).then(function(thread) {
-		const matchingMessage = thread.message(messageId);
-		if (matchingMessage) {
-			res.status(200).send(loadRelevantDataFromMessage(matchingMessage));
-		} else {
+	threadService.getThreadMessage(threadId, messageId).then(function(result) {
+		if (result.status === 404) {
 			res.sendStatus(404);
+			return;
 		}
+		res.status(200).send(result.data);
 	}, function(err) {
 		if (err.code === 'ENOENT') {
 			res.sendStatus(404);

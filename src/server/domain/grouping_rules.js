@@ -1,8 +1,7 @@
+import { normalizeGroupingRulesConfig } from '../validation/contracts.js';
+
 export function getEmailGroupingRules(config) {
-	if (!config.emailGroupingRules) {
-		return {rules: []};
-	}
-	return config.emailGroupingRules;
+	return normalizeGroupingRulesConfig(config.emailGroupingRules);
 }
 
 export function threadMatchesRule(thread, rule) {
