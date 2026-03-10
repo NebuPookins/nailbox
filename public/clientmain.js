@@ -474,39 +474,22 @@ $(function() {
 	}
 
 	function ensureGroupingRulesIsland() {
-		var mountGroupingRules;
+		var frontendApi;
 		if (groupingRulesIsland) {
 			return {
 				instance: groupingRulesIsland,
 				wasCreated: false
 			};
 		}
-		if (!$groupingRulesRoot.length || !window.NailboxGroupingRules) {
+		frontendApi = window.NailboxFrontend;
+		if (!$groupingRulesRoot.length || !frontendApi) {
 			return null;
 		}
-		mountGroupingRules = window.NailboxGroupingRules.mount || window.NailboxGroupingRules.mountGroupingRulesIsland;
-		if (typeof mountGroupingRules !== 'function') {
+		if (typeof frontendApi.mountGroupingRulesSettings !== 'function') {
 			return null;
 		}
-		groupingRulesIsland = mountGroupingRules({
+		groupingRulesIsland = frontendApi.mountGroupingRulesSettings({
 			container: $groupingRulesRoot.get(0),
-			api: {
-				loadRules: function() {
-					return $.ajax({
-						url: '/api/email-grouping-rules',
-						method: 'GET',
-						dataType: 'json'
-					});
-				},
-				saveRules: function(payload) {
-					return $.ajax({
-						url: '/api/email-grouping-rules',
-						method: 'POST',
-						contentType: 'application/json',
-						data: JSON.stringify(payload)
-					});
-				}
-			},
 			notify: createGroupingRulesNotify(),
 			onSaved: function() {
 				$settingsModal.modal('hide');
