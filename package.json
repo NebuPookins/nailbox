@@ -13,7 +13,9 @@
   "scripts": {
     "start": "node main.mjs",
     "dev": "node --watch main.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "build:frontend": "esbuild src/frontend/grouping_rules_island.jsx --bundle --format=iife --global-name=NailboxGroupingRules --outfile=public/grouping_rules_island.js",
+    "dev:frontend": "npm run build:frontend -- --watch"
   },
   "author": "Nebu Pookins <nebupookins@gmail.com>",
   "private": true,
@@ -36,6 +38,9 @@
     "sanitize-html": "^2.7.0"
   },
   "devDependencies": {
+    "esbuild": "^0.25.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "typescript": "^5.8.2"
   }
 }
