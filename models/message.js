@@ -1,13 +1,13 @@
-(() => {
-	'use strict';
+import _ from 'lodash';
+import assert from 'assert';
+import htmlEntities from 'html-entities';
+import nebulog from 'nebulog';
+import mimelib from 'mimelib';
+import util from 'util';
 
-	const _ = require('lodash');
-	const assert = require('assert');
-	const Entities = require('html-entities').AllHtmlEntities;
-	const entities = new Entities();
-	const logger = require('nebulog').make({filename: __filename, level: 'debug'});
-	const mimelib = require('mimelib');
-	const util = require('util');
+const Entities = htmlEntities.AllHtmlEntities;
+const entities = new Entities();
+const logger = nebulog.make({filename: 'models/message.js', level: 'debug'});
 
 	/**
 	 * Given an input like:
@@ -47,7 +47,7 @@
 			[{name: 'aa@gmail.com', email: 'aa@gmail.com'}]);
 	})();
 
-	function Message(data) {
+function Message(data) {
 		this._data = data;
 		assert(this._data.id, util.inspect(data));
 		assert(this._data.payload, util.inspect(data));
@@ -400,5 +400,8 @@
 		return this._data.internalDate;
 	};
 
-	exports.Message = Message;
-})();
+export { Message };
+
+export default {
+	Message,
+};

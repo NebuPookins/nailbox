@@ -13,7 +13,6 @@ import nebulog from 'nebulog';
 const logger = nebulog.make({filename: 'main.mjs', level: 'debug'});
 import nodeFs from 'node-fs';
 import nodeFsPromises from 'node:fs/promises';
-import q from 'q';
 import _ from 'lodash';
 import sanitizeHtml from 'sanitize-html';
 import htmlEntities from 'html-entities';
@@ -41,6 +40,10 @@ import {
 	gmailApiRequest,
 	isGoogleOAuthConfigured,
 } from './services/google_oauth.mjs';
+import {
+	getEmailGroupingRules,
+	groupThreads,
+} from './src/server/domain/grouping_rules.js';
 
 /*
  * Set up graceful exit, because otherwise there's a race condition
@@ -205,7 +208,7 @@ app.post('/setup', function(req, res) {
 	}, function(err) {
 		logger.error(util.format("Failed to save config file: %s", util.inspect(err)));
 		res.sendStatus(500);
-	}).done();
+	});
 });
 
 app.get('/api/clientId', function(req, res) {
@@ -295,7 +298,7 @@ app.post('/auth/google/disconnect', function(req, res) {
 	}, function(err) {
 		logger.error(util.format('Failed to clear Google OAuth config: %s', util.inspect(err)));
 		res.sendStatus(500);
-	}).done();
+	});
 });
 
 /**
@@ -369,14 +372,16 @@ async function saveThreadPayload(threadPayload) {
 			}
 			await new Promise((resolve, reject) => {
 				nodeFs.writeFile(filePath, JSON.stringify(newData), function(err) {
-					if (err) {
-						logger.error(util.inspect(err));
-						reject(err);
-					} else {
-						lastRefresheds.markRefreshed(threadId).done();
-						resolve();
-					}
-				});
+						if (err) {
+							logger.error(util.inspect(err));
+							reject(err);
+						} else {
+							lastRefresheds.markRefreshed(threadId).catch((saveError) => {
+								logger.error(util.format('Failed to save last refreshed for %s: %s', threadId, util.inspect(saveError)));
+							});
+							resolve();
+						}
+					});
 			});
 			return {status: 200};
 		}
@@ -804,38 +809,6 @@ app.get('/api/threads', async function(req, res) {
 });
 
 /**
- * Get email grouping rules from config
- */
-function getEmailGroupingRules(config) {
-	if (!config.emailGroupingRules) {
-		return { rules: [] };
-	}
-	return config.emailGroupingRules;
-}
-
-/**
- * Check if a thread matches a grouping rule
- */
-function threadMatchesRule(thread, rule) {
-	return rule.conditions.some(condition => {
-		switch (condition.type) {
-			case 'sender_name':
-				return thread.senders.some(sender => 
-					sender.name && sender.name.includes(condition.value)
-				);
-			case 'sender_email':
-				return thread.senders.some(sender => 
-					sender.email && sender.email.includes(condition.value)
-				);
-			case 'subject':
-				return thread.subject && thread.subject.includes(condition.value);
-			default:
-				return false;
-		}
-	});
-}
-
-/**
  * Get email grouping rules
  */
 app.get('/api/email-grouping-rules', function(req, res) {
@@ -862,7 +835,7 @@ app.post('/api/email-grouping-rules', function(req, res) {
 		}, function(err) {
 			logger.error(util.format("Failed to save config file: %s", util.inspect(err)));
 			res.sendStatus(500);
-		}).done();
+		});
 	} catch (err) {
 		logger.error(util.inspect(err));
 		res.sendStatus(500);
@@ -876,107 +849,11 @@ app.post('/api/email-grouping-rules', function(req, res) {
 app.get('/api/threads/grouped', async function(req, res) {
 	try {
 		const allThreads = await getNMostRelevantThreads(100);
-		var groupedThreads = {};
-		const whenIHaveTimeSuffix = " - When I Have Time";
-		
-		// Get grouping rules from config
 		const groupingRules = getEmailGroupingRules(config);
-
-		function addToGroupedThreads(group, thread) {
-			const key = (thread.visibility === 'when-i-have-time') ? `${group}${whenIHaveTimeSuffix}` : group;
-			if (!Array.isArray(groupedThreads[key])) {
-				groupedThreads[key] = [];
-			}
-			groupedThreads[key].push(thread);
-		}
-
-		allThreads.forEach((thread) => {
-			var foundAGroup = false;
-			for (let rule of groupingRules.rules) {
-				if (threadMatchesRule(thread, rule)) {
-					addToGroupedThreads(rule.name, thread);
-					foundAGroup = true;
-					break;
-				}
-			}
-			if (!foundAGroup) {
-				addToGroupedThreads("Others", thread);
-			}
-		});
-
-		var orderedGroupThreads = [];
-		Object.keys(groupedThreads).forEach((group) => {
-			// Find the rule that created this group to get its sortType
-			let sortType = "mostRecent"; // default
-			for (let rule of groupingRules.rules) {
-				if (rule.name === group || group.endsWith(whenIHaveTimeSuffix) && rule.name === group.replace(whenIHaveTimeSuffix, "")) {
-					sortType = rule.sortType || "mostRecent";
-					break;
-				}
-			}
-			
-			// Sort threads within the group based on sortType
-			let sortedThreads = [...groupedThreads[group]];
-			if (sortType === "shortest") {
-				sortedThreads.sort((a, b) => {
-					// Sort by total word count (ascending - shortest first)
-					return a.totalTimeToReadSeconds - b.totalTimeToReadSeconds;
-				});
-			} else {
-				// Default "mostRecent" sorting
-				const hideUntilComparator = hideUntils.comparator();
-				sortedThreads.sort(hideUntilComparator);
-			}
-			
-			orderedGroupThreads.push({
-				label: group,
-				threads: sortedThreads,
-				sortType: sortType
-			});
-		});
-
-		/*
-			* Sort groups by their "newest" message; threads is guaranteed non-empty
-			* from previous step.
-			*/
-		const hideUntilComparator = hideUntils.comparator();
-		orderedGroupThreads.sort((groupA, groupB) => {
-			return hideUntilComparator(groupA.threads[0], groupB.threads[0]);
-		});
-		
-		// Create priority map from rules
-		const groupPriority = {};
-		groupingRules.rules.forEach(rule => {
-			groupPriority[rule.name] = rule.priority;
-		});
-		
-		orderedGroupThreads.sort((groupA, groupB) => {
-			const BFirst = 1;
-			const AFirst = -1;
-			let labelA = groupA.label.replace(whenIHaveTimeSuffix, "");
-			let labelB = groupB.label.replace(whenIHaveTimeSuffix, "");
-			let whenIHaveTimeA = labelA != groupA.label;
-			let whenIHaveTimeB = labelB != groupB.label;
-			if (whenIHaveTimeA && !whenIHaveTimeB) {
-				return BFirst;
-			}
-			if (!whenIHaveTimeA && whenIHaveTimeB) {
-				return AFirst;
-			}
-			//assert whenIHaveTimeA == whenIHaveTimeB;
-			if (groupPriority[labelA]) {
-				if (groupPriority[labelB]) {
-					return groupPriority[labelA] - groupPriority[labelB];
-				} else {
-					return BFirst;
-				}
-			} else {
-				if (groupPriority[labelB]) {
-					return AFirst;
-				} else {
-					return 0;
-				}
-			}
+		const orderedGroupThreads = groupThreads({
+			threads: allThreads,
+			groupingRules,
+			hideUntilComparator: hideUntils.comparator(),
 		});
 		res.status(200);
 		res.type('application/json');
@@ -1109,7 +986,7 @@ app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, function(req, res) {
 			logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
 			res.sendStatus(500);
 		}
-	}).done();
+	});
 });
 
 
@@ -1142,7 +1019,7 @@ app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/, func
 			logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
 			res.sendStatus(500);
 		}
-	}).done();
+	});
 });
 
 app.get(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)$/, function(req, res) {
@@ -1162,7 +1039,7 @@ app.get(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)$/, function(req, re
 			logger.error(util.format("Failed to read thread data: %s", util.inspect(err)));
 			res.sendStatus(500);
 		}
-	}).done();
+	});
 });
 
 /**
@@ -1189,7 +1066,7 @@ app.post('/api/rfc2822', (req, res) => {
 				message: util.format("Could not find message %s in thread %s", req.body.inReplyTo, req.body.threadId)
 			};
 		}
-		return q.Promise((resolve, reject) => {
+		return new Promise((resolve, reject) => {
 			marked.parse(bodyPlusSignature, {
 				gfm: true,
 				tables: true, //TODO: This no longer works as of marked 4?
@@ -1271,7 +1148,7 @@ app.post('/api/rfc2822', (req, res) => {
 				}
 			});
 		});
-	}).spread((thread, htmlizedMarkdown) => {
+	}).then(([thread, htmlizedMarkdown]) => {
 		const mostRecentMessage = thread.mostRecentMessageSatisfying(() => true);
 		const replyTo = mostRecentMessage.replyTo();
 		if (replyTo == null) {
@@ -1300,7 +1177,7 @@ app.post('/api/rfc2822', (req, res) => {
 				'<style type="test/css">blockquote {padding: 10px 20px;margin: 0 0 20px; border-left: 5px solid #eee;}</style>'+
 				'</head><body>%s</body></html>', htmlizedMarkdown)
 		});
-		return q.Promise((resolve, reject) => {
+		return new Promise((resolve, reject) => {
 			mail.build((err, message) => {
 				if (err) {
 					logger.error(util.format("Failed to compose mail %j", err));
@@ -1321,7 +1198,7 @@ app.post('/api/rfc2822', (req, res) => {
 			logger.error(util.inspect(failResp));
 			res.sendStatus(500);
 		}
-	}).done();
+	});
 });
 
 app.use(function(req, res) {

@@ -1,6 +1,7 @@
 {
   "name": "nailbox",
   "version": "0.0.1",
+  "type": "module",
   "description": "Mailbox reimplementation in NodeJS",
   "keywords": [
     "Mailbox",
@@ -10,7 +11,9 @@
     "email": "nebupookins@gmail.com"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node main.mjs",
+    "dev": "node --watch main.mjs",
+    "test": "node --test"
   },
   "author": "Nebu Pookins <nebupookins@gmail.com>",
   "private": true,
@@ -32,5 +35,7 @@
     "q": "^1.4.1",
     "sanitize-html": "^2.7.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
 }
