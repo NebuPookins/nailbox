@@ -5,6 +5,11 @@ import _ from 'lodash';
 import threadRepository from '../repositories/thread_repository.js';
 import { buildRfc2822Message } from '../services/rfc2822_service.js';
 import { refreshSingleThreadFromGmail, syncRecentThreadsFromGmail } from '../services/gmail_sync_service.js';
+import {
+	normalizeGmailMoveThreadDto,
+	normalizeGmailSendMessageDto,
+	normalizeRfc2822RequestDto,
+} from '../validation/contracts.js';
 
 export default function registerGmailRoutes(app, dependencies) {
 	const {lastRefresheds, logger, withGmailApi} = dependencies;
@@ -130,18 +135,15 @@ export default function registerGmailRoutes(app, dependencies) {
 
 	app.post(/^\/api\/gmail\/threads\/([a-z0-9]+)\/move$/, async function(req, res) {
 		const threadId = req.params[0];
-		if (typeof req.body.labelId !== 'string' || req.body.labelId.length === 0) {
-			res.status(400).send({humanErrorMessage: 'invalid labelId'});
-			return;
-		}
 		try {
+			const { labelId } = normalizeGmailMoveThreadDto(req.body);
 			const gmailResponse = await withGmailApi(res, async (gmailRequest) => {
 				return gmailRequest({
 					method: 'POST',
 					path: `/threads/${threadId}/modify`,
 					json: {
 						removeLabelIds: ['INBOX', 'UNREAD'],
-						addLabelIds: [req.body.labelId],
+						addLabelIds: [labelId],
 					},
 				});
 			});
@@ -150,25 +152,23 @@ export default function registerGmailRoutes(app, dependencies) {
 			}
 			res.status(200).send(gmailResponse);
 		} catch (error) {
+			if (error.code === 'INVALID_CONTRACT') {
+				res.status(400).send({humanErrorMessage: error.message});
+				return;
+			}
 			logger.error(util.inspect(error));
 			res.sendStatus(500);
 		}
 	});
 
 	app.post('/api/gmail/messages/send', async function(req, res) {
-		if (typeof req.body.threadId !== 'string' || typeof req.body.raw !== 'string') {
-			res.status(400).send({humanErrorMessage: 'invalid message payload'});
-			return;
-		}
 		try {
+			const messagePayload = normalizeGmailSendMessageDto(req.body);
 			const gmailResponse = await withGmailApi(res, async (gmailRequest) => {
 				return gmailRequest({
 					method: 'POST',
 					path: '/messages/send',
-					json: {
-						threadId: req.body.threadId,
-						raw: req.body.raw,
-					},
+					json: messagePayload,
 				});
 			});
 			if (gmailResponse == null) {
@@ -176,6 +176,10 @@ export default function registerGmailRoutes(app, dependencies) {
 			}
 			res.status(200).send(gmailResponse);
 		} catch (error) {
+			if (error.code === 'INVALID_CONTRACT') {
+				res.status(400).send({humanErrorMessage: error.message});
+				return;
+			}
 			logger.error(util.inspect(error));
 			res.sendStatus(500);
 		}
@@ -201,24 +205,22 @@ export default function registerGmailRoutes(app, dependencies) {
 	});
 
 	app.post('/api/rfc2822', async function(req, res) {
-		const missingFields = ['threadId', 'body', 'inReplyTo', 'myEmail'].filter((requiredField) => {
-			return !req.body[requiredField];
-		});
-		if (missingFields.length > 0) {
-			res.status(400).send(util.format('Must provide %j', missingFields));
-			return;
-		}
-		logger.info(util.format('/api/rfc2822 received for thread %s', req.body.threadId));
 		try {
+			const requestDto = normalizeRfc2822RequestDto(req.body);
+			logger.info(util.format('/api/rfc2822 received for thread %s', requestDto.threadId));
 			const encodedMessage = await buildRfc2822Message({
-				threadId: req.body.threadId,
-				body: req.body.body,
-				inReplyTo: req.body.inReplyTo,
-				myEmail: req.body.myEmail,
+				threadId: requestDto.threadId,
+				body: requestDto.body,
+				inReplyTo: requestDto.inReplyTo,
+				myEmail: requestDto.myEmail,
 				logger,
 			});
 			res.status(200).send(encodedMessage);
 		} catch (error) {
+			if (error.code === 'INVALID_CONTRACT') {
+				res.status(400).send({humanErrorMessage: error.message});
+				return;
+			}
 			if (error.status && error.message) {
 				res.status(error.status).send(error.message);
 				return;

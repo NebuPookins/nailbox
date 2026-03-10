@@ -15,3 +15,19 @@ export interface GoogleAuthStatusDto {
 	emailAddress: string | null;
 	scopes: string[];
 }
+
+export interface GmailMoveThreadDto {
+	labelId: string;
+}
+
+export interface GmailSendMessageDto {
+	threadId: string;
+	raw: string;
+}
+
+export interface Rfc2822RequestDto {
+	threadId: string;
+	body: string;
+	inReplyTo: string;
+	myEmail: string;
+}
