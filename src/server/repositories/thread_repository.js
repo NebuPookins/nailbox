@@ -9,48 +9,68 @@ import { validatePersistedThread } from '../validation/contracts.js';
 const logger = nebulog.make({filename: 'src/server/repositories/thread_repository.js', level: 'info'});
 const THREADS_DIRECTORY = 'data/threads';
 
-export async function deleteThread(threadId) {
-	const pathToDelete = `${THREADS_DIRECTORY}/${threadId}`;
-	try {
-		await rm(pathToDelete);
-		logger.info(`Deleted file ${pathToDelete}`);
-		return true;
-	} catch (error) {
-		if (error.code === 'ENOENT') {
-			logger.info(`File ${pathToDelete} already deleted.`);
+/**
+ * @param {{
+ *  fileioImpl?: typeof fileio,
+ *  threadModelModule?: typeof threadModel,
+ *  threadsDirectory?: string,
+ * }} [dependencies]
+ * @returns {import('../types/thread').ThreadRepository}
+ */
+export function createThreadRepository(dependencies = {}) {
+	const {
+		fileioImpl = fileio,
+		threadModelModule = threadModel,
+		threadsDirectory = THREADS_DIRECTORY,
+	} = dependencies;
+
+	async function deleteThread(threadId) {
+		const pathToDelete = `${threadsDirectory}/${threadId}`;
+		try {
+			await rm(pathToDelete);
+			logger.info(`Deleted file ${pathToDelete}`);
 			return true;
+		} catch (error) {
+			if (error.code === 'ENOENT') {
+				logger.info(`File ${pathToDelete} already deleted.`);
+				return true;
+			}
+			logger.error(`Error deleting ${pathToDelete}. Code: ${error.code}. Stack: ${error.stack}`);
+			return false;
 		}
-		logger.error(`Error deleting ${pathToDelete}. Code: ${error.code}. Stack: ${error.stack}`);
-		return false;
 	}
-}
 
-export async function listThreadIds() {
-	return readdir(THREADS_DIRECTORY);
-}
-
-export async function readThread(threadId) {
-	const threadJson = await readThreadJson(threadId);
-	return new threadModel.Thread(threadJson);
-}
-
-export async function readThreadJson(threadId) {
-	const threadJson = await fileio.readJsonFromOptionalFile(`${THREADS_DIRECTORY}/${threadId}`);
-	if (!threadJson.id && !threadJson.messages) {
-		return threadJson;
+	async function listThreadIds() {
+		return readdir(threadsDirectory);
 	}
-	return validatePersistedThread(threadJson);
+
+	async function readThread(threadId) {
+		const threadJson = await readThreadJson(threadId);
+		return new threadModelModule.Thread(validatePersistedThread(threadJson));
+	}
+
+	async function readThreadJson(threadId) {
+		const threadJson = await fileioImpl.readJsonFromOptionalFile(`${threadsDirectory}/${threadId}`);
+		if (!threadJson.id && !threadJson.messages) {
+			return threadJson;
+		}
+		return validatePersistedThread(threadJson);
+	}
+
+	async function saveThreadJson(threadId, threadPayload) {
+		validatePersistedThread(threadPayload);
+		return fileioImpl.saveJsonToFile(threadPayload, `${threadsDirectory}/${threadId}`);
+	}
+
+	return {
+		deleteThread,
+		listThreadIds,
+		readThread,
+		readThreadJson,
+		saveThreadJson,
+	};
 }
 
-export async function saveThreadJson(threadId, threadPayload) {
-	validatePersistedThread(threadPayload);
-	return fileio.saveJsonToFile(threadPayload, `${THREADS_DIRECTORY}/${threadId}`);
-}
+const threadRepository = createThreadRepository();
 
-export default {
-	deleteThread,
-	listThreadIds,
-	readThread,
-	readThreadJson,
-	saveThreadJson,
-};
+export default threadRepository;

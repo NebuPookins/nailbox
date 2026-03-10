@@ -261,6 +261,25 @@ $(function() {
 			method: 'POST',
 			dataType: 'json'
 		}).then(function(resp) {
+			var failedResults = Array.isArray(resp.results) ? resp.results.filter(function(result) {
+				return result.status >= 400;
+			}) : [];
+			if (failedResults.length > 0) {
+				var displayedThreadIds = failedResults.slice(0, 5).map(function(result) {
+					return result.threadId;
+				});
+				var moreCount = failedResults.length - displayedThreadIds.length;
+				var details = displayedThreadIds.join(', ');
+				if (moreCount > 0) {
+					details += ' +' + moreCount + ' more';
+				}
+				updateMessenger.update({
+					type: 'error',
+					message: 'Synced ' + resp.syncedThreadCount + ' Gmail threads, but ' +
+						failedResults.length + ' failed: ' + details + '.'
+				});
+				return resp;
+			}
 			updateMessenger.update({
 				type: 'success',
 				message: 'Synced ' + resp.syncedThreadCount + ' Gmail threads.'

@@ -50,15 +50,23 @@ export async function syncRecentThreadsFromGmail({
 	]);
 	const uniqueThreadIds = _.uniq(inboxThreadIds.concat(trashThreadIds));
 	const threadSaveResults = await Promise.all(uniqueThreadIds.map(async (threadId) => {
-		const saveResult = await refreshSingleThreadFromGmail({
-			gmailRequest,
-			threadId,
-			lastRefresheds,
-		});
-		return {
-			threadId,
-			status: saveResult.status,
-		};
+		try {
+			const saveResult = await refreshSingleThreadFromGmail({
+				gmailRequest,
+				threadId,
+				lastRefresheds,
+			});
+			return {
+				threadId,
+				status: saveResult.status,
+			};
+		} catch (error) {
+			return {
+				threadId,
+				status: 500,
+				error: error.message,
+			};
+		}
 	}));
 	return {
 		threadIds: uniqueThreadIds,
