@@ -1,6 +1,7 @@
 import util from 'util';
 
 import { getGoogleAuthStatus, getGoogleOAuthConfig, isGoogleOAuthConfigured } from '../../../services/google_oauth.mjs';
+import { normalizeGoogleOAuthSetupDto } from '../validation/contracts.js';
 
 function getDefaultRedirectUri(req) {
 	return `${req.protocol}://${req.get('host')}/auth/google/callback`;
@@ -33,17 +34,24 @@ export default function registerSetupRoutes(app, dependencies) {
 	});
 
 	app.post('/setup', async function(req, res) {
-		const googleOAuth = getGoogleOAuthConfig(config);
-		googleOAuth.clientId = (req.body.clientId || '').trim();
-		googleOAuth.clientSecret = (req.body.clientSecret || '').trim();
-		googleOAuth.redirectUri = (req.body.redirectUri || getDefaultRedirectUri(req)).trim();
-		logger.info('Updating Google OAuth configuration.');
 		try {
+			const googleOAuthSetup = normalizeGoogleOAuthSetupDto(req.body, getDefaultRedirectUri(req));
+			const googleOAuth = getGoogleOAuthConfig(config);
+			googleOAuth.clientId = googleOAuthSetup.clientId;
+			googleOAuth.clientSecret = googleOAuthSetup.clientSecret;
+			googleOAuth.redirectUri = googleOAuthSetup.redirectUri;
+			logger.info('Updating Google OAuth configuration.');
 			await saveConfig();
 			res.render('setup', getSetupViewModel(config, req, {
 				successMessage: 'Google OAuth configuration saved.',
 			}));
 		} catch (error) {
+			if (error.code === 'INVALID_CONTRACT') {
+				res.status(400).render('setup', getSetupViewModel(config, req, {
+					errorMessage: error.message,
+				}));
+				return;
+			}
 			logger.error(util.format('Failed to save config file: %s', util.inspect(error)));
 			res.sendStatus(500);
 		}

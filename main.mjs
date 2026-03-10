@@ -16,14 +16,13 @@ import {
 } from './services/google_oauth.mjs';
 import registerAuthRoutes from './src/server/routes/auth_routes.js';
 import registerGmailRoutes from './src/server/routes/gmail_routes.js';
+import configRepository from './src/server/repositories/config_repository.js';
 import registerSetupRoutes from './src/server/routes/setup_routes.js';
 import registerThreadRoutes from './src/server/routes/thread_routes.js';
-import { normalizeAppConfig } from './src/server/validation/contracts.js';
 
 const DEFAULT_CONFIG = {
 	port: 3000,
 };
-const PATH_TO_CONFIG = 'data/config.json';
 
 /*
  * Set up graceful exit, because otherwise there's a race condition
@@ -45,7 +44,7 @@ function readConfigWithDefault(config, strFieldName) {
 }
 
 function saveConfig() {
-	return helpers_fileio.saveJsonToFile(config, PATH_TO_CONFIG);
+	return configRepository.saveConfig(config);
 }
 
 function makeGoogleAuthErrorResponse(res, code, message, status = 401) {
@@ -92,10 +91,9 @@ async function withGmailApi(res, fnCallback) {
 logger.info("Checking directory structure...");
 await helpers_fileio.ensureDirectoryExists('data/threads');
 logger.info("Directory structure looks fine.");
-const rawConfig = await helpers_fileio.readJsonFromOptionalFile(PATH_TO_CONFIG);
 const hideUntils = await models_hideUntils.load();
 const lastRefresheds = await models_lastRefreshed.load();
-const config = normalizeAppConfig(rawConfig);
+const config = await configRepository.readConfig();
 
 const app = express();
 app.set('views', path.join(process.cwd(), 'views'));
@@ -115,7 +113,7 @@ const routeDependencies = {
 	hideUntils,
 	lastRefresheds,
 	logger,
-	pathToConfig: PATH_TO_CONFIG,
+	configRepository,
 	saveConfig,
 	withGmailApi,
 };

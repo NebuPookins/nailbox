@@ -12,11 +12,10 @@ import {
 export default function registerThreadRoutes(app, dependencies) {
 	const {
 		config,
+		configRepository,
 		hideUntils,
-		helpersFileio,
 		lastRefresheds,
 		logger,
-		pathToConfig,
 	} = dependencies;
 
 	app.post('/api/threads', async function(req, res) {
@@ -64,7 +63,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		try {
 			logger.info('Updating email grouping rules');
 			config.emailGroupingRules = normalizeGroupingRulesConfig(req.body);
-			await helpersFileio.saveJsonToFile(config, pathToConfig);
+			await configRepository.saveConfig(config);
 			res.sendStatus(200);
 		} catch (error) {
 			if (error.code === 'INVALID_CONTRACT') {

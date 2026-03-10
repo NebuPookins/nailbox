@@ -117,6 +117,30 @@ export function normalizeAppConfig(value) {
 	return normalized;
 }
 
+export function normalizeGoogleOAuthSetupDto(value, defaultRedirectUri) {
+	assertObject(value, 'googleOAuthSetup');
+	const clientId = typeof value.clientId === 'string' ? value.clientId.trim() : '';
+	const clientSecret = typeof value.clientSecret === 'string' ? value.clientSecret.trim() : '';
+	const fallbackRedirectUri = typeof defaultRedirectUri === 'string' ? defaultRedirectUri : '';
+	const redirectUri = typeof value.redirectUri === 'string'
+		? value.redirectUri.trim()
+		: fallbackRedirectUri.trim();
+	if (clientId.length === 0) {
+		throw makeValidationError('googleOAuthSetup.clientId is required');
+	}
+	if (clientSecret.length === 0) {
+		throw makeValidationError('googleOAuthSetup.clientSecret is required');
+	}
+	if (redirectUri.length === 0) {
+		throw makeValidationError('googleOAuthSetup.redirectUri is required');
+	}
+	return {
+		clientId,
+		clientSecret,
+		redirectUri,
+	};
+}
+
 function normalizePersistedMessage(message, index) {
 	assertObject(message, `thread.messages[${index}]`);
 	assertString(message.id, `thread.messages[${index}].id`);
@@ -271,6 +295,53 @@ export function normalizeWordcountUpdateDto(value) {
 		throw makeValidationError('wordcountUpdate.wordcount must be numeric');
 	}
 	return {wordcount};
+}
+
+export function normalizeGmailMoveThreadDto(value) {
+	assertObject(value, 'gmailMoveThread');
+	assertString(value.labelId, 'gmailMoveThread.labelId');
+	if (value.labelId.length === 0) {
+		throw makeValidationError('gmailMoveThread.labelId is required');
+	}
+	return {
+		labelId: value.labelId,
+	};
+}
+
+export function normalizeGmailSendMessageDto(value) {
+	assertObject(value, 'gmailSendMessage');
+	assertString(value.threadId, 'gmailSendMessage.threadId');
+	assertString(value.raw, 'gmailSendMessage.raw');
+	if (value.threadId.length === 0) {
+		throw makeValidationError('gmailSendMessage.threadId is required');
+	}
+	if (value.raw.length === 0) {
+		throw makeValidationError('gmailSendMessage.raw is required');
+	}
+	return {
+		threadId: value.threadId,
+		raw: value.raw,
+	};
+}
+
+export function normalizeRfc2822RequestDto(value) {
+	assertObject(value, 'rfc2822Request');
+	assertString(value.threadId, 'rfc2822Request.threadId');
+	assertString(value.body, 'rfc2822Request.body');
+	assertString(value.inReplyTo, 'rfc2822Request.inReplyTo');
+	assertString(value.myEmail, 'rfc2822Request.myEmail');
+	const normalized = {
+		threadId: value.threadId,
+		body: value.body,
+		inReplyTo: value.inReplyTo,
+		myEmail: value.myEmail,
+	};
+	Object.entries(normalized).forEach(([key, fieldValue]) => {
+		if (fieldValue.length === 0) {
+			throw makeValidationError(`rfc2822Request.${key} is required`);
+		}
+	});
+	return normalized;
 }
 
 export { makeValidationError };

@@ -7,3 +7,14 @@ export interface AppConfig {
 	googleOAuth?: GoogleOAuthConfig;
 	emailGroupingRules?: GroupingRulesConfig;
 }
+
+export interface GoogleOAuthSetupDto {
+	clientId: string;
+	clientSecret: string;
+	redirectUri: string;
+}
+
+export interface ConfigRepository {
+	readConfig(): Promise<AppConfig>;
+	saveConfig(config: AppConfig): Promise<AppConfig>;
+}

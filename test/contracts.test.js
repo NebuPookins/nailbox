@@ -4,8 +4,12 @@ import assert from 'node:assert/strict';
 import {
 	makeValidationError,
 	normalizeAppConfig,
+	normalizeGmailMoveThreadDto,
+	normalizeGmailSendMessageDto,
+	normalizeGoogleOAuthSetupDto,
 	normalizeGroupingRulesConfig,
 	normalizeHideUntilDto,
+	normalizeRfc2822RequestDto,
 	normalizeThreadMessageDto,
 	normalizeThreadSummaryDto,
 	normalizeWordcountUpdateDto,
@@ -49,6 +53,44 @@ test('normalizeHideUntilDto coerces timestamps and rejects invalid values', () =
 
 test('normalizeWordcountUpdateDto coerces numeric strings', () => {
 	assert.deepEqual(normalizeWordcountUpdateDto({wordcount: '123'}), {wordcount: 123});
+});
+
+test('normalizeGoogleOAuthSetupDto trims values and falls back to the default redirect uri', () => {
+	assert.deepEqual(normalizeGoogleOAuthSetupDto({
+		clientId: ' abc ',
+		clientSecret: ' secret ',
+	}, 'https://example.com/callback'), {
+		clientId: 'abc',
+		clientSecret: 'secret',
+		redirectUri: 'https://example.com/callback',
+	});
+});
+
+test('normalizeGmailMoveThreadDto rejects empty label ids', () => {
+	assert.throws(() => {
+		normalizeGmailMoveThreadDto({labelId: ''});
+	}, (error) => error.code === 'INVALID_CONTRACT');
+});
+
+test('normalizeGmailSendMessageDto validates required fields', () => {
+	assert.deepEqual(normalizeGmailSendMessageDto({
+		threadId: 'thread-1',
+		raw: 'raw-payload',
+	}), {
+		threadId: 'thread-1',
+		raw: 'raw-payload',
+	});
+});
+
+test('normalizeRfc2822RequestDto rejects blank required fields', () => {
+	assert.throws(() => {
+		normalizeRfc2822RequestDto({
+			threadId: 'thread-1',
+			body: '',
+			inReplyTo: 'message-1',
+			myEmail: 'me@example.com',
+		});
+	}, (error) => error.code === 'INVALID_CONTRACT');
 });
 
 test('normalizeThreadSummaryDto validates response shape', () => {
