@@ -14,7 +14,7 @@
     "start": "node main.mjs",
     "dev": "node --watch main.mjs",
     "test": "node --test",
-    "build:frontend": "esbuild src/frontend/grouping_rules_island.jsx --bundle --format=iife --global-name=NailboxGroupingRules --outfile=public/grouping_rules_island.js",
+    "build:frontend": "esbuild src/frontend/index.js --bundle --format=iife --global-name=NailboxFrontend --outfile=public/frontend.js",
     "dev:frontend": "npm run build:frontend -- --watch"
   },
   "author": "Nebu Pookins <nebupookins@gmail.com>",
