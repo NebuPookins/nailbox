@@ -106,7 +106,7 @@ html(lang="en")
 				width: 90%;
 				max-width: 1000px;
 			}
-			#rules-container {
+			#grouping-rules-root {
 				max-height: 500px;
 				overflow-y: auto;
 			}
@@ -219,18 +219,8 @@ html(lang="en")
 							span(aria-hidden="true") &times;
 						h4.modal-title Email Grouping Rules
 					.modal-body
-						.row
-							.col-xs-12
-								p Configure how emails are grouped and prioritized. Rules are checked in order, and the first matching rule determines the group.
-								button.btn.btn-success#add-rule-btn
-									span.glyphicon.glyphicon-plus
-									|  Add New Rule
-						.row
-							.col-xs-12
-								#rules-container
-									// Rules will be dynamically added here
+						#grouping-rules-root
 					.modal-footer
-						button.btn.btn-primary#save-rules-btn Save Rules
 						button.btn.btn-default(type="button" data-dismiss="modal") Cancel
 		script(type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js')
 		script(type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/js/bootstrap.min.js")
@@ -239,8 +229,11 @@ html(lang="en")
 		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.11.2/moment.js')
 		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/q.js/1.4.1/q.js')
 		script(type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/messenger/1.4.2/js/messenger.js")
+		script(type='text/javascript' src='https://unpkg.com/react@18/umd/react.production.min.js')
+		script(type='text/javascript' src='https://unpkg.com/react-dom@18/umd/react-dom.production.min.js')
 		script(type='text/javascript' src="public/filesize.min.js")
 		script(type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2014-11-29/FileSaver.min.js")
+		script(type='text/javascript' src='public/grouping_rules_island.js')
 		script(type='text/javascript' src='public/clientmain.js')
 		script#handlebar-group(type='text/x-handlebars-template')
 			.group {{label}}
