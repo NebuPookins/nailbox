@@ -11,6 +11,7 @@ import {
 	renderDeletedMessagesNotice,
 	renderThreadMessage,
 } from './thread_viewer_presenter.js';
+import { createThreadViewerState } from './thread_viewer_state.js';
 import { createThreadViewerController } from './thread_viewer_controller.js';
 
 $(function() {
@@ -68,6 +69,7 @@ $(function() {
 	var groupingRulesIsland = null;
 	var labelPickerIsland = null;
 	var laterPickerIsland = null;
+	var threadViewerState = createThreadViewerState();
 	var appApi = frontendApi.createAppApi({
 		onApiError: function(error) {
 			handleApiError(error, error && error.message);
@@ -108,6 +110,28 @@ $(function() {
 		if (error) {
 			console.log(error);
 		}
+	}
+
+	function setThreadViewerThreadId(threadId) {
+		threadViewerState.setThreadId(threadId);
+		$threadViewer.data('threadId', threadId || null);
+	}
+
+	function getThreadViewerThreadId() {
+		return threadViewerState.getThreadId();
+	}
+
+	function setThreadViewerSubject(subject) {
+		threadViewerState.setSubject(subject);
+	}
+
+	function getThreadViewerSubject() {
+		return threadViewerState.getSubject();
+	}
+
+	function clearThreadViewerState() {
+		threadViewerState.clear();
+		$threadViewer.removeData('threadId');
 	}
 
 	function handleApiError(error, fallbackMessage) {
@@ -340,8 +364,8 @@ $(function() {
 
 	function switchFromThreadViewerToLabelPicker($picker) {
 		return threadActionController.switchFromThreadViewerToLabelPicker({
-			threadId: $threadViewer.data('threadId'),
-			subject: $threadViewer.find('.modal-title').text(),
+			threadId: getThreadViewerThreadId(),
+			subject: getThreadViewerSubject(),
 			hideThreadViewer: function() {
 				$threadViewer.modal('hide');
 			},
@@ -593,7 +617,7 @@ $(function() {
 				$threads.empty();
 			},
 			getCurrentThreadId: function() {
-				return $threadViewer.data('threadId');
+				return getThreadViewerThreadId();
 			},
 			hideLoading: function() {
 				$threadViewer.find('.loading-img').hide();
@@ -607,12 +631,13 @@ $(function() {
 				$threadViewer.find('.senders').text(text);
 			},
 			setThreadId: function(threadId) {
-				$threadViewer.data('threadId', threadId);
+				setThreadViewerThreadId(threadId);
 			},
 			setThreadsLoadingText: function(text) {
 				$threads.text(text);
 			},
 			setTitle: function(subject) {
+				setThreadViewerSubject(subject);
 				$threadViewer.find('.modal-title').text(subject);
 			},
 			showLoading: function() {
@@ -639,7 +664,7 @@ $(function() {
 					$threadViewer.modal('hide');
 				},
 				inReplyTo: $threadViewer.find('.threads .message:last').data('messageId'),
-				threadId: $threadViewer.data('threadId')
+				threadId: getThreadViewerThreadId()
 			});
 		} catch (error) {
 			reportAsyncError(error);
@@ -668,7 +693,7 @@ $(function() {
 				hideModal: function() {
 					$threadViewer.modal('hide');
 				},
-				threadId: $threadViewer.data('threadId')
+				threadId: getThreadViewerThreadId()
 			});
 			if (!result || !result.ok) {
 				return false;
@@ -685,7 +710,7 @@ $(function() {
 				hideModal: function() {
 					$threadViewer.modal('hide');
 				},
-				threadId: $threadViewer.data('threadId')
+				threadId: getThreadViewerThreadId()
 			});
 			if (!result || !result.ok) {
 				return false;
@@ -706,8 +731,8 @@ $(function() {
 				$threadViewer.modal('hide');
 			},
 			openLaterPicker: showLaterPicker,
-			subject: $threadViewer.find('.modal-title').text(),
-			threadId: $threadViewer.data('threadId')
+			subject: getThreadViewerSubject(),
+			threadId: getThreadViewerThreadId()
 		});
 	});
 
@@ -716,7 +741,7 @@ $(function() {
 			openWindow: function(url, target) {
 				window.open(url, target);
 			},
-			threadId: $threadViewer.data('threadId')
+			threadId: getThreadViewerThreadId()
 		});
 	});
 
@@ -730,11 +755,15 @@ $(function() {
 				isReplyFocused: function() {
 					return $threadViewer.find('textarea').is(':focus');
 				},
-				threadId: $threadViewer.data('threadId')
+				threadId: getThreadViewerThreadId()
 			});
 		} catch (error) {
 			reportAsyncError(error);
 		}
+	});
+
+	$threadViewer.on('hidden.bs.modal', function() {
+		clearThreadViewerState();
 	});
 
 	$main.on('click', 'a.view-on-gmail', function(eventObject) {
