@@ -8,7 +8,7 @@ import hljs from 'highlight.js';
 import posthtml from 'posthtml';
 import Optional from 'optional-js';
 
-import threadModel from '../../../models/thread.js';
+import threadRepository from '../repositories/thread_repository.js';
 
 function renderHighlightedCode(code, lang) {
 	const htmlWithClasses = lang ?
@@ -63,51 +63,59 @@ function renderHighlightedCode(code, lang) {
 		.html;
 }
 
-function markdownToHtml(bodyPlusSignature) {
-	return new Promise((resolve, reject) => {
-		marked.parse(bodyPlusSignature, {
-			gfm: true,
-			tables: true,
-			breaks: true,
-			smartLists: true,
-			smartypants: true,
-			highlight: renderHighlightedCode,
-		}, (error, content) => {
-			if (error) {
-				reject(error);
-				return;
-			}
-			const contentWithPreBackground = posthtml()
-				.use((tree) => {
-					tree.match({'tag': 'pre'}, (node) => {
-						Object.assign(node, {
-							attrs: {
-								style: 'background:#002b36; color:#839496',
-							},
-						});
-						return node;
-					});
-				})
-				.process(content, {sync: true})
-				.html;
-			resolve(contentWithPreBackground);
-		});
+async function markdownToHtml(bodyPlusSignature) {
+	const content = marked.parse(bodyPlusSignature, {
+		gfm: true,
+		tables: true,
+		breaks: true,
+		smartLists: true,
+		smartypants: true,
+		highlight: renderHighlightedCode,
 	});
+	return posthtml()
+		.use((tree) => {
+			tree.match({'tag': 'pre'}, (node) => {
+				Object.assign(node, {
+					attrs: {
+						style: 'background:#002b36; color:#839496',
+					},
+				});
+				return node;
+			});
+		})
+		.process(content, {sync: true})
+		.html;
 }
 
-function buildMail({thread, htmlizedMarkdown, bodyPlusSignature, myEmail}) {
-	const mostRecentMessage = thread.mostRecentMessageSatisfying(() => true);
-	const replyTo = mostRecentMessage.replyTo();
-	if (replyTo == null) {
-		throw 'TODO: How should we handle the case where we can\'t find a reply to?';
-	}
-	const threadParticipants = mostRecentMessage.recipients().concat(replyTo);
-	const peopleOtherThanYourself = _.uniqBy(
-		threadParticipants.filter((person) => person != null && person.email !== myEmail),
-		(recipient) => recipient.email
+function normalizeEmailAddress(emailAddress) {
+	return typeof emailAddress === 'string' ? emailAddress.trim().toLowerCase() : '';
+}
+
+function collectReplyRecipients({thread, replyMessage, myEmail}) {
+	const normalizedMyEmail = normalizeEmailAddress(myEmail);
+	return _.uniqBy(
+		thread.senders()
+			.concat(thread.recipients(), replyMessage.replyTo())
+			.filter((person) => person != null && normalizeEmailAddress(person.email).length > 0)
+			.filter((person) => normalizeEmailAddress(person.email) !== normalizedMyEmail),
+		(person) => normalizeEmailAddress(person.email)
 	);
-	const toLine = peopleOtherThanYourself.map((person) => util.format('%s <%s>', person.name, person.email));
-	const inReplyToId = Optional.ofNullable(mostRecentMessage.header('Message-ID'))
+}
+
+function buildMail({thread, htmlizedMarkdown, bodyPlusSignature, myEmail, replyMessage}) {
+	const recipients = collectReplyRecipients({
+		thread,
+		replyMessage,
+		myEmail,
+	});
+	if (recipients.length === 0) {
+		throw {
+			status: 400,
+			message: 'Could not determine recipients for reply.',
+		};
+	}
+	const toLine = recipients.map((person) => util.format('%s <%s>', person.name, person.email));
+	const inReplyToId = Optional.ofNullable(replyMessage.header('Message-ID'))
 		.map((header) => header.value)
 		.orElse(null);
 	return mailcomposer({
@@ -123,53 +131,60 @@ function buildMail({thread, htmlizedMarkdown, bodyPlusSignature, myEmail}) {
 	});
 }
 
-function buildMimeMessage(mail, logger) {
-	return new Promise((resolve, reject) => {
-		mail.build((error, message) => {
-			if (error) {
-				logger.error(util.format('Failed to compose mail %j', error));
-				reject({
-					status: 500,
-					message: '',
-				});
-				return;
-			}
-			resolve(message);
-		});
-	});
-}
-
-export async function buildRfc2822Message({
-	threadId,
-	body,
-	inReplyTo,
-	myEmail,
-	logger,
-}) {
-	const bodyPlusSignature = `${body}\n\n---\nSent using [Nailbox](https://github.com/NebuPookins/nailbox/).`;
-	const thread = await threadModel.get(threadId);
-	if (!thread.message(inReplyTo)) {
+async function buildMimeMessage(mail, logger) {
+	try {
+		return await util.promisify(mail.build.bind(mail))();
+	} catch (error) {
+		logger.error(util.format('Failed to compose mail %j', error));
 		throw {
-			status: 400,
-			message: util.format('Could not find message %s in thread %s', inReplyTo, threadId),
+			status: 500,
+			message: '',
 		};
 	}
-	const htmlizedMarkdown = await markdownToHtml(bodyPlusSignature);
-	const mostRecentMessage = thread.mostRecentMessageSatisfying(() => true);
-	const threadParticipants = mostRecentMessage.recipients().concat(mostRecentMessage.replyTo());
-	if (threadParticipants.some((person) => person == null)) {
-		logger.warn(`Got null receiver in ${util.inspect(threadParticipants)} from thread ${util.inspect(thread)}`);
-	}
-	const mail = buildMail({
-		thread,
-		htmlizedMarkdown,
-		bodyPlusSignature,
-		myEmail,
-	});
-	const mimeMessage = await buildMimeMessage(mail, logger);
-	return base64url.encode(mimeMessage);
 }
 
-export default {
-	buildRfc2822Message,
-};
+export function createRfc2822Service(dependencies = {}) {
+	const repository = dependencies.threadRepository || threadRepository;
+
+	async function buildRfc2822Message({
+		threadId,
+		body,
+		inReplyTo,
+		myEmail,
+		logger,
+	}) {
+		const bodyPlusSignature = `${body}\n\n---\nSent using [Nailbox](https://github.com/NebuPookins/nailbox/).`;
+		const thread = await repository.readThread(threadId);
+		const replyMessage = thread.message(inReplyTo);
+		if (!replyMessage) {
+			throw {
+				status: 400,
+				message: util.format('Could not find message %s in thread %s', inReplyTo, threadId),
+			};
+		}
+		const htmlizedMarkdown = await markdownToHtml(bodyPlusSignature);
+		const threadParticipants = thread.senders().concat(thread.recipients(), replyMessage.replyTo());
+		if (threadParticipants.some((person) => person == null)) {
+			logger.warn(`Got null receiver in ${util.inspect(threadParticipants)} from thread ${util.inspect(thread)}`);
+		}
+		const mail = buildMail({
+			thread,
+			htmlizedMarkdown,
+			bodyPlusSignature,
+			myEmail,
+			replyMessage,
+		});
+		const mimeMessage = await buildMimeMessage(mail, logger);
+		return base64url.encode(mimeMessage);
+	}
+
+	return {
+		buildRfc2822Message,
+	};
+}
+
+const rfc2822Service = createRfc2822Service();
+
+export const { buildRfc2822Message } = rfc2822Service;
+
+export default rfc2822Service;

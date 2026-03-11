@@ -1,3 +1,5 @@
+import frontendApi from './index.js';
+
 $(function() {
 	'use strict';
 
@@ -37,6 +39,7 @@ $(function() {
 	var $threadViewer = $('#thread-viewer');
 	var $labelPicker = $('#label-picker');
 	var $laterPicker = $('#later-picker');
+	var $laterPickerRoot = $('#later-picker-root');
 	var $settingsBtn = $('#settings-btn');
 	var $settingsModal = $('#settings-modal');
 	var $groupingRulesRoot = $('#grouping-rules-root');
@@ -49,6 +52,12 @@ $(function() {
 	};
 	var labelsCache = [];
 	var groupingRulesIsland = null;
+	var laterPickerIsland = null;
+	var appApi = frontendApi.createAppApi({
+		onApiError: function(error) {
+			handleApiError(error, error && error.message);
+		}
+	});
 
 	var handlebarsTemplates = {};
 	handlebarsTemplates.group = Handlebars.compile($('#handlebar-group').html());
@@ -68,11 +77,6 @@ $(function() {
 		if (typeof filesize === 'function') {
 			return filesize(bytes);
 		}
-		/*
-		 * The filesize function is supposed to be loaded via CDN, but that has
-		 * failed before when the remote asset was unavailable. Keep a trivial
-		 * fallback here so attachment rendering still works.
-		 */
 		return bytes + ' bytes';
 	});
 
@@ -134,21 +138,10 @@ $(function() {
 		for (i = 0; i < this.length; i++) {
 			chr = this.charCodeAt(i);
 			hash = ((hash << 5) - hash) + chr;
-			hash |= 0; // Convert to 32bit integer
+			hash |= 0;
 		}
 		return hash;
 	};
-
-	function apiRequest(options) {
-		return new Promise(function(resolve, reject) {
-			$.ajax(options).done(function(data) {
-				resolve(data);
-			}).fail(function(jqXHR, textStatus, errorThrown) {
-				handleApiFailure(jqXHR, textStatus || errorThrown);
-				reject(jqXHR);
-			});
-		});
-	}
 
 	function reportAsyncError(error) {
 		if (error) {
@@ -156,15 +149,14 @@ $(function() {
 		}
 	}
 
-	function handleApiFailure(jqXHR, fallbackMessage) {
-		var responseJson = jqXHR && jqXHR.responseJSON;
-		if (responseJson && responseJson.code === 'GOOGLE_REAUTH_REQUIRED') {
+	function handleApiError(error, fallbackMessage) {
+		if (error && error.code === 'GOOGLE_REAUTH_REQUIRED') {
 			authStatus.connected = false;
 			authStatus.emailAddress = null;
 			renderDisconnectedState('Google authorization expired. Reconnect Gmail to continue.');
 			return;
 		}
-		if (responseJson && responseJson.code === 'GOOGLE_AUTH_MISCONFIGURED') {
+		if (error && error.code === 'GOOGLE_AUTH_MISCONFIGURED') {
 			renderSetupNeededState('Google OAuth is not configured.');
 			return;
 		}
@@ -207,27 +199,17 @@ $(function() {
 		);
 	}
 
-	function loadAuthStatus() {
-		return apiRequest({
-			url: '/api/auth/status',
-			method: 'GET',
-			dataType: 'json'
-		}).then(function(status) {
-			authStatus = status;
-			return status;
-		});
+	async function loadAuthStatus() {
+		var status = await appApi.loadAuthStatus();
+		authStatus = status;
+		return status;
 	}
 
-	function loadLabels() {
-		return apiRequest({
-			url: '/api/gmail/labels',
-			method: 'GET',
-			dataType: 'json'
-		}).then(function(labels) {
-			labelsCache = labels;
-			populateLabelPicker();
-			return labels;
-		});
+	async function loadLabels() {
+		var labels = await appApi.loadLabels();
+		labelsCache = labels;
+		populateLabelPicker();
+		return labels;
 	}
 
 	function populateLabelPicker() {
@@ -256,64 +238,55 @@ $(function() {
 			});
 	}
 
-	function syncThreadsFromGoogle(updateMessenger) {
+	async function syncThreadsFromGoogle(updateMessenger) {
 		updateMessenger = updateMessenger || messengerGetter().info('Syncing Gmail...');
 		updateMessenger.update({
 			type: 'info',
 			message: 'Syncing Gmail to local cache...'
 		});
-		return apiRequest({
-			url: '/api/gmail/sync',
-			method: 'POST',
-			dataType: 'json'
-		}).then(function(resp) {
-			var failedResults = Array.isArray(resp.results) ? resp.results.filter(function(result) {
-				return result.status >= 400;
-			}) : [];
-			if (failedResults.length > 0) {
-				var displayedThreadIds = failedResults.slice(0, 5).map(function(result) {
-					return result.threadId;
-				});
-				var moreCount = failedResults.length - displayedThreadIds.length;
-				var details = displayedThreadIds.join(', ');
-				if (moreCount > 0) {
-					details += ' +' + moreCount + ' more';
-				}
-				updateMessenger.update({
-					type: 'error',
-					message: 'Synced ' + resp.syncedThreadCount + ' Gmail threads, but ' +
-						failedResults.length + ' failed: ' + details + '.'
-				});
-				return resp;
+		var resp = await appApi.syncThreadsFromGoogle();
+		var failedResults = Array.isArray(resp.results) ? resp.results.filter(function(result) {
+			return result.status >= 400;
+		}) : [];
+		if (failedResults.length > 0) {
+			var displayedThreadIds = failedResults.slice(0, 5).map(function(result) {
+				return result.threadId;
+			});
+			var moreCount = failedResults.length - displayedThreadIds.length;
+			var details = displayedThreadIds.join(', ');
+			if (moreCount > 0) {
+				details += ' +' + moreCount + ' more';
 			}
 			updateMessenger.update({
-				type: 'success',
-				message: 'Synced ' + resp.syncedThreadCount + ' Gmail threads.'
+				type: 'error',
+				message: 'Synced ' + resp.syncedThreadCount + ' Gmail threads, but ' +
+					failedResults.length + ' failed: ' + details + '.'
 			});
 			return resp;
+		}
+		updateMessenger.update({
+			type: 'success',
+			message: 'Synced ' + resp.syncedThreadCount + ' Gmail threads.'
 		});
+		return resp;
 	}
 
-	function refreshThreadFromGoogle(threadId) {
-		return apiRequest({
-			url: '/api/gmail/threads/' + threadId + '/refresh',
-			method: 'POST'
-		}).catch(function() {
+	async function refreshThreadFromGoogle(threadId) {
+		try {
+			await appApi.refreshThread(threadId);
+		} catch (error) {
 			console.log('Failed to refresh thread', threadId);
-		});
+		}
 	}
 
-	function updateUiWithThreadsFromServer(updateMessenger) {
+	async function updateUiWithThreadsFromServer(updateMessenger) {
 		updateMessenger = updateMessenger || messengerGetter().info('Refreshing threads from cache...');
 		updateMessenger.update({
 			type: 'info',
 			message: 'Downloading threads from local cache...'
 		});
-		return apiRequest({
-			url: '/api/threads/grouped',
-			method: 'GET',
-			dataType: 'json'
-		}).then(function(groupsOfThreads) {
+		try {
+			var groupsOfThreads = await appApi.loadGroupedThreads();
 			$main.empty();
 			$status.hide();
 			groupsOfThreads.forEach(function(group) {
@@ -325,8 +298,8 @@ $(function() {
 				});
 				group.threads.forEach(function(thread) {
 					thread.mainDisplayedLabelIds = thread.labelIds.filter(function(labelId) {
-						return labelId !== 'INBOX' && // Every e-mail we display is in the INBOX.
-							labelId !== 'UNREAD' && // Controversial design choice: We think inbox zero is faciliated if we get rid of the distracting concept of a read e-mail vs an unread e-mail.
+						return labelId !== 'INBOX' &&
+							labelId !== 'UNREAD' &&
 							labelId !== 'SENT' &&
 							labelId !== 'TRASH';
 					});
@@ -345,13 +318,13 @@ $(function() {
 				type: 'success',
 				message: 'GUI updated with cached threads.'
 			});
-		}).catch(function(err) {
+		} catch (error) {
 			$status.show().html(
 				'<h1>Failed to load cached mail</h1>' +
 				'<p>Check the server logs, then try syncing Gmail again.</p>'
 			);
-			throw err;
-		});
+			throw error;
+		}
 	}
 
 	function deleteThreadFromUI(threadId) {
@@ -361,57 +334,37 @@ $(function() {
 		});
 	}
 
-	function deleteThread(threadId, updateMessenger) {
+	async function deleteThread(threadId, updateMessenger) {
 		updateMessenger.update({
 			type: 'info',
 			message: 'Deleting thread ' + threadId + '...'
 		});
-		return apiRequest({
-			url: '/api/threads/' + threadId + '/trash',
-			method: 'POST',
-			dataType: 'json'
-		}).then(function() {
-			deleteThreadFromUI(threadId);
-		});
+		await appApi.deleteThread(threadId);
+		deleteThreadFromUI(threadId);
 	}
 
-	function archiveThread(threadId, updateMessenger) {
+	async function archiveThread(threadId, updateMessenger) {
 		updateMessenger.update({
 			type: 'info',
 			message: 'Archiving thread ' + threadId + '...'
 		});
-		return apiRequest({
-			url: '/api/threads/' + threadId + '/archive',
-			method: 'POST',
-			dataType: 'json'
-		}).then(function() {
-			deleteThreadFromUI(threadId);
-		});
+		await appApi.archiveThread(threadId);
+		deleteThreadFromUI(threadId);
 	}
 
-	function moveThreadToLabel(threadId, labelId, updateMessenger) {
+	async function moveThreadToLabel(threadId, labelId, updateMessenger) {
 		updateMessenger.update({
 			type: 'info',
 			message: 'Moving thread ' + threadId + ' to label...'
 		});
-		return apiRequest({
-			url: '/api/threads/' + threadId + '/move',
-			method: 'POST',
-			dataType: 'json',
-			data: {
-				labelId: labelId
-			}
-		}).then(function() {
-			deleteThreadFromUI(threadId);
-		});
+		await appApi.moveThreadToLabel(threadId, labelId);
+		deleteThreadFromUI(threadId);
 	}
 
-	function getThreadData(threadId, attemptNumber, updateMessenger) {
-		return apiRequest({
-			url: '/api/threads/' + threadId + '/messages',
-			method: 'GET',
-			dataType: 'json'
-		}).catch(function(error) {
+	async function getThreadData(threadId, attemptNumber, updateMessenger) {
+		try {
+			return await appApi.getThreadData(threadId);
+		} catch (error) {
 			if (attemptNumber < 60) {
 				updateMessenger.update({
 					type: 'info',
@@ -424,7 +377,7 @@ $(function() {
 				message: 'Failed to get thread data after too many retries.'
 			});
 			throw error;
-		});
+		}
 	}
 
 	function b64toBlob(b64Data) {
@@ -451,6 +404,33 @@ $(function() {
 		return false;
 	}
 
+	function showLaterPicker(threadId, subject) {
+		var islandState = ensureLaterPickerIsland();
+		if (!threadId) {
+			messengerGetter().error('Missing thread id.');
+			return false;
+		}
+		if (!islandState) {
+			messengerGetter().error('Failed to load later picker');
+			return false;
+		}
+		$laterPicker.find('.modal-title').text(subject || '');
+		$laterPicker.data('threadId', threadId);
+		islandState.instance.open({
+			onHideThread: async function(selectedThreadId, hideUntil) {
+				var updateMessenger = messengerGetter().info('Hiding thread ' + selectedThreadId + '.');
+				await appApi.hideThread(selectedThreadId, hideUntil);
+				updateMessenger.update({
+					type: 'success',
+					message: 'Successfully hid thread ' + selectedThreadId + '.'
+				});
+			},
+			threadId: threadId
+		});
+		$laterPicker.modal('show');
+		return false;
+	}
+
 	function switchFromThreadViewerToPicker($picker) {
 		var threadId = $threadViewer.data('threadId');
 		if (threadId) {
@@ -462,6 +442,16 @@ $(function() {
 			messengerGetter().error('Missing thread id.');
 		}
 		return false;
+	}
+
+	function showLaterPickerFromThreadViewer() {
+		var threadId = $threadViewer.data('threadId');
+		if (!threadId) {
+			messengerGetter().error('Missing thread id.');
+			return false;
+		}
+		$threadViewer.modal('hide');
+		return showLaterPicker(threadId, $threadViewer.find('.modal-title').text());
 	}
 
 	function createGroupingRulesNotify() {
@@ -478,16 +468,22 @@ $(function() {
 		};
 	}
 
+	function createLaterPickerNotify() {
+		return {
+			error: function(message) {
+				messengerGetter().error(message);
+			}
+		};
+	}
+
 	function ensureGroupingRulesIsland() {
-		var frontendApi;
 		if (groupingRulesIsland) {
 			return {
 				instance: groupingRulesIsland,
 				wasCreated: false
 			};
 		}
-		frontendApi = window.NailboxFrontend;
-		if (!$groupingRulesRoot.length || !frontendApi) {
+		if (!$groupingRulesRoot.length) {
 			return null;
 		}
 		if (typeof frontendApi.mountGroupingRulesSettings !== 'function') {
@@ -507,24 +503,49 @@ $(function() {
 		};
 	}
 
-	function bootstrapConnectedApp() {
+	function ensureLaterPickerIsland() {
+		if (laterPickerIsland) {
+			return {
+				instance: laterPickerIsland,
+				wasCreated: false
+			};
+		}
+		if (!$laterPickerRoot.length) {
+			return null;
+		}
+		if (typeof frontendApi.mountLaterPickerIsland !== 'function') {
+			return null;
+		}
+		laterPickerIsland = frontendApi.mountLaterPickerIsland({
+			container: $laterPickerRoot.get(0),
+			notify: createLaterPickerNotify(),
+			onDismiss: function() {
+				$laterPicker.modal('hide');
+			},
+			onHidden: function(threadId) {
+				deleteThreadFromUI(threadId);
+			}
+		});
+		return {
+			instance: laterPickerIsland,
+			wasCreated: true
+		};
+	}
+
+	async function bootstrapConnectedApp() {
 		renderConnectedState();
-		updateUiWithThreadsFromServer(messengerGetter().info('Loading cached threads...'))
-			.then(function() {
-				return loadLabels().catch(function() {
-					messengerGetter().error('Failed to load Gmail labels. Continuing with cached mail.');
-					return [];
-				});
-			})
-			.then(function() {
-				return syncThreadsFromGoogle(messengerGetter().info('Downloading new threads from Gmail...'));
-			})
-			.then(function() {
-				return updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...'));
-			})
-			.catch(function() {
-				messengerGetter().error('Failed to refresh Gmail. Cached mail is still available.');
-			});
+		try {
+			await updateUiWithThreadsFromServer(messengerGetter().info('Loading cached threads...'));
+			try {
+				await loadLabels();
+			} catch (error) {
+				messengerGetter().error('Failed to load Gmail labels. Continuing with cached mail.');
+			}
+			await syncThreadsFromGoogle(messengerGetter().info('Downloading new threads from Gmail...'));
+			await updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...'));
+		} catch (error) {
+			messengerGetter().error('Failed to refresh Gmail. Cached mail is still available.');
+		}
 
 		setInterval(function() {
 			if (authStatus.connected) {
@@ -552,50 +573,58 @@ $(function() {
 			renderDisconnectedState();
 			return;
 		}
-		bootstrapConnectedApp();
+		bootstrapConnectedApp().catch(reportAsyncError);
 	}).catch(reportAsyncError);
 
-	$authControls.on('click', '#disconnect-gmail-btn', function() {
-		apiRequest({
-			url: '/auth/google/disconnect',
-			method: 'POST'
-		}).then(function() {
+	$authControls.on('click', '#disconnect-gmail-btn', async function() {
+		try {
+			await appApi.disconnectGmail();
 			authStatus.connected = false;
 			authStatus.emailAddress = null;
 			renderDisconnectedState('Gmail disconnected.');
-		}).catch(reportAsyncError);
+		} catch (error) {
+			reportAsyncError(error);
+		}
 	});
 
-	$authControls.on('click', '#refresh-now-btn', function() {
-		syncThreadsFromGoogle(messengerGetter().info('Syncing Gmail...'))
-			.then(function() {
-				return updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...'));
-			}).catch(reportAsyncError);
+	$authControls.on('click', '#refresh-now-btn', async function() {
+		try {
+			await syncThreadsFromGoogle(messengerGetter().info('Syncing Gmail...'));
+			await updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...'));
+		} catch (error) {
+			reportAsyncError(error);
+		}
 	});
 
-	$main.on('click', 'button.delete', function(eventObject) {
+	$main.on('click', 'button.delete', async function(eventObject) {
 		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
 		var threadId = $divThread.data('threadId');
 		var updateMessenger = messengerGetter().info('Deleting thread ' + threadId + '...');
-		deleteThread(threadId, updateMessenger).then(function() {
+		try {
+			await deleteThread(threadId, updateMessenger);
 			updateMessenger.update({
 				type: 'success',
 				message: 'Successfully deleted message ' + threadId
 			});
-		}).catch(reportAsyncError);
+		} catch (error) {
+			reportAsyncError(error);
+		}
 		return false;
 	});
 
-	$main.on('click', 'button.archive-thread', function(eventObject) {
+	$main.on('click', 'button.archive-thread', async function(eventObject) {
 		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
 		var threadId = $divThread.data('threadId');
 		var updateMessenger = messengerGetter().info('Archiving thread ' + threadId + '...');
-		archiveThread(threadId, updateMessenger).then(function() {
+		try {
+			await archiveThread(threadId, updateMessenger);
 			updateMessenger.update({
 				type: 'success',
 				message: 'Successfully archived thread ' + threadId + '.'
 			});
-		}).catch(reportAsyncError);
+		} catch (error) {
+			reportAsyncError(error);
+		}
 		return false;
 	});
 
@@ -605,10 +634,14 @@ $(function() {
 	});
 
 	$main.on('click', 'button.later', function(eventObject) {
-		return mainClickerShowPicker($(eventObject.currentTarget), $laterPicker);
+		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
+		return showLaterPicker($divThread.data('threadId'), $divThread.find('.subject').text());
 	});
 
-	$main.on('click', 'div.thread', function(eventObject) {
+	$main.on('click', 'div.thread', async function(eventObject) {
+		if ($(eventObject.target).closest('button, a, input, select, textarea, label').length > 0) {
+			return true;
+		}
 		var $threadDiv = $(eventObject.currentTarget);
 		var threadId = $threadDiv.data('threadId');
 		var $threads = $threadViewer.find('.threads');
@@ -620,7 +653,8 @@ $(function() {
 		$threads.text($threadDiv.find('.snippet').text());
 		$threadViewer.find('.loading-img').show();
 		$threadViewer.modal('show');
-		getThreadData(threadId, 0, updateMessenger).then(function(threadData) {
+		try {
+			var threadData = await getThreadData(threadId, 0, updateMessenger);
 			if ($threadViewer.data('threadId') !== threadId) {
 				return;
 			}
@@ -638,22 +672,18 @@ $(function() {
 			nonDeletedMessages.forEach(function(message) {
 				message.duration = moment.duration(message.timeToReadSeconds, 'seconds').humanize();
 				$threads.append(handlebarsTemplates.message(message));
-				apiRequest({
-					url: '/api/threads/' + threadId + '/messages/' + message.messageId + '/wordcount',
-					method: 'POST',
-					data: {
-						wordcount: message.wordcount
-					}
-				}).catch(reportAsyncError);
+				appApi.updateMessageWordcount(threadId, message.messageId, message.wordcount).catch(reportAsyncError);
 			});
 			updateMessenger.update({
 				type: 'success',
 				message: 'Successfully downloaded thread data for ' + threadId + '.'
 			});
-		}).catch(reportAsyncError);
+		} catch (error) {
+			reportAsyncError(error);
+		}
 	});
 
-	$threadViewer.find('button.reply-all').on('click', function() {
+	$threadViewer.find('button.reply-all').on('click', async function() {
 		var threadId = $threadViewer.data('threadId');
 		var updateMessenger = messengerGetter().info('Sending reply to thread ' + threadId + '...');
 		if (!threadId || !authStatus.emailAddress) {
@@ -663,53 +693,45 @@ $(function() {
 			});
 			return;
 		}
-		apiRequest({
-			url: '/api/rfc2822',
-			method: 'POST',
-			data: {
+		try {
+			var base64EncodedEmail = await appApi.buildRfc2822({
 				myEmail: authStatus.emailAddress,
 				threadId: threadId,
 				body: $threadViewer.find('.reply textarea').val(),
 				inReplyTo: $threadViewer.find('.threads .message:last').data('messageId')
-			}
-		}).then(function(base64EncodedEmail) {
-			return apiRequest({
-				url: '/api/gmail/messages/send',
-				method: 'POST',
-				dataType: 'json',
-				data: {
-					threadId: threadId,
-					raw: base64EncodedEmail
-				}
 			});
-		}).then(function(resp) {
+			var resp = await appApi.sendMessage({
+				threadId: threadId,
+				raw: base64EncodedEmail
+			});
 			updateMessenger.update({
 				type: 'success',
 				message: 'Successfully sent message with id ' + resp.id + '.'
 			});
 			$threadViewer.find('.reply textarea').val('');
 			$threadViewer.modal('hide');
-		}).catch(reportAsyncError);
+		} catch (error) {
+			reportAsyncError(error);
+		}
 	});
 
-	$threadViewer.on('click', 'button.dl-attachment', function(eventObj) {
+	$threadViewer.on('click', 'button.dl-attachment', async function(eventObj) {
 		var $clickedButton = $(eventObj.currentTarget);
 		var attachmentId = $clickedButton.data('attachment-id');
 		var attachmentName = $clickedButton.data('attachment-name');
 		var messageId = $clickedButton.parents('.message').data('message-id');
-		apiRequest({
-			url: '/api/gmail/messages/' + messageId + '/attachments/' + attachmentId,
-			method: 'GET',
-			dataType: 'json'
-		}).then(function(resp) {
+		try {
+			var resp = await appApi.getAttachment(messageId, attachmentId);
 			var base64Version = resp.data.replace(/[-_]/g, function(char) {
 				return char === '-' ? '+' : '/';
 			});
 			saveAs(b64toBlob(base64Version), attachmentName);
-		}).catch(reportAsyncError);
+		} catch (error) {
+			reportAsyncError(error);
+		}
 	});
 
-	$threadViewer.find('button.delete').on('click', function() {
+	$threadViewer.find('button.delete').on('click', async function() {
 		var threadId = $threadViewer.data('threadId');
 		var updateMessenger = messengerGetter().info('Deleting thread ' + threadId + '...');
 		if (!threadId) {
@@ -719,17 +741,20 @@ $(function() {
 			});
 			return false;
 		}
-		deleteThread(threadId, updateMessenger).then(function() {
+		try {
+			await deleteThread(threadId, updateMessenger);
 			updateMessenger.update({
 				type: 'success',
 				message: 'Successfully deleted message ' + threadId
 			});
 			$threadViewer.modal('hide');
-		}).catch(reportAsyncError);
+		} catch (error) {
+			reportAsyncError(error);
+		}
 		return false;
 	});
 
-	$threadViewer.find('button.archive-thread').on('click', function() {
+	$threadViewer.find('button.archive-thread').on('click', async function() {
 		var threadId = $threadViewer.data('threadId');
 		var updateMessenger = messengerGetter().info('Archiving thread ' + threadId + '...');
 		if (!threadId) {
@@ -739,13 +764,16 @@ $(function() {
 			});
 			return false;
 		}
-		archiveThread(threadId, updateMessenger).then(function() {
+		try {
+			await archiveThread(threadId, updateMessenger);
 			$threadViewer.modal('hide');
 			updateMessenger.update({
 				type: 'success',
 				message: 'Successfully archived thread ' + threadId + '.'
 			});
-		}).catch(reportAsyncError);
+		} catch (error) {
+			reportAsyncError(error);
+		}
 		return false;
 	});
 
@@ -754,7 +782,7 @@ $(function() {
 	});
 
 	$threadViewer.find('button.later').on('click', function() {
-		return switchFromThreadViewerToPicker($laterPicker);
+		return showLaterPickerFromThreadViewer();
 	});
 
 	$threadViewer.find('button.view-on-gmail').on('click', function() {
@@ -765,125 +793,32 @@ $(function() {
 		return false;
 	});
 
-	$threadViewer.on('keydown', function(event) {
-		/*
-		 * If the textarea (where the user types their reply) has focus, then don't
-		 * process any key events.
-		 */
+	$threadViewer.on('keydown', async function(event) {
 		if ($threadViewer.find('textarea').is(':focus')) {
 			return;
 		}
 		if (event.key === 'Delete') {
 			var threadId = $threadViewer.data('threadId');
 			var updateMessenger = messengerGetter().info('Deleting thread ' + threadId + '...');
-			deleteThread(threadId, updateMessenger).then(function() {
+			try {
+				await deleteThread(threadId, updateMessenger);
 				updateMessenger.update({
 					type: 'success',
 					message: 'Successfully deleted message ' + threadId
 				});
 				$threadViewer.modal('hide');
-			}).catch(reportAsyncError);
+			} catch (error) {
+				reportAsyncError(error);
+			}
 		}
 	});
 
 	$main.on('click', 'a.view-on-gmail', function(eventObject) {
-		// Prevent bubbling, but otherwise do nothing, since it's a link.
 		eventObject.stopPropagation();
 		return true;
 	});
 
-	$laterPicker.on('click', '.button', function(eventObject) {
-		var threadId = $laterPicker.data('threadId');
-		var updateMessenger = messengerGetter().info('Hiding thread ' + threadId + '.');
-		var btnClicked = eventObject.currentTarget;
-		var todaysEvening = moment().hour(18).startOf('hour');
-		var tomorrowsEvening = moment(todaysEvening).add(1, 'day');
-		var hideUntil;
-		if (!threadId) {
-			updateMessenger.update({
-				type: 'error',
-				message: 'Tried to hide thread, but no threadId was found.'
-			});
-			return;
-		}
-		switch ($(btnClicked).data('value')) {
-			case 'hours':
-				hideUntil = {
-					type: 'timestamp',
-					value: moment().add(3, 'hours').valueOf()
-				};
-				break;
-			case 'evening':
-				hideUntil = {
-					type: 'timestamp',
-					value: (moment().add(3, 'hours').isBefore(todaysEvening) ? todaysEvening : tomorrowsEvening).valueOf()
-				};
-				break;
-			case 'tomorrow':
-				hideUntil = {
-					type: 'timestamp',
-					value: moment().hour(7).startOf('hour').add(1, 'day').valueOf()
-				};
-				break;
-			case 'weekend':
-				hideUntil = {
-					type: 'timestamp',
-					value: moment().day(6).hour(7).startOf('hour').isBefore(moment()) ?
-						moment().day(6).hour(7).startOf('hour').add(1, 'week').valueOf() :
-						moment().day(6).hour(7).startOf('hour').valueOf()
-				};
-				break;
-			case 'monday':
-				hideUntil = {
-					type: 'timestamp',
-					value: moment().day(1).hour(7).startOf('hour').isBefore(moment()) ?
-						moment().day(1).hour(7).startOf('hour').add(1, 'week').valueOf() :
-						moment().day(1).hour(7).startOf('hour').valueOf()
-				};
-				break;
-			case 'month':
-				hideUntil = {
-					type: 'timestamp',
-					value: moment().add(1, 'month').hour(7).startOf('hour').valueOf()
-				};
-				break;
-			case 'someday':
-				hideUntil = {
-					type: 'timestamp',
-					value: moment().add(6, 'month').hour(7).startOf('hour').valueOf()
-				};
-				break;
-			case 'when-i-have-time':
-				hideUntil = { type: 'when-i-have-time' };
-				break;
-			default:
-				updateMessenger.update({
-					type: 'error',
-					message: 'Forgot to implement ' + $(btnClicked).data('value')
-				});
-				return;
-		}
-		apiRequest({
-			url: '/api/threads/' + threadId + '/hideUntil',
-			data: hideUntil,
-			method: 'PUT'
-		}).then(function() {
-			updateMessenger.update({
-				type: 'success',
-				message: 'Successfully hid thread ' + threadId + '.'
-			});
-			$laterPicker.modal('hide');
-			deleteThreadFromUI(threadId);
-		}).catch(function() {
-			updateMessenger.update({
-				type: 'error',
-				message: 'Failed to hide thread.'
-			});
-		});
-		return false;
-	});
-
-	$labelPicker.on('click', 'button', function(eventObject) {
+	$labelPicker.on('click', 'button', async function(eventObject) {
 		var threadId = $labelPicker.data('threadId');
 		var labelId = $(eventObject.currentTarget).data('label-id');
 		var updateMessenger = messengerGetter().info('Moving thread ' + threadId + ' to label...');
@@ -894,13 +829,16 @@ $(function() {
 			});
 			return;
 		}
-		moveThreadToLabel(threadId, labelId, updateMessenger).then(function() {
+		try {
+			await moveThreadToLabel(threadId, labelId, updateMessenger);
 			$labelPicker.modal('hide');
 			updateMessenger.update({
 				type: 'success',
 				message: 'Successfully moved thread ' + threadId + ' to label.'
 			});
-		}).catch(reportAsyncError);
+		} catch (error) {
+			reportAsyncError(error);
+		}
 	});
 
 	$settingsBtn.on('click', function() {
