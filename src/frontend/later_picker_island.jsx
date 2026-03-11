@@ -46,7 +46,7 @@ function LaterPickerApp({ notify, onDismiss, onHidden, state }) {
 					{row.map((option) => (
 						<div className="col-xs-4" key={option.value}>
 							<button
-								className="button btn btn-link"
+								className="button btn btn-default"
 								disabled={!hasThread || pendingPreset.length > 0}
 								onClick={() => handlePresetClick(option.value)}
 								type="button"

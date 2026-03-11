@@ -29,21 +29,30 @@ html(lang="en")
 			@-webkit-keyframes spin { 100% { -webkit-transform: rotate(360deg); } }
 			@keyframes spin { 100% { -webkit-transform: rotate(360deg); transform:rotate(360deg); } }
 			#later-picker .row .button {
+				display: block;
+				width: 100%;
 				text-align: center;
 				height: 100px;
 				background: #f9f9f9;
+				background-image: none;
+				color: #333;
 				border: solid 1px #fff;
 				padding: 10px;
+				white-space: normal;
 			}
 			#later-picker .row .button:hover {
 				background: #563d7c;
 				color: #fff;
 			}
 			#later-picker .row .button .glyphicon {
+				display: block;
 				font-size: 48px;
 			}
 			#later-picker .row .button .later-label {
+				display: block;
 				font-size: 18px;
+				line-height: 1.2;
+				margin-top: 6px;
 			}
 			.noselect {
 				-webkit-touch-callout: none; /* iOS Safari */
