@@ -15,10 +15,11 @@ import {
 	isGoogleOAuthConfigured,
 } from './services/google_oauth.mjs';
 import registerAuthRoutes from './src/server/routes/auth_routes.js';
-import registerGmailRoutes from './src/server/routes/gmail_routes.js';
+import registerThreadActionRoutes from './src/server/routes/thread_action_routes.js';
 import configRepository from './src/server/repositories/config_repository.js';
 import registerSetupRoutes from './src/server/routes/setup_routes.js';
 import registerThreadRoutes from './src/server/routes/thread_routes.js';
+import frontendAssetService from './src/server/services/frontend_asset_service.js';
 
 const DEFAULT_CONFIG = {
 	port: 3000,
@@ -98,6 +99,7 @@ const config = await configRepository.readConfig();
 const app = express();
 app.set('views', path.join(process.cwd(), 'views'));
 app.set('view engine', 'pug');
+app.locals.assetPath = frontendAssetService.assetPath;
 app.use('/public', express.static('public'));
 app.use(bodyParser.json({limit: '10mb', parameterLimit: 10000}));
 app.use(bodyParser.urlencoded({limit: '10mb', parameterLimit: 10000, extended: true }));
@@ -121,7 +123,7 @@ const routeDependencies = {
 registerSetupRoutes(app, routeDependencies);
 registerAuthRoutes(app, routeDependencies);
 registerThreadRoutes(app, routeDependencies);
-registerGmailRoutes(app, routeDependencies);
+registerThreadActionRoutes(app, routeDependencies);
 
 app.use(function(req, res) {
 	logger.debug(util.format("Sent 404 in response to %s %s", req.method, req.url));

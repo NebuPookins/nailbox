@@ -7,7 +7,7 @@ import hideUntilModel from '../models/hide_until.js';
 import lastRefreshedModel from '../models/last_refreshed.js';
 import messageModel from '../models/message.js';
 import registerAuthRoutes from '../src/server/routes/auth_routes.js';
-import registerGmailRoutes from '../src/server/routes/gmail_routes.js';
+import registerThreadActionRoutes from '../src/server/routes/thread_action_routes.js';
 import registerSetupRoutes from '../src/server/routes/setup_routes.js';
 import registerThreadRoutes from '../src/server/routes/thread_routes.js';
 import gmailSyncService from '../src/server/services/gmail_sync_service.js';
@@ -20,7 +20,7 @@ test('backend modules load under ESM', () => {
   assert.equal(typeof lastRefreshedModel.load, 'function');
   assert.equal(typeof messageModel.Message, 'function');
   assert.equal(typeof registerAuthRoutes, 'function');
-  assert.equal(typeof registerGmailRoutes, 'function');
+  assert.equal(typeof registerThreadActionRoutes, 'function');
   assert.equal(typeof registerSetupRoutes, 'function');
   assert.equal(typeof registerThreadRoutes, 'function');
   assert.equal(typeof gmailSyncService.syncRecentThreadsFromGmail, 'function');

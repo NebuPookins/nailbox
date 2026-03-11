@@ -161,45 +161,7 @@ html(lang="en")
 					.modal-header
 						h4.modal-title Subject Line Here
 					.modal-body
-						.row
-							.col-xs-4
-								.button(data-value="hours")
-									.glyphicon.glyphicon-time
-									.later-label.noselect Couple of Hours
-							.col-xs-4
-								.button(data-value="evening")
-									.glyphicon.glyphicon-lamp
-									.later-label.noselect Coming Evening
-							.col-xs-4
-								.button(data-value="tomorrow")
-									.glyphicon.glyphicon-bed
-									.later-label.noselect Tomorrow
-						.row
-							.col-xs-4
-								.button(data-value="weekend")
-									.glyphicon.glyphicon-sunglasses
-									.later-label.noselect This Weekend
-							.col-xs-4
-								.button(data-value="monday")
-									.glyphicon.glyphicon-briefcase
-									.later-label.noselect Next Monday
-							.col-xs-4
-								.button(data-value="month")
-									.glyphicon.glyphicon-calendar
-									.later-label.noselect In a Month
-						.row
-							.col-xs-4
-								.button(data-value="someday")
-									.glyphicon.glyphicon-cloud
-									.later-label.noselect Someday
-							.col-xs-4
-								.button(data-value="when-i-have-time")
-									.glyphicon.glyphicon-tasks
-									.later-label.noselect When I have time
-							.col-xs-4
-								.button(data-value="custom")
-									.glyphicon.glyphicon-pencil
-									.later-label.noselect Pick a Date
+						#later-picker-root
 		#label-picker.modal.fade(tabindex="-1" role="dialog")
 			.modal-dialog
 				.modal-content
@@ -230,8 +192,7 @@ html(lang="en")
 		script(type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/messenger/1.4.2/js/messenger.js")
 		script(type='text/javascript' src="public/filesize.min.js")
 		script(type='text/javascript' src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2014-11-29/FileSaver.min.js")
-		script(type='text/javascript' src='public/frontend.js')
-		script(type='text/javascript' src='public/clientmain.js')
+		script(type='text/javascript' src=assetPath('main.js'))
 		script#handlebar-group(type='text/x-handlebars-template')
 			.group {{label}}
 		script#handlebar-thread(type='text/x-handlebars-template')

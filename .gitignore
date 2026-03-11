@@ -6,3 +6,6 @@
 
 # Ignore files managed by npm
 /node_modules/
+
+# Ignore generated frontend assets
+/public/assets/
