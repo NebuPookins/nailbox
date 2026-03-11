@@ -317,7 +317,6 @@ $(function() {
 			threadId: $divThread.data('threadId'),
 			subject: $divThread.find('.subject').text(),
 			setThreadId: function(threadId) {
-				$picker.data('threadId', threadId);
 				var islandState = ensureLabelPickerIsland();
 				if (islandState) {
 					islandState.instance.open({
@@ -346,7 +345,6 @@ $(function() {
 			return false;
 		}
 		$laterPicker.find('.modal-title').text(subject || '');
-		$laterPicker.data('threadId', threadId);
 		islandState.instance.open({
 			onHideThread: async function(selectedThreadId, hideUntil) {
 				var updateMessenger = messengerGetter().info('Hiding thread ' + selectedThreadId + '.');
@@ -370,7 +368,13 @@ $(function() {
 				$threadViewer.modal('hide');
 			},
 			setThreadId: function(threadId) {
-				$picker.data('threadId', threadId);
+				var islandState = ensureLabelPickerIsland();
+				if (islandState) {
+					islandState.instance.open({
+						labels: buildLabelPickerLabels(),
+						threadId: threadId
+					});
+				}
 			},
 			setTitle: function(subject) {
 				$picker.find('.modal-title').text(subject);
@@ -764,6 +768,18 @@ $(function() {
 
 	$threadViewer.on('hidden.bs.modal', function() {
 		clearThreadViewerState();
+	});
+
+	$labelPicker.on('hidden.bs.modal', function() {
+		if (labelPickerIsland && typeof labelPickerIsland.clear === 'function') {
+			labelPickerIsland.clear();
+		}
+	});
+
+	$laterPicker.on('hidden.bs.modal', function() {
+		if (laterPickerIsland && typeof laterPickerIsland.clear === 'function') {
+			laterPickerIsland.clear();
+		}
 	});
 
 	$main.on('click', 'a.view-on-gmail', function(eventObject) {

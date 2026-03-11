@@ -74,6 +74,10 @@ export function mountLabelPickerIsland({ container, notify, onDismiss, onMoveThr
 	renderApp();
 
 	return {
+		clear() {
+			state.threadId = null;
+			renderApp();
+		},
 		open({ labels, threadId }) {
 			state.labels = Array.isArray(labels) ? labels : [];
 			state.threadId = threadId || null;

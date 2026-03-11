@@ -85,6 +85,11 @@ export function mountLaterPickerIsland({ container, notify, onDismiss, onHidden 
 	renderApp();
 
 	return {
+		clear() {
+			state.onHideThread = null;
+			state.threadId = null;
+			renderApp();
+		},
 		open({ onHideThread, threadId }) {
 			state.onHideThread = onHideThread;
 			state.threadId = threadId;
