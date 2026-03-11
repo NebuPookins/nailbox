@@ -43,6 +43,7 @@ $(function() {
 	var $authControls = $('#auth-controls');
 	var $threadViewer = $('#thread-viewer');
 	var $labelPicker = $('#label-picker');
+	var $labelPickerRoot = $('#label-picker-root');
 	var $laterPicker = $('#later-picker');
 	var $laterPickerRoot = $('#later-picker-root');
 	var $settingsBtn = $('#settings-btn');
@@ -57,6 +58,7 @@ $(function() {
 	};
 	var labelsCache = [];
 	var groupingRulesIsland = null;
+	var labelPickerIsland = null;
 	var laterPickerIsland = null;
 	var appApi = frontendApi.createAppApi({
 		onApiError: function(error) {
@@ -84,7 +86,6 @@ $(function() {
 	handlebarsTemplates.thread = Handlebars.compile($('#handlebar-thread').html());
 	handlebarsTemplates.message = Handlebars.compile($('#handlebar-message').html());
 	handlebarsTemplates.deletedMessages = Handlebars.compile($('#handlebar-deleted-messages').html());
-	handlebarsTemplates.labelSelection = Handlebars.compile($('#handlebar-label-selection').html());
 
 	Handlebars.registerHelper('nMore', function(total, amountToSubtract) {
 		if (typeof amountToSubtract !== 'number') {
@@ -228,21 +229,11 @@ $(function() {
 	async function loadLabels() {
 		var labels = await appApi.loadLabels();
 		labelsCache = labels;
-		populateLabelPicker();
+		var islandState = ensureLabelPickerIsland();
+		if (islandState) {
+			islandState.instance.setLabels(buildLabelPickerLabels());
+		}
 		return labels;
-	}
-
-	function populateLabelPicker() {
-		var $labelList = $labelPicker.find('ul.label-list');
-		$labelList.empty();
-		filterSelectableLabels(labelsCache)
-			.forEach(function(label) {
-				$labelList.append(handlebarsTemplates.labelSelection({
-					id: label.id,
-					isSystem: label.type === 'system',
-					hue: (label.name.hashCode() % 360)
-				}));
-			});
 	}
 
 	async function syncThreadsFromGoogle(updateMessenger) {
@@ -367,6 +358,13 @@ $(function() {
 			subject: $divThread.find('.subject').text(),
 			setThreadId: function(threadId) {
 				$picker.data('threadId', threadId);
+				var islandState = ensureLabelPickerIsland();
+				if (islandState) {
+					islandState.instance.open({
+						labels: buildLabelPickerLabels(),
+						threadId: threadId
+					});
+				}
 			},
 			setTitle: function(subject) {
 				$picker.find('.modal-title').text(subject);
@@ -445,6 +443,23 @@ $(function() {
 		};
 	}
 
+	function createLabelPickerNotify() {
+		return {
+			error: function(message) {
+				messengerGetter().error(message);
+			}
+		};
+	}
+
+	function buildLabelPickerLabels() {
+		return filterSelectableLabels(labelsCache).map(function(label) {
+			return {
+				...label,
+				hue: typeof label.name === 'string' ? (label.name.hashCode() % 360) : 0
+			};
+		});
+	}
+
 	function ensureGroupingRulesIsland() {
 		if (groupingRulesIsland) {
 			return {
@@ -497,6 +512,35 @@ $(function() {
 		});
 		return {
 			instance: laterPickerIsland,
+			wasCreated: true
+		};
+	}
+
+	function ensureLabelPickerIsland() {
+		if (labelPickerIsland) {
+			return {
+				instance: labelPickerIsland,
+				wasCreated: false
+			};
+		}
+		if (!$labelPickerRoot.length) {
+			return null;
+		}
+		if (typeof frontendApi.mountLabelPickerIsland !== 'function') {
+			return null;
+		}
+		labelPickerIsland = frontendApi.mountLabelPickerIsland({
+			container: $labelPickerRoot.get(0),
+			notify: createLabelPickerNotify(),
+			onDismiss: function() {
+				$labelPicker.modal('hide');
+			},
+			onMoveThread: function(threadId, labelId) {
+				return threadActionController.moveThreadToLabel(threadId, labelId);
+			}
+		});
+		return {
+			instance: labelPickerIsland,
 			wasCreated: true
 		};
 	}
@@ -760,20 +804,6 @@ $(function() {
 	$main.on('click', 'a.view-on-gmail', function(eventObject) {
 		eventObject.stopPropagation();
 		return true;
-	});
-
-	$labelPicker.on('click', 'button', async function(eventObject) {
-		var threadId = $labelPicker.data('threadId');
-		var labelId = $(eventObject.currentTarget).data('label-id');
-		try {
-			var result = await threadActionController.moveThreadToLabel(threadId, labelId);
-			if (!result || !result.ok) {
-				return;
-			}
-			$labelPicker.modal('hide');
-		} catch (error) {
-			reportAsyncError(error);
-		}
 	});
 
 	$settingsBtn.on('click', function() {

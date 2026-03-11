@@ -1,5 +1,6 @@
 import { createAppApi, createGroupingRulesApi } from './api.js';
 import { mountGroupingRulesIsland } from './grouping_rules_island.jsx';
+import { mountLabelPickerIsland } from './label_picker_island.jsx';
 import { mountLaterPickerIsland } from './later_picker_island.jsx';
 
 export function mountGroupingRulesSettings({ container, notify, onSaved }) {
@@ -16,6 +17,7 @@ const frontendApi = {
 	createGroupingRulesApi,
 	mountGroupingRulesIsland,
 	mountGroupingRulesSettings,
+	mountLabelPickerIsland,
 	mountLaterPickerIsland,
 };
 
@@ -28,6 +30,10 @@ if (typeof window !== 'undefined') {
 	window.NailboxLaterPicker = {
 		mount: mountLaterPickerIsland,
 		mountLaterPickerIsland,
+	};
+	window.NailboxLabelPicker = {
+		mount: mountLabelPickerIsland,
+		mountLabelPickerIsland,
 	};
 }
 
