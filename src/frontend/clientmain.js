@@ -1,8 +1,16 @@
 import frontendApi from './index.js';
 import {
+	renderThreadGroup,
+	renderThreadItem,
+} from './thread_list_presenter.js';
+import {
 	createThreadActionController,
 	filterSelectableLabels,
 } from './thread_action_controller.js';
+import {
+	renderDeletedMessagesNotice,
+	renderThreadMessage,
+} from './thread_viewer_presenter.js';
 import { createThreadViewerController } from './thread_viewer_controller.js';
 
 $(function() {
@@ -79,74 +87,6 @@ $(function() {
 			return appApi.updateMessageWordcount(threadId, messageId, wordcount);
 		},
 		threadActionController: threadActionController
-	});
-
-	var handlebarsTemplates = {};
-	handlebarsTemplates.group = Handlebars.compile($('#handlebar-group').html());
-	handlebarsTemplates.thread = Handlebars.compile($('#handlebar-thread').html());
-	handlebarsTemplates.message = Handlebars.compile($('#handlebar-message').html());
-	handlebarsTemplates.deletedMessages = Handlebars.compile($('#handlebar-deleted-messages').html());
-
-	Handlebars.registerHelper('nMore', function(total, amountToSubtract) {
-		if (typeof amountToSubtract !== 'number') {
-			amountToSubtract = 1;
-		}
-		return total - amountToSubtract;
-	});
-
-	Handlebars.registerHelper('filesize', function(bytes) {
-		if (typeof filesize === 'function') {
-			return filesize(bytes);
-		}
-		return bytes + ' bytes';
-	});
-
-	Handlebars.registerHelper('prettyTimestamp', function(timestamp) {
-		var now = moment();
-		var momentToFormat = moment(timestamp);
-		if (momentToFormat.isSame(now, 'day')) {
-			return momentToFormat.format('h:mm A');
-		}
-		if (momentToFormat.isSame(now, 'week')) {
-			return momentToFormat.format('ddd h:mm A');
-		}
-		if (momentToFormat.isSame(now, 'year')) {
-			return momentToFormat.format('MMM Do');
-		}
-		return momentToFormat.format('YYYY-MMM-DD');
-	});
-
-	Handlebars.registerHelper('formatReadTime', function(totalSeconds) {
-		if (typeof totalSeconds !== 'number' || totalSeconds < 0) {
-			return '';
-		}
-		if (totalSeconds === 0) {
-			return '0 sec read';
-		}
-		if (totalSeconds < 60) {
-			return totalSeconds + ' sec read';
-		}
-		var minutes = Math.round(totalSeconds / 60);
-		if (minutes <= 1) {
-			return '1 min read';
-		}
-		return minutes + ' min read';
-	});
-
-	Handlebars.registerHelper('pluralize', function(number, singular, plural) {
-		return number === 1 ? singular : plural;
-	});
-
-	Handlebars.registerHelper('labelIdToName', function(labelId) {
-		var labelObj = labelsCache.find(function(label) { return label.id === labelId; });
-		if (!labelObj) {
-			return '';
-		}
-		var match = /^CATEGORY_([A-Z]+)$/.exec(labelObj.id);
-		if (labelObj.type === 'system' && match !== null) {
-			return match[1].charAt(0).toUpperCase() + match[1].substr(1).toLowerCase();
-		}
-		return labelObj.name;
 	});
 
 	String.prototype.hashCode = function() {
@@ -288,20 +228,16 @@ $(function() {
 			$main.empty();
 			$status.hide();
 			groupsOfThreads.forEach(function(group) {
-				$main.append($(handlebarsTemplates.group(group)));
+				$main.append($(renderThreadGroup(group)));
 				group.threads.forEach(function(thread) {
 					if (thread.needsRefreshing) {
 						refreshThreadFromGoogle(thread.threadId);
 					}
 				});
 				group.threads.forEach(function(thread) {
-					thread.mainDisplayedLabelIds = thread.labelIds.filter(function(labelId) {
-						return labelId !== 'INBOX' &&
-							labelId !== 'UNREAD' &&
-							labelId !== 'SENT' &&
-							labelId !== 'TRASH';
-					});
-					var $thread = $(handlebarsTemplates.thread(thread));
+					var $thread = $(renderThreadItem(thread, {
+						labels: labelsCache,
+					}));
 					$thread.data('labelIds', thread.labelIds);
 					$main.append($thread);
 				});
@@ -648,10 +584,10 @@ $(function() {
 		var $threads = $threadViewer.find('.threads');
 		await threadViewerController.openThread({
 			appendDeletedMessages: function(payload) {
-				$threads.append(handlebarsTemplates.deletedMessages(payload));
+				$threads.append(renderDeletedMessagesNotice(payload));
 			},
 			appendMessage: function(message) {
-				$threads.append(handlebarsTemplates.message(message));
+				$threads.append(renderThreadMessage(message));
 			},
 			clearThreads: function() {
 				$threads.empty();
