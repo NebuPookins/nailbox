@@ -3,6 +3,7 @@ import {
 	createThreadActionController,
 	filterSelectableLabels,
 } from './thread_action_controller.js';
+import { createThreadViewerController } from './thread_viewer_controller.js';
 
 $(function() {
 	'use strict';
@@ -66,6 +67,16 @@ $(function() {
 		appApi: appApi,
 		messengerGetter: messengerGetter,
 		onThreadRemoved: deleteThreadFromUI
+	});
+	var threadViewerController = createThreadViewerController({
+		appApi: appApi,
+		getThreadData: getThreadData,
+		messengerGetter: messengerGetter,
+		onError: reportAsyncError,
+		onUpdateMessageWordcount: function(threadId, messageId, wordcount) {
+			return appApi.updateMessageWordcount(threadId, messageId, wordcount);
+		},
+		threadActionController: threadActionController
 	});
 
 	var handlebarsTemplates = {};
@@ -349,21 +360,6 @@ $(function() {
 		}
 	}
 
-	function b64toBlob(b64Data) {
-		var sliceSize = 512;
-		var byteCharacters = atob(b64Data);
-		var byteArrays = [];
-		for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
-			var slice = byteCharacters.slice(offset, offset + sliceSize);
-			var byteNumbers = new Array(slice.length);
-			for (var i = 0; i < slice.length; i++) {
-				byteNumbers[i] = slice.charCodeAt(i);
-			}
-			byteArrays.push(new Uint8Array(byteNumbers));
-		}
-		return new Blob(byteArrays);
-	}
-
 	function showLabelPickerFromThreadRow($mainBtnClicked, $picker) {
 		var $divThread = $mainBtnClicked.parents('.thread[data-thread-id]');
 		return threadActionController.openLabelPicker({
@@ -425,16 +421,6 @@ $(function() {
 				$picker.modal('show');
 			}
 		});
-	}
-
-	function showLaterPickerFromThreadViewer() {
-		var threadId = $threadViewer.data('threadId');
-		if (!threadId) {
-			messengerGetter().error('Missing thread id.');
-			return false;
-		}
-		$threadViewer.modal('hide');
-		return showLaterPicker(threadId, $threadViewer.find('.modal-title').text());
 	}
 
 	function createGroupingRulesNotify() {
@@ -615,73 +601,66 @@ $(function() {
 			return true;
 		}
 		var $threadDiv = $(eventObject.currentTarget);
-		var threadId = $threadDiv.data('threadId');
 		var $threads = $threadViewer.find('.threads');
-		var updateMessenger = messengerGetter().info('Downloading thread data for ' + threadId + '...');
-		$threadViewer.data('threadId', threadId);
-		$threadViewer.find('.modal-title').text($threadDiv.find('.subject').text());
-		$threadViewer.find('.senders').text($threadDiv.find('.senders').attr('title') || '');
-		$threadViewer.find('.receivers').text($threadDiv.find('.receivers').attr('title') || '');
-		$threads.text($threadDiv.find('.snippet').text());
-		$threadViewer.find('.loading-img').show();
-		$threadViewer.modal('show');
-		try {
-			var threadData = await getThreadData(threadId, 0, updateMessenger);
-			if ($threadViewer.data('threadId') !== threadId) {
-				return;
-			}
-			$threadViewer.find('.loading-img').hide();
-			$threads.empty();
-			var nonDeletedMessages = threadData.messages.filter(function(message) {
-				return !message.deleted;
-			});
-			if (threadData.messages.length > nonDeletedMessages.length) {
-				$threads.append(handlebarsTemplates.deletedMessages({
-					num: threadData.messages.length - nonDeletedMessages.length,
-					threadId: threadId
-				}));
-			}
-			nonDeletedMessages.forEach(function(message) {
-				message.duration = moment.duration(message.timeToReadSeconds, 'seconds').humanize();
+		await threadViewerController.openThread({
+			appendDeletedMessages: function(payload) {
+				$threads.append(handlebarsTemplates.deletedMessages(payload));
+			},
+			appendMessage: function(message) {
 				$threads.append(handlebarsTemplates.message(message));
-				appApi.updateMessageWordcount(threadId, message.messageId, message.wordcount).catch(reportAsyncError);
-			});
-			updateMessenger.update({
-				type: 'success',
-				message: 'Successfully downloaded thread data for ' + threadId + '.'
-			});
-		} catch (error) {
-			reportAsyncError(error);
-		}
+			},
+			clearThreads: function() {
+				$threads.empty();
+			},
+			getCurrentThreadId: function() {
+				return $threadViewer.data('threadId');
+			},
+			hideLoading: function() {
+				$threadViewer.find('.loading-img').hide();
+			},
+			receiversText: $threadDiv.find('.receivers').attr('title') || '',
+			sendersText: $threadDiv.find('.senders').attr('title') || '',
+			setReceivers: function(text) {
+				$threadViewer.find('.receivers').text(text);
+			},
+			setSenders: function(text) {
+				$threadViewer.find('.senders').text(text);
+			},
+			setThreadId: function(threadId) {
+				$threadViewer.data('threadId', threadId);
+			},
+			setThreadsLoadingText: function(text) {
+				$threads.text(text);
+			},
+			setTitle: function(subject) {
+				$threadViewer.find('.modal-title').text(subject);
+			},
+			showLoading: function() {
+				$threadViewer.find('.loading-img').show();
+			},
+			showModal: function() {
+				$threadViewer.modal('show');
+			},
+			snippet: $threadDiv.find('.snippet').text(),
+			subject: $threadDiv.find('.subject').text(),
+			threadId: $threadDiv.data('threadId')
+		});
 	});
 
 	$threadViewer.find('button.reply-all').on('click', async function() {
-		var threadId = $threadViewer.data('threadId');
-		var updateMessenger = messengerGetter().info('Sending reply to thread ' + threadId + '...');
-		if (!threadId || !authStatus.emailAddress) {
-			updateMessenger.update({
-				type: 'error',
-				message: 'Missing thread id or authenticated email address.'
-			});
-			return;
-		}
 		try {
-			var base64EncodedEmail = await appApi.buildRfc2822({
-				myEmail: authStatus.emailAddress,
-				threadId: threadId,
+			await threadViewerController.replyAll({
 				body: $threadViewer.find('.reply textarea').val(),
-				inReplyTo: $threadViewer.find('.threads .message:last').data('messageId')
+				clearReply: function() {
+					$threadViewer.find('.reply textarea').val('');
+				},
+				emailAddress: authStatus.emailAddress,
+				hideModal: function() {
+					$threadViewer.modal('hide');
+				},
+				inReplyTo: $threadViewer.find('.threads .message:last').data('messageId'),
+				threadId: $threadViewer.data('threadId')
 			});
-			var resp = await appApi.sendMessage({
-				threadId: threadId,
-				raw: base64EncodedEmail
-			});
-			updateMessenger.update({
-				type: 'success',
-				message: 'Successfully sent message with id ' + resp.id + '.'
-			});
-			$threadViewer.find('.reply textarea').val('');
-			$threadViewer.modal('hide');
 		} catch (error) {
 			reportAsyncError(error);
 		}
@@ -689,28 +668,31 @@ $(function() {
 
 	$threadViewer.on('click', 'button.dl-attachment', async function(eventObj) {
 		var $clickedButton = $(eventObj.currentTarget);
-		var attachmentId = $clickedButton.data('attachment-id');
-		var attachmentName = $clickedButton.data('attachment-name');
-		var messageId = $clickedButton.parents('.message').data('message-id');
 		try {
-			var resp = await appApi.getAttachment(messageId, attachmentId);
-			var base64Version = resp.data.replace(/[-_]/g, function(char) {
-				return char === '-' ? '+' : '/';
+			await threadViewerController.downloadAttachment({
+				attachmentId: $clickedButton.data('attachment-id'),
+				attachmentName: $clickedButton.data('attachment-name'),
+				messageId: $clickedButton.parents('.message').data('message-id'),
+				saveAttachment: function(blob, attachmentName) {
+					saveAs(blob, attachmentName);
+				}
 			});
-			saveAs(b64toBlob(base64Version), attachmentName);
 		} catch (error) {
 			reportAsyncError(error);
 		}
 	});
 
 	$threadViewer.find('button.delete').on('click', async function() {
-		var threadId = $threadViewer.data('threadId');
 		try {
-			var result = await threadActionController.deleteThread(threadId);
+			var result = await threadViewerController.deleteCurrentThread({
+				hideModal: function() {
+					$threadViewer.modal('hide');
+				},
+				threadId: $threadViewer.data('threadId')
+			});
 			if (!result || !result.ok) {
 				return false;
 			}
-			$threadViewer.modal('hide');
 		} catch (error) {
 			reportAsyncError(error);
 		}
@@ -718,13 +700,16 @@ $(function() {
 	});
 
 	$threadViewer.find('button.archive-thread').on('click', async function() {
-		var threadId = $threadViewer.data('threadId');
 		try {
-			var result = await threadActionController.archiveThread(threadId);
+			var result = await threadViewerController.archiveCurrentThread({
+				hideModal: function() {
+					$threadViewer.modal('hide');
+				},
+				threadId: $threadViewer.data('threadId')
+			});
 			if (!result || !result.ok) {
 				return false;
 			}
-			$threadViewer.modal('hide');
 		} catch (error) {
 			reportAsyncError(error);
 		}
@@ -736,32 +721,39 @@ $(function() {
 	});
 
 	$threadViewer.find('button.later').on('click', function() {
-		return showLaterPickerFromThreadViewer();
+		return threadViewerController.showLaterPicker({
+			hideModal: function() {
+				$threadViewer.modal('hide');
+			},
+			openLaterPicker: showLaterPicker,
+			subject: $threadViewer.find('.modal-title').text(),
+			threadId: $threadViewer.data('threadId')
+		});
 	});
 
 	$threadViewer.find('button.view-on-gmail').on('click', function() {
-		var threadId = $threadViewer.data('threadId');
-		if (threadId) {
-			window.open('https://mail.google.com/mail/u/0/#inbox/' + threadId, '_blank');
-		}
-		return false;
+		return threadViewerController.viewOnGmail({
+			openWindow: function(url, target) {
+				window.open(url, target);
+			},
+			threadId: $threadViewer.data('threadId')
+		});
 	});
 
 	$threadViewer.on('keydown', async function(event) {
-		if ($threadViewer.find('textarea').is(':focus')) {
-			return;
-		}
-		if (event.key === 'Delete') {
-			var threadId = $threadViewer.data('threadId');
-			try {
-				var result = await threadActionController.deleteThread(threadId);
-				if (!result || !result.ok) {
-					return;
-				}
-				$threadViewer.modal('hide');
-			} catch (error) {
-				reportAsyncError(error);
-			}
+		try {
+			await threadViewerController.handleKeydown({
+				event: event,
+				hideModal: function() {
+					$threadViewer.modal('hide');
+				},
+				isReplyFocused: function() {
+					return $threadViewer.find('textarea').is(':focus');
+				},
+				threadId: $threadViewer.data('threadId')
+			});
+		} catch (error) {
+			reportAsyncError(error);
 		}
 	});
 
