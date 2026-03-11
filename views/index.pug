@@ -54,6 +54,14 @@ html(lang="en")
 				line-height: 1.2;
 				margin-top: 6px;
 			}
+			#label-picker-root .label-picker-grid {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+			}
+			#label-picker-root .label-picker-grid .btn {
+				min-width: 120px;
+			}
 			.noselect {
 				-webkit-touch-callout: none; /* iOS Safari */
 				-webkit-user-select: none;   /* Chrome/Safari/Opera */
@@ -177,11 +185,7 @@ html(lang="en")
 					.modal-header
 						h4.modal-title Subject Line Here
 					.modal-body
-						ul.label-list
-							li Inbox
-							li Spam
-							li Trash
-							li Unread
+						#label-picker-root
 		#settings-modal.modal.fade(tabindex="-1" role="dialog")
 			.modal-dialog.modal-lg
 				.modal-content
@@ -296,7 +300,3 @@ html(lang="en")
 								| {{filesize size}}
 							| 
 							| {{/each}}
-		script#handlebar-label-selection(type='text/x-handlebars-template')
-			| <button class="btn {{#if isSystem}}btn-warning{{else}}{{/if}}" {{#if isSystem}}{{else}}style="background-image: linear-gradient(to bottom,hsl({{hue}},84%,40%),hsl({{hue}},84%,38%) 100%); border-color: hsl({{hue}},85%,26%); color:#fff; text-shadow: 0 -1px 0 rgba(0,0,0,.2);"{{/if}}" data-label-id="{{id}}")>
-			| {{labelIdToName id}}
-			| </button>
