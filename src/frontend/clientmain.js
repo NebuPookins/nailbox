@@ -1,4 +1,8 @@
 import frontendApi from './index.js';
+import {
+	createThreadActionController,
+	filterSelectableLabels,
+} from './thread_action_controller.js';
 
 $(function() {
 	'use strict';
@@ -57,6 +61,11 @@ $(function() {
 		onApiError: function(error) {
 			handleApiError(error, error && error.message);
 		}
+	});
+	var threadActionController = createThreadActionController({
+		appApi: appApi,
+		messengerGetter: messengerGetter,
+		onThreadRemoved: deleteThreadFromUI
 	});
 
 	var handlebarsTemplates = {};
@@ -215,20 +224,7 @@ $(function() {
 	function populateLabelPicker() {
 		var $labelList = $labelPicker.find('ul.label-list');
 		$labelList.empty();
-		labelsCache
-			.filter(function(label) {
-				return label.labelListVisibility !== 'labelHide';
-			})
-			.filter(function(label) {
-				return label.id !== 'SENT' && label.id !== 'DRAFT';
-			})
-			.filter(function(label) {
-				return label.id !== 'INBOX' &&
-					label.id !== 'IMPORTANT' &&
-					label.id !== 'STARRED' &&
-					label.id !== 'TRASH' &&
-					label.id !== 'UNREAD';
-			})
+		filterSelectableLabels(labelsCache)
 			.forEach(function(label) {
 				$labelList.append(handlebarsTemplates.labelSelection({
 					id: label.id,
@@ -334,33 +330,6 @@ $(function() {
 		});
 	}
 
-	async function deleteThread(threadId, updateMessenger) {
-		updateMessenger.update({
-			type: 'info',
-			message: 'Deleting thread ' + threadId + '...'
-		});
-		await appApi.deleteThread(threadId);
-		deleteThreadFromUI(threadId);
-	}
-
-	async function archiveThread(threadId, updateMessenger) {
-		updateMessenger.update({
-			type: 'info',
-			message: 'Archiving thread ' + threadId + '...'
-		});
-		await appApi.archiveThread(threadId);
-		deleteThreadFromUI(threadId);
-	}
-
-	async function moveThreadToLabel(threadId, labelId, updateMessenger) {
-		updateMessenger.update({
-			type: 'info',
-			message: 'Moving thread ' + threadId + ' to label...'
-		});
-		await appApi.moveThreadToLabel(threadId, labelId);
-		deleteThreadFromUI(threadId);
-	}
-
 	async function getThreadData(threadId, attemptNumber, updateMessenger) {
 		try {
 			return await appApi.getThreadData(threadId);
@@ -395,13 +364,21 @@ $(function() {
 		return new Blob(byteArrays);
 	}
 
-	function mainClickerShowPicker($mainBtnClicked, $picker) {
+	function showLabelPickerFromThreadRow($mainBtnClicked, $picker) {
 		var $divThread = $mainBtnClicked.parents('.thread[data-thread-id]');
-		var threadId = $divThread.data('threadId');
-		$picker.find('.modal-title').text($divThread.find('.subject').text());
-		$picker.data('threadId', threadId);
-		$picker.modal('show');
-		return false;
+		return threadActionController.openLabelPicker({
+			threadId: $divThread.data('threadId'),
+			subject: $divThread.find('.subject').text(),
+			setThreadId: function(threadId) {
+				$picker.data('threadId', threadId);
+			},
+			setTitle: function(subject) {
+				$picker.find('.modal-title').text(subject);
+			},
+			show: function() {
+				$picker.modal('show');
+			}
+		});
 	}
 
 	function showLaterPicker(threadId, subject) {
@@ -431,17 +408,23 @@ $(function() {
 		return false;
 	}
 
-	function switchFromThreadViewerToPicker($picker) {
-		var threadId = $threadViewer.data('threadId');
-		if (threadId) {
-			$threadViewer.modal('hide');
-			$picker.find('.modal-title').text($threadViewer.find('.modal-title').text());
-			$picker.data('threadId', threadId);
-			$picker.modal('show');
-		} else {
-			messengerGetter().error('Missing thread id.');
-		}
-		return false;
+	function switchFromThreadViewerToLabelPicker($picker) {
+		return threadActionController.switchFromThreadViewerToLabelPicker({
+			threadId: $threadViewer.data('threadId'),
+			subject: $threadViewer.find('.modal-title').text(),
+			hideThreadViewer: function() {
+				$threadViewer.modal('hide');
+			},
+			setThreadId: function(threadId) {
+				$picker.data('threadId', threadId);
+			},
+			setTitle: function(subject) {
+				$picker.find('.modal-title').text(subject);
+			},
+			show: function() {
+				$picker.modal('show');
+			}
+		});
 	}
 
 	function showLaterPickerFromThreadViewer() {
@@ -599,13 +582,8 @@ $(function() {
 	$main.on('click', 'button.delete', async function(eventObject) {
 		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
 		var threadId = $divThread.data('threadId');
-		var updateMessenger = messengerGetter().info('Deleting thread ' + threadId + '...');
 		try {
-			await deleteThread(threadId, updateMessenger);
-			updateMessenger.update({
-				type: 'success',
-				message: 'Successfully deleted message ' + threadId
-			});
+			await threadActionController.deleteThread(threadId);
 		} catch (error) {
 			reportAsyncError(error);
 		}
@@ -615,13 +593,8 @@ $(function() {
 	$main.on('click', 'button.archive-thread', async function(eventObject) {
 		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
 		var threadId = $divThread.data('threadId');
-		var updateMessenger = messengerGetter().info('Archiving thread ' + threadId + '...');
 		try {
-			await archiveThread(threadId, updateMessenger);
-			updateMessenger.update({
-				type: 'success',
-				message: 'Successfully archived thread ' + threadId + '.'
-			});
+			await threadActionController.archiveThread(threadId);
 		} catch (error) {
 			reportAsyncError(error);
 		}
@@ -629,8 +602,7 @@ $(function() {
 	});
 
 	$main.on('click', 'button.label-thread', function(eventObject) {
-		mainClickerShowPicker($(eventObject.currentTarget), $labelPicker);
-		return false;
+		return showLabelPickerFromThreadRow($(eventObject.currentTarget), $labelPicker);
 	});
 
 	$main.on('click', 'button.later', function(eventObject) {
@@ -733,20 +705,11 @@ $(function() {
 
 	$threadViewer.find('button.delete').on('click', async function() {
 		var threadId = $threadViewer.data('threadId');
-		var updateMessenger = messengerGetter().info('Deleting thread ' + threadId + '...');
-		if (!threadId) {
-			updateMessenger.update({
-				type: 'error',
-				message: 'Missing thread id.'
-			});
-			return false;
-		}
 		try {
-			await deleteThread(threadId, updateMessenger);
-			updateMessenger.update({
-				type: 'success',
-				message: 'Successfully deleted message ' + threadId
-			});
+			var result = await threadActionController.deleteThread(threadId);
+			if (!result || !result.ok) {
+				return false;
+			}
 			$threadViewer.modal('hide');
 		} catch (error) {
 			reportAsyncError(error);
@@ -756,21 +719,12 @@ $(function() {
 
 	$threadViewer.find('button.archive-thread').on('click', async function() {
 		var threadId = $threadViewer.data('threadId');
-		var updateMessenger = messengerGetter().info('Archiving thread ' + threadId + '...');
-		if (!threadId) {
-			updateMessenger.update({
-				type: 'error',
-				message: 'Missing thread id.'
-			});
-			return false;
-		}
 		try {
-			await archiveThread(threadId, updateMessenger);
+			var result = await threadActionController.archiveThread(threadId);
+			if (!result || !result.ok) {
+				return false;
+			}
 			$threadViewer.modal('hide');
-			updateMessenger.update({
-				type: 'success',
-				message: 'Successfully archived thread ' + threadId + '.'
-			});
 		} catch (error) {
 			reportAsyncError(error);
 		}
@@ -778,7 +732,7 @@ $(function() {
 	});
 
 	$threadViewer.find('button.label-thread').on('click', function() {
-		return switchFromThreadViewerToPicker($labelPicker);
+		return switchFromThreadViewerToLabelPicker($labelPicker);
 	});
 
 	$threadViewer.find('button.later').on('click', function() {
@@ -799,13 +753,11 @@ $(function() {
 		}
 		if (event.key === 'Delete') {
 			var threadId = $threadViewer.data('threadId');
-			var updateMessenger = messengerGetter().info('Deleting thread ' + threadId + '...');
 			try {
-				await deleteThread(threadId, updateMessenger);
-				updateMessenger.update({
-					type: 'success',
-					message: 'Successfully deleted message ' + threadId
-				});
+				var result = await threadActionController.deleteThread(threadId);
+				if (!result || !result.ok) {
+					return;
+				}
 				$threadViewer.modal('hide');
 			} catch (error) {
 				reportAsyncError(error);
@@ -821,21 +773,12 @@ $(function() {
 	$labelPicker.on('click', 'button', async function(eventObject) {
 		var threadId = $labelPicker.data('threadId');
 		var labelId = $(eventObject.currentTarget).data('label-id');
-		var updateMessenger = messengerGetter().info('Moving thread ' + threadId + ' to label...');
-		if (!threadId) {
-			updateMessenger.update({
-				type: 'error',
-				message: 'Missing thread id.'
-			});
-			return;
-		}
 		try {
-			await moveThreadToLabel(threadId, labelId, updateMessenger);
+			var result = await threadActionController.moveThreadToLabel(threadId, labelId);
+			if (!result || !result.ok) {
+				return;
+			}
 			$labelPicker.modal('hide');
-			updateMessenger.update({
-				type: 'success',
-				message: 'Successfully moved thread ' + threadId + ' to label.'
-			});
 		} catch (error) {
 			reportAsyncError(error);
 		}
