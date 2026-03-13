@@ -1,8 +1,15 @@
 import frontendApi from './index.js';
 import {
+	renderConnectedContent,
+	renderDisconnectedContent,
+	renderSetupNeededContent,
+} from './auth_status_presenter.js';
+import { createAppShellController } from './app_shell_controller.js';
+import {
 	renderThreadGroup,
 	renderThreadItem,
 } from './thread_list_presenter.js';
+import { createThreadListController } from './thread_list_controller.js';
 import {
 	createThreadActionController,
 	filterSelectableLabels,
@@ -90,6 +97,97 @@ $(function() {
 		},
 		threadActionController: threadActionController
 	});
+	var appShellController = createAppShellController({
+		appApi: appApi,
+		getAuthStatus: function() {
+			return authStatus;
+		},
+		loadLabels: loadLabels,
+		messengerGetter: messengerGetter,
+		renderConnectedState: renderConnectedState,
+		renderDisconnectedState: renderDisconnectedState,
+		renderSetupNeededState: renderSetupNeededState,
+		reportError: reportAsyncError,
+		setAuthStatus: function(nextAuthStatus) {
+			authStatus = nextAuthStatus;
+		},
+		syncThreadsFromGoogle: syncThreadsFromGoogle,
+		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer
+	});
+	var threadListController = createThreadListController({
+		openLabelPicker: function(threadSummary) {
+			return threadActionController.openLabelPicker({
+				threadId: threadSummary.threadId,
+				subject: threadSummary.subject,
+				setThreadId: function(threadId) {
+					var islandState = ensureLabelPickerIsland();
+					if (islandState) {
+						islandState.instance.open({
+							labels: buildLabelPickerLabels(),
+							threadId: threadId
+						});
+					}
+				},
+				setTitle: function(subject) {
+					$labelPicker.find('.modal-title').text(subject);
+				},
+				show: function() {
+					$labelPicker.modal('show');
+				}
+			});
+		},
+		openLaterPicker: showLaterPicker,
+		openThreadViewer: function(threadSummary) {
+			var $threads = $threadViewer.find('.threads');
+			return {
+				appendDeletedMessages: function(payload) {
+					$threads.append(renderDeletedMessagesNotice(payload));
+				},
+				appendMessage: function(message) {
+					$threads.append(renderThreadMessage(message));
+				},
+				clearThreads: function() {
+					$threads.empty();
+				},
+				getCurrentThreadId: function() {
+					return getThreadViewerThreadId();
+				},
+				hideLoading: function() {
+					$threadViewer.find('.loading-img').hide();
+				},
+				receiversText: threadSummary.receiversText,
+				sendersText: threadSummary.sendersText,
+				setReceivers: function(text) {
+					$threadViewer.find('.receivers').text(text);
+				},
+				setSenders: function(text) {
+					$threadViewer.find('.senders').text(text);
+				},
+				setThreadId: function(threadId) {
+					setThreadViewerThreadId(threadId);
+				},
+				setThreadsLoadingText: function(text) {
+					$threads.text(text);
+				},
+				setTitle: function(subject) {
+					setThreadViewerSubject(subject);
+					$threadViewer.find('.modal-title').text(subject);
+				},
+				showLoading: function() {
+					$threadViewer.find('.loading-img').show();
+				},
+				showModal: function() {
+					$threadViewer.modal('show');
+				},
+				snippet: threadSummary.snippet,
+				subject: threadSummary.subject,
+				threadId: threadSummary.threadId
+			};
+		},
+		reportError: reportAsyncError,
+		threadActionController: threadActionController,
+		threadViewerController: threadViewerController
+	});
 
 	String.prototype.hashCode = function() {
 		var hash = 0;
@@ -151,43 +249,23 @@ $(function() {
 	}
 
 	function renderSetupNeededState(message) {
-		$status.show().html(
-			'<h1>Google OAuth setup required</h1>' +
-			'<p>' + _.escape(message || 'Configure Google OAuth before Nailbox can talk to Gmail.') + '</p>' +
-			'<p><a class="btn btn-primary" href="/setup">Open setup</a></p>'
-		);
+		var content = renderSetupNeededContent(message);
+		$status.show().html(content.statusHtml);
 		$main.empty();
-		$authControls.empty();
+		$authControls.html(content.authControlsHtml);
 	}
 
 	function renderDisconnectedState(message) {
-		$status.show().html(
-			'<h1>Connect Gmail</h1>' +
-			'<p>' + _.escape(message || 'Gmail is not connected.') + '</p>' +
-			'<p><a class="btn btn-primary" href="/auth/google/start">Connect Gmail</a> ' +
-			'<a class="btn btn-default" href="/setup">Review setup</a></p>'
-		);
+		var content = renderDisconnectedContent(message);
+		$status.show().html(content.statusHtml);
 		$main.empty();
-		$authControls.html('<a class="btn btn-primary btn-sm" href="/auth/google/start">Connect Gmail</a>');
+		$authControls.html(content.authControlsHtml);
 	}
 
 	function renderConnectedState() {
-		$status.show().html(
-			'<h1>Loading Nailbox</h1>' +
-			'<p>Reading cached mail and refreshing Gmail in the background...</p>'
-		);
-		var escapedEmail = _.escape(authStatus.emailAddress || 'Connected');
-		$authControls.html(
-			'<span class="text-muted" style="margin-right:10px;">' + escapedEmail + '</span>' +
-			'<button class="btn btn-default btn-sm" id="refresh-now-btn">Sync Gmail</button> ' +
-			'<button class="btn btn-warning btn-sm" id="disconnect-gmail-btn">Disconnect</button>'
-		);
-	}
-
-	async function loadAuthStatus() {
-		var status = await appApi.loadAuthStatus();
-		authStatus = status;
-		return status;
+		var content = renderConnectedContent(authStatus);
+		$status.show().html(content.statusHtml);
+		$authControls.html(content.authControlsHtml);
 	}
 
 	async function loadLabels() {
@@ -309,29 +387,6 @@ $(function() {
 			});
 			throw error;
 		}
-	}
-
-	function showLabelPickerFromThreadRow($mainBtnClicked, $picker) {
-		var $divThread = $mainBtnClicked.parents('.thread[data-thread-id]');
-		return threadActionController.openLabelPicker({
-			threadId: $divThread.data('threadId'),
-			subject: $divThread.find('.subject').text(),
-			setThreadId: function(threadId) {
-				var islandState = ensureLabelPickerIsland();
-				if (islandState) {
-					islandState.instance.open({
-						labels: buildLabelPickerLabels(),
-						threadId: threadId
-					});
-				}
-			},
-			setTitle: function(subject) {
-				$picker.find('.modal-title').text(subject);
-			},
-			show: function() {
-				$picker.modal('show');
-			}
-		});
 	}
 
 	function showLaterPicker(threadId, subject) {
@@ -509,56 +564,11 @@ $(function() {
 		};
 	}
 
-	async function bootstrapConnectedApp() {
-		renderConnectedState();
-		try {
-			await updateUiWithThreadsFromServer(messengerGetter().info('Loading cached threads...'));
-			try {
-				await loadLabels();
-			} catch (error) {
-				messengerGetter().error('Failed to load Gmail labels. Continuing with cached mail.');
-			}
-			await syncThreadsFromGoogle(messengerGetter().info('Downloading new threads from Gmail...'));
-			await updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...'));
-		} catch (error) {
-			messengerGetter().error('Failed to refresh Gmail. Cached mail is still available.');
-		}
-
-		setInterval(function() {
-			if (authStatus.connected) {
-				updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...')).catch(reportAsyncError);
-			}
-		}, moment.duration(5, 'minutes').as('milliseconds'));
-
-		setInterval(function() {
-			if (authStatus.connected) {
-				syncThreadsFromGoogle(messengerGetter().info('Downloading new threads from Gmail...'))
-					.then(function() {
-						return updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...'));
-					})
-					.catch(reportAsyncError);
-			}
-		}, moment.duration(30, 'minutes').as('milliseconds'));
-	}
-
-	loadAuthStatus().then(function(status) {
-		if (!status.configured) {
-			renderSetupNeededState();
-			return;
-		}
-		if (!status.connected) {
-			renderDisconnectedState();
-			return;
-		}
-		bootstrapConnectedApp().catch(reportAsyncError);
-	}).catch(reportAsyncError);
+	appShellController.initialize().catch(reportAsyncError);
 
 	$authControls.on('click', '#disconnect-gmail-btn', async function() {
 		try {
-			await appApi.disconnectGmail();
-			authStatus.connected = false;
-			authStatus.emailAddress = null;
-			renderDisconnectedState('Gmail disconnected.');
+			await appShellController.disconnectGmail();
 		} catch (error) {
 			reportAsyncError(error);
 		}
@@ -566,8 +576,7 @@ $(function() {
 
 	$authControls.on('click', '#refresh-now-btn', async function() {
 		try {
-			await syncThreadsFromGoogle(messengerGetter().info('Syncing Gmail...'));
-			await updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...'));
+			await appShellController.refreshNow();
 		} catch (error) {
 			reportAsyncError(error);
 		}
@@ -575,33 +584,28 @@ $(function() {
 
 	$main.on('click', 'button.delete', async function(eventObject) {
 		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
-		var threadId = $divThread.data('threadId');
-		try {
-			await threadActionController.deleteThread(threadId);
-		} catch (error) {
-			reportAsyncError(error);
-		}
-		return false;
+		return threadListController.deleteThread($divThread.data('threadId'));
 	});
 
 	$main.on('click', 'button.archive-thread', async function(eventObject) {
 		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
-		var threadId = $divThread.data('threadId');
-		try {
-			await threadActionController.archiveThread(threadId);
-		} catch (error) {
-			reportAsyncError(error);
-		}
-		return false;
+		return threadListController.archiveThread($divThread.data('threadId'));
 	});
 
 	$main.on('click', 'button.label-thread', function(eventObject) {
-		return showLabelPickerFromThreadRow($(eventObject.currentTarget), $labelPicker);
+		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
+		return threadListController.openLabelPicker({
+			threadId: $divThread.data('threadId'),
+			subject: $divThread.find('.subject').text()
+		});
 	});
 
 	$main.on('click', 'button.later', function(eventObject) {
 		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
-		return showLaterPicker($divThread.data('threadId'), $divThread.find('.subject').text());
+		return threadListController.openLaterPicker({
+			threadId: $divThread.data('threadId'),
+			subject: $divThread.find('.subject').text()
+		});
 	});
 
 	$main.on('click', 'div.thread', async function(eventObject) {
@@ -609,47 +613,9 @@ $(function() {
 			return true;
 		}
 		var $threadDiv = $(eventObject.currentTarget);
-		var $threads = $threadViewer.find('.threads');
-		await threadViewerController.openThread({
-			appendDeletedMessages: function(payload) {
-				$threads.append(renderDeletedMessagesNotice(payload));
-			},
-			appendMessage: function(message) {
-				$threads.append(renderThreadMessage(message));
-			},
-			clearThreads: function() {
-				$threads.empty();
-			},
-			getCurrentThreadId: function() {
-				return getThreadViewerThreadId();
-			},
-			hideLoading: function() {
-				$threadViewer.find('.loading-img').hide();
-			},
+		await threadListController.openThread({
 			receiversText: $threadDiv.find('.receivers').attr('title') || '',
 			sendersText: $threadDiv.find('.senders').attr('title') || '',
-			setReceivers: function(text) {
-				$threadViewer.find('.receivers').text(text);
-			},
-			setSenders: function(text) {
-				$threadViewer.find('.senders').text(text);
-			},
-			setThreadId: function(threadId) {
-				setThreadViewerThreadId(threadId);
-			},
-			setThreadsLoadingText: function(text) {
-				$threads.text(text);
-			},
-			setTitle: function(subject) {
-				setThreadViewerSubject(subject);
-				$threadViewer.find('.modal-title').text(subject);
-			},
-			showLoading: function() {
-				$threadViewer.find('.loading-img').show();
-			},
-			showModal: function() {
-				$threadViewer.modal('show');
-			},
 			snippet: $threadDiv.find('.snippet').text(),
 			subject: $threadDiv.find('.subject').text(),
 			threadId: $threadDiv.data('threadId')
