@@ -32,12 +32,13 @@ $(function() {
 	}
 
 	if (typeof Messenger !== 'undefined') {
-		Messenger({
+		Messenger.options = {
+			theme: 'air',
 			messageDefaults: {
 				showCloseButton: true,
 				closeButtonText: 'x'
 			}
-		});
+		};
 	}
 
 	var messengerGetter = (function() {
