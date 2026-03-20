@@ -12,7 +12,6 @@ import {
 import { createThreadListController } from './thread_list_controller.js';
 import {
 	createThreadActionController,
-	filterSelectableLabels,
 } from './thread_action_controller.js';
 import {
 	renderDeletedMessagesNotice,
@@ -20,6 +19,8 @@ import {
 } from './thread_viewer_presenter.js';
 import { createThreadViewerState } from './thread_viewer_state.js';
 import { createThreadViewerController } from './thread_viewer_controller.js';
+import { createIslandManager } from './island_manager.js';
+import { wireModals } from './modal_wiring.js';
 
 $(function() {
 	'use strict';
@@ -74,121 +75,7 @@ $(function() {
 		scopes: []
 	};
 	var labelsCache = [];
-	var groupingRulesIsland = null;
-	var labelPickerIsland = null;
-	var laterPickerIsland = null;
 	var threadViewerState = createThreadViewerState();
-	var appApi = frontendApi.createAppApi({
-		onApiError: function(error) {
-			handleApiError(error, error && error.message);
-		}
-	});
-	var threadActionController = createThreadActionController({
-		appApi: appApi,
-		messengerGetter: messengerGetter,
-		onThreadRemoved: deleteThreadFromUI
-	});
-	var threadViewerController = createThreadViewerController({
-		appApi: appApi,
-		getThreadData: getThreadData,
-		messengerGetter: messengerGetter,
-		onError: reportAsyncError,
-		onUpdateMessageWordcount: function(threadId, messageId, wordcount) {
-			return appApi.updateMessageWordcount(threadId, messageId, wordcount);
-		},
-		threadActionController: threadActionController
-	});
-	var appShellController = createAppShellController({
-		appApi: appApi,
-		getAuthStatus: function() {
-			return authStatus;
-		},
-		loadLabels: loadLabels,
-		messengerGetter: messengerGetter,
-		renderConnectedState: renderConnectedState,
-		renderDisconnectedState: renderDisconnectedState,
-		renderSetupNeededState: renderSetupNeededState,
-		reportError: reportAsyncError,
-		setAuthStatus: function(nextAuthStatus) {
-			authStatus = nextAuthStatus;
-		},
-		syncThreadsFromGoogle: syncThreadsFromGoogle,
-		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer
-	});
-	var threadListController = createThreadListController({
-		openLabelPicker: function(threadSummary) {
-			return threadActionController.openLabelPicker({
-				threadId: threadSummary.threadId,
-				subject: threadSummary.subject,
-				setThreadId: function(threadId) {
-					var islandState = ensureLabelPickerIsland();
-					if (islandState) {
-						islandState.instance.open({
-							labels: buildLabelPickerLabels(),
-							threadId: threadId
-						});
-					}
-				},
-				setTitle: function(subject) {
-					$labelPicker.find('.modal-title').text(subject);
-				},
-				show: function() {
-					$labelPicker.modal('show');
-				}
-			});
-		},
-		openLaterPicker: showLaterPicker,
-		openThreadViewer: function(threadSummary) {
-			var $threads = $threadViewer.find('.threads');
-			return {
-				appendDeletedMessages: function(payload) {
-					$threads.append(renderDeletedMessagesNotice(payload));
-				},
-				appendMessage: function(message) {
-					$threads.append(renderThreadMessage(message));
-				},
-				clearThreads: function() {
-					$threads.empty();
-				},
-				getCurrentThreadId: function() {
-					return getThreadViewerThreadId();
-				},
-				hideLoading: function() {
-					$threadViewer.find('.loading-img').hide();
-				},
-				receiversText: threadSummary.receiversText,
-				sendersText: threadSummary.sendersText,
-				setReceivers: function(text) {
-					$threadViewer.find('.receivers').text(text);
-				},
-				setSenders: function(text) {
-					$threadViewer.find('.senders').text(text);
-				},
-				setThreadId: function(threadId) {
-					setThreadViewerThreadId(threadId);
-				},
-				setThreadsLoadingText: function(text) {
-					$threads.text(text);
-				},
-				setTitle: function(subject) {
-					setThreadViewerSubject(subject);
-					$threadViewer.find('.modal-title').text(subject);
-				},
-				showLoading: function() {
-					$threadViewer.find('.loading-img').show();
-				},
-				showModal: function() {
-					$threadViewer.modal('show');
-				},
-				snippet: threadSummary.snippet,
-				subject: threadSummary.subject,
-				threadId: threadSummary.threadId
-			};
-		},
-		reportError: reportAsyncError,
-		threadActionController: threadActionController,
-		threadViewerController: threadViewerController
-	});
 
 	String.prototype.hashCode = function() {
 		var hash = 0;
@@ -272,9 +159,9 @@ $(function() {
 	async function loadLabels() {
 		var labels = await appApi.loadLabels();
 		labelsCache = labels;
-		var islandState = ensureLabelPickerIsland();
+		var islandState = islands.ensureLabelPickerIsland();
 		if (islandState) {
-			islandState.instance.setLabels(buildLabelPickerLabels());
+			islandState.instance.setLabels(islands.buildLabelPickerLabels());
 		}
 		return labels;
 	}
@@ -391,7 +278,7 @@ $(function() {
 	}
 
 	function showLaterPicker(threadId, subject) {
-		var islandState = ensureLaterPickerIsland();
+		var islandState = islands.ensureLaterPickerIsland();
 		if (!threadId) {
 			messengerGetter().error('Missing thread id.');
 			return false;
@@ -416,353 +303,154 @@ $(function() {
 		return false;
 	}
 
-	function switchFromThreadViewerToLabelPicker($picker) {
-		return threadActionController.switchFromThreadViewerToLabelPicker({
-			threadId: getThreadViewerThreadId(),
-			subject: getThreadViewerSubject(),
-			hideThreadViewer: function() {
-				$threadViewer.modal('hide');
-			},
-			setThreadId: function(threadId) {
-				var islandState = ensureLabelPickerIsland();
-				if (islandState) {
-					islandState.instance.open({
-						labels: buildLabelPickerLabels(),
-						threadId: threadId
-					});
+	var appApi = frontendApi.createAppApi({
+		onApiError: function(error) {
+			handleApiError(error, error && error.message);
+		}
+	});
+	var threadActionController = createThreadActionController({
+		appApi: appApi,
+		messengerGetter: messengerGetter,
+		onThreadRemoved: deleteThreadFromUI
+	});
+	var islands = createIslandManager({
+		frontendApi: frontendApi,
+		$groupingRulesRoot: $groupingRulesRoot,
+		$labelPickerRoot: $labelPickerRoot,
+		$laterPickerRoot: $laterPickerRoot,
+		hideSettingsModal: function() { $settingsModal.modal('hide'); },
+		hideLabelPicker: function() { $labelPicker.modal('hide'); },
+		hideLaterPicker: function() { $laterPicker.modal('hide'); },
+		threadActionController: threadActionController,
+		getLabels: function() { return labelsCache; },
+		deleteThreadFromUI: deleteThreadFromUI,
+		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer,
+		messengerGetter: messengerGetter,
+		reportAsyncError: reportAsyncError,
+	});
+	var threadViewerController = createThreadViewerController({
+		appApi: appApi,
+		getThreadData: getThreadData,
+		messengerGetter: messengerGetter,
+		onError: reportAsyncError,
+		onUpdateMessageWordcount: function(threadId, messageId, wordcount) {
+			return appApi.updateMessageWordcount(threadId, messageId, wordcount);
+		},
+		threadActionController: threadActionController
+	});
+	var appShellController = createAppShellController({
+		appApi: appApi,
+		getAuthStatus: function() {
+			return authStatus;
+		},
+		loadLabels: loadLabels,
+		messengerGetter: messengerGetter,
+		renderConnectedState: renderConnectedState,
+		renderDisconnectedState: renderDisconnectedState,
+		renderSetupNeededState: renderSetupNeededState,
+		reportError: reportAsyncError,
+		setAuthStatus: function(nextAuthStatus) {
+			authStatus = nextAuthStatus;
+		},
+		syncThreadsFromGoogle: syncThreadsFromGoogle,
+		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer
+	});
+	var threadListController = createThreadListController({
+		openLabelPicker: function(threadSummary) {
+			return threadActionController.openLabelPicker({
+				threadId: threadSummary.threadId,
+				subject: threadSummary.subject,
+				setThreadId: function(threadId) {
+					var islandState = islands.ensureLabelPickerIsland();
+					if (islandState) {
+						islandState.instance.open({
+							labels: islands.buildLabelPickerLabels(),
+							threadId: threadId
+						});
+					}
+				},
+				setTitle: function(subject) {
+					$labelPicker.find('.modal-title').text(subject);
+				},
+				show: function() {
+					$labelPicker.modal('show');
 				}
-			},
-			setTitle: function(subject) {
-				$picker.find('.modal-title').text(subject);
-			},
-			show: function() {
-				$picker.modal('show');
-			}
-		});
-	}
-
-	function createGroupingRulesNotify() {
-		return {
-			error: function(message) {
-				messengerGetter().error(message);
-			},
-			success: function(message) {
-				messengerGetter().info(message).update({
-					type: 'success',
-					message: message
-				});
-			}
-		};
-	}
-
-	function createLaterPickerNotify() {
-		return {
-			error: function(message) {
-				messengerGetter().error(message);
-			}
-		};
-	}
-
-	function createLabelPickerNotify() {
-		return {
-			error: function(message) {
-				messengerGetter().error(message);
-			}
-		};
-	}
-
-	function buildLabelPickerLabels() {
-		return filterSelectableLabels(labelsCache).map(function(label) {
+			});
+		},
+		openLaterPicker: showLaterPicker,
+		openThreadViewer: function(threadSummary) {
+			var $threads = $threadViewer.find('.threads');
 			return {
-				...label,
-				hue: typeof label.name === 'string' ? (label.name.hashCode() % 360) : 0
+				appendDeletedMessages: function(payload) {
+					$threads.append(renderDeletedMessagesNotice(payload));
+				},
+				appendMessage: function(message) {
+					$threads.append(renderThreadMessage(message));
+				},
+				clearThreads: function() {
+					$threads.empty();
+				},
+				getCurrentThreadId: function() {
+					return getThreadViewerThreadId();
+				},
+				hideLoading: function() {
+					$threadViewer.find('.loading-img').hide();
+				},
+				receiversText: threadSummary.receiversText,
+				sendersText: threadSummary.sendersText,
+				setReceivers: function(text) {
+					$threadViewer.find('.receivers').text(text);
+				},
+				setSenders: function(text) {
+					$threadViewer.find('.senders').text(text);
+				},
+				setThreadId: function(threadId) {
+					setThreadViewerThreadId(threadId);
+				},
+				setThreadsLoadingText: function(text) {
+					$threads.text(text);
+				},
+				setTitle: function(subject) {
+					setThreadViewerSubject(subject);
+					$threadViewer.find('.modal-title').text(subject);
+				},
+				showLoading: function() {
+					$threadViewer.find('.loading-img').show();
+				},
+				showModal: function() {
+					$threadViewer.modal('show');
+				},
+				snippet: threadSummary.snippet,
+				subject: threadSummary.subject,
+				threadId: threadSummary.threadId
 			};
-		});
-	}
+		},
+		reportError: reportAsyncError,
+		threadActionController: threadActionController,
+		threadViewerController: threadViewerController
+	});
 
-	function ensureGroupingRulesIsland() {
-		if (groupingRulesIsland) {
-			return {
-				instance: groupingRulesIsland,
-				wasCreated: false
-			};
-		}
-		if (!$groupingRulesRoot.length) {
-			return null;
-		}
-		if (typeof frontendApi.mountGroupingRulesSettings !== 'function') {
-			return null;
-		}
-		groupingRulesIsland = frontendApi.mountGroupingRulesSettings({
-			container: $groupingRulesRoot.get(0),
-			notify: createGroupingRulesNotify(),
-			onSaved: function() {
-				$settingsModal.modal('hide');
-				updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...')).catch(reportAsyncError);
-			}
-		});
-		return {
-			instance: groupingRulesIsland,
-			wasCreated: true
-		};
-	}
-
-	function ensureLaterPickerIsland() {
-		if (laterPickerIsland) {
-			return {
-				instance: laterPickerIsland,
-				wasCreated: false
-			};
-		}
-		if (!$laterPickerRoot.length) {
-			return null;
-		}
-		if (typeof frontendApi.mountLaterPickerIsland !== 'function') {
-			return null;
-		}
-		laterPickerIsland = frontendApi.mountLaterPickerIsland({
-			container: $laterPickerRoot.get(0),
-			notify: createLaterPickerNotify(),
-			onDismiss: function() {
-				$laterPicker.modal('hide');
-			},
-			onHidden: function(threadId) {
-				deleteThreadFromUI(threadId);
-			}
-		});
-		return {
-			instance: laterPickerIsland,
-			wasCreated: true
-		};
-	}
-
-	function ensureLabelPickerIsland() {
-		if (labelPickerIsland) {
-			return {
-				instance: labelPickerIsland,
-				wasCreated: false
-			};
-		}
-		if (!$labelPickerRoot.length) {
-			return null;
-		}
-		if (typeof frontendApi.mountLabelPickerIsland !== 'function') {
-			return null;
-		}
-		labelPickerIsland = frontendApi.mountLabelPickerIsland({
-			container: $labelPickerRoot.get(0),
-			notify: createLabelPickerNotify(),
-			onDismiss: function() {
-				$labelPicker.modal('hide');
-			},
-			onMoveThread: function(threadId, labelId) {
-				return threadActionController.moveThreadToLabel(threadId, labelId);
-			}
-		});
-		return {
-			instance: labelPickerIsland,
-			wasCreated: true
-		};
-	}
+	wireModals({
+		$main,
+		$authControls,
+		$threadViewer,
+		$labelPicker,
+		$laterPicker,
+		$settingsBtn,
+		$settingsModal,
+		appShellController,
+		threadListController,
+		threadViewerController,
+		threadActionController,
+		islands,
+		getThreadViewerThreadId,
+		getThreadViewerSubject,
+		clearThreadViewerState,
+		showLaterPicker,
+		messengerGetter,
+		reportAsyncError,
+		getAuthStatus: function() { return authStatus; },
+	});
 
 	appShellController.initialize().catch(reportAsyncError);
-
-	$authControls.on('click', '#disconnect-gmail-btn', async function() {
-		try {
-			await appShellController.disconnectGmail();
-		} catch (error) {
-			reportAsyncError(error);
-		}
-	});
-
-	$authControls.on('click', '#refresh-now-btn', async function() {
-		try {
-			await appShellController.refreshNow();
-		} catch (error) {
-			reportAsyncError(error);
-		}
-	});
-
-	$main.on('click', 'button.delete', async function(eventObject) {
-		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
-		return threadListController.deleteThread($divThread.data('threadId'));
-	});
-
-	$main.on('click', 'button.archive-thread', async function(eventObject) {
-		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
-		return threadListController.archiveThread($divThread.data('threadId'));
-	});
-
-	$main.on('click', 'button.label-thread', function(eventObject) {
-		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
-		return threadListController.openLabelPicker({
-			threadId: $divThread.data('threadId'),
-			subject: $divThread.find('.subject').text()
-		});
-	});
-
-	$main.on('click', 'button.later', function(eventObject) {
-		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
-		return threadListController.openLaterPicker({
-			threadId: $divThread.data('threadId'),
-			subject: $divThread.find('.subject').text()
-		});
-	});
-
-	$main.on('click', 'div.thread', async function(eventObject) {
-		if ($(eventObject.target).closest('button, a, input, select, textarea, label').length > 0) {
-			return true;
-		}
-		var $threadDiv = $(eventObject.currentTarget);
-		await threadListController.openThread({
-			receiversText: $threadDiv.find('.receivers').attr('title') || '',
-			sendersText: $threadDiv.find('.senders').attr('title') || '',
-			snippet: $threadDiv.find('.snippet').text(),
-			subject: $threadDiv.find('.subject').text(),
-			threadId: $threadDiv.data('threadId')
-		});
-	});
-
-	$threadViewer.find('button.reply-all').on('click', async function() {
-		try {
-			await threadViewerController.replyAll({
-				body: $threadViewer.find('.reply textarea').val(),
-				clearReply: function() {
-					$threadViewer.find('.reply textarea').val('');
-				},
-				emailAddress: authStatus.emailAddress,
-				hideModal: function() {
-					$threadViewer.modal('hide');
-				},
-				inReplyTo: $threadViewer.find('.threads .message:last').data('messageId'),
-				threadId: getThreadViewerThreadId()
-			});
-		} catch (error) {
-			reportAsyncError(error);
-		}
-	});
-
-	$threadViewer.on('click', 'button.dl-attachment', async function(eventObj) {
-		var $clickedButton = $(eventObj.currentTarget);
-		try {
-			await threadViewerController.downloadAttachment({
-				attachmentId: $clickedButton.data('attachment-id'),
-				attachmentName: $clickedButton.data('attachment-name'),
-				messageId: $clickedButton.parents('.message').data('message-id'),
-				saveAttachment: function(blob, attachmentName) {
-					saveAs(blob, attachmentName);
-				}
-			});
-		} catch (error) {
-			reportAsyncError(error);
-		}
-	});
-
-	$threadViewer.find('button.delete').on('click', async function() {
-		try {
-			var result = await threadViewerController.deleteCurrentThread({
-				hideModal: function() {
-					$threadViewer.modal('hide');
-				},
-				threadId: getThreadViewerThreadId()
-			});
-			if (!result || !result.ok) {
-				return false;
-			}
-		} catch (error) {
-			reportAsyncError(error);
-		}
-		return false;
-	});
-
-	$threadViewer.find('button.archive-thread').on('click', async function() {
-		try {
-			var result = await threadViewerController.archiveCurrentThread({
-				hideModal: function() {
-					$threadViewer.modal('hide');
-				},
-				threadId: getThreadViewerThreadId()
-			});
-			if (!result || !result.ok) {
-				return false;
-			}
-		} catch (error) {
-			reportAsyncError(error);
-		}
-		return false;
-	});
-
-	$threadViewer.find('button.label-thread').on('click', function() {
-		return switchFromThreadViewerToLabelPicker($labelPicker);
-	});
-
-	$threadViewer.find('button.later').on('click', function() {
-		return threadViewerController.showLaterPicker({
-			hideModal: function() {
-				$threadViewer.modal('hide');
-			},
-			openLaterPicker: showLaterPicker,
-			subject: getThreadViewerSubject(),
-			threadId: getThreadViewerThreadId()
-		});
-	});
-
-	$threadViewer.find('button.view-on-gmail').on('click', function() {
-		return threadViewerController.viewOnGmail({
-			openWindow: function(url, target) {
-				window.open(url, target);
-			},
-			threadId: getThreadViewerThreadId()
-		});
-	});
-
-	$threadViewer.on('keydown', async function(event) {
-		try {
-			await threadViewerController.handleKeydown({
-				event: event,
-				hideModal: function() {
-					$threadViewer.modal('hide');
-				},
-				isReplyFocused: function() {
-					return $threadViewer.find('textarea').is(':focus');
-				},
-				threadId: getThreadViewerThreadId()
-			});
-		} catch (error) {
-			reportAsyncError(error);
-		}
-	});
-
-	$threadViewer.on('hidden.bs.modal', function() {
-		clearThreadViewerState();
-	});
-
-	$labelPicker.on('hidden.bs.modal', function() {
-		if (labelPickerIsland && typeof labelPickerIsland.clear === 'function') {
-			labelPickerIsland.clear();
-		}
-	});
-
-	$laterPicker.on('hidden.bs.modal', function() {
-		if (laterPickerIsland && typeof laterPickerIsland.clear === 'function') {
-			laterPickerIsland.clear();
-		}
-	});
-
-	$main.on('click', 'a.view-on-gmail', function(eventObject) {
-		eventObject.stopPropagation();
-		return true;
-	});
-
-	$settingsBtn.on('click', function() {
-		var islandState = ensureGroupingRulesIsland();
-		if (!islandState) {
-			messengerGetter().error('Failed to load grouping rules editor');
-			return;
-		}
-		if (!islandState.wasCreated) {
-			islandState.instance.refresh();
-		}
-		$settingsModal.modal('show');
-	});
 });
