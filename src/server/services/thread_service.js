@@ -20,6 +20,7 @@ const logger = nebulog.make({filename: 'src/server/services/thread_service.js', 
 
 export function createThreadService(dependencies = {}) {
 	const repository = dependencies.threadRepository || threadRepository;
+	const MessageClass = dependencies.MessageClass || modelsMessage.Message;
 
 	async function saveThreadPayload({
 		threadPayload,
@@ -56,7 +57,7 @@ export function createThreadService(dependencies = {}) {
 		}
 
 		threadPayload.messages.forEach((messageData) => {
-			const messageInstance = new modelsMessage.Message(messageData);
+			const messageInstance = new MessageClass(messageData);
 			const originalBody = messageInstance.bestBody();
 			const plainTextBody = sanitizeHtml(originalBody, {allowedTags: [], allowedAttributes: {}});
 			const wordCount = plainTextBody.split(' ').filter((word) => word.length > 0).length;

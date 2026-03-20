@@ -6,8 +6,8 @@ import nebulog from 'nebulog';
 const logger = nebulog.make({filename: 'main.mjs', level: 'debug'});
 import helpers_fileio from './helpers/fileio.js';
 
-import models_hideUntils from './models/hide_until.js';
-import models_lastRefreshed from './models/last_refreshed.js';
+import hideUntilRepository from './src/server/repositories/hide_until_repository.js';
+import lastRefreshedRepository from './src/server/repositories/last_refreshed_repository.js';
 import {
 	clearGoogleTokens,
 	getGoogleAuthStatus,
@@ -92,8 +92,8 @@ async function withGmailApi(res, fnCallback) {
 logger.info("Checking directory structure...");
 await helpers_fileio.ensureDirectoryExists('data/threads');
 logger.info("Directory structure looks fine.");
-const hideUntils = await models_hideUntils.load();
-const lastRefresheds = await models_lastRefreshed.load();
+const hideUntils = await hideUntilRepository.load();
+const lastRefresheds = await lastRefreshedRepository.load();
 const config = await configRepository.readConfig();
 
 const app = express();
