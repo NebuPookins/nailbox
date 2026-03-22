@@ -6,6 +6,10 @@
  * Thread list actions (archive, delete, label, later, open) are handled by
  * the thread list React island and are no longer wired here.
  *
+ * Thread viewer actions (reply, delete, archive, label, later, view-on-gmail,
+ * download attachment) are handled by the thread viewer React island and are
+ * no longer wired here.
+ *
  * @param {{
  *   $authControls: object,
  *   $threadViewer: object,
@@ -15,15 +19,11 @@
  *   $settingsModal: object,
  *   appShellController: object,
  *   threadViewerController: object,
- *   threadActionController: object,
  *   islands: object,
  *   getThreadViewerThreadId: () => string|null,
- *   getThreadViewerSubject: () => string|null,
  *   clearThreadViewerState: () => void,
- *   showLaterPicker: (threadId: string, subject: string) => boolean,
  *   messengerGetter: () => object,
  *   reportAsyncError: (error: Error) => void,
- *   getAuthStatus: () => object,
  * }} deps
  */
 export function wireModals({
@@ -35,15 +35,11 @@ export function wireModals({
 	$settingsModal,
 	appShellController,
 	threadViewerController,
-	threadActionController,
 	islands,
 	getThreadViewerThreadId,
-	getThreadViewerSubject,
 	clearThreadViewerState,
-	showLaterPicker,
 	messengerGetter,
 	reportAsyncError,
-	getAuthStatus,
 }) {
 	$authControls.on('click', '#disconnect-gmail-btn', async function() {
 		try {
@@ -59,120 +55,6 @@ export function wireModals({
 		} catch (error) {
 			reportAsyncError(error);
 		}
-	});
-
-	$threadViewer.find('button.reply-all').on('click', async function() {
-		try {
-			await threadViewerController.replyAll({
-				body: $threadViewer.find('.reply textarea').val(),
-				clearReply: function() {
-					$threadViewer.find('.reply textarea').val('');
-				},
-				emailAddress: getAuthStatus().emailAddress,
-				hideModal: function() {
-					$threadViewer.modal('hide');
-				},
-				inReplyTo: $threadViewer.find('.threads .message:last').data('messageId'),
-				threadId: getThreadViewerThreadId()
-			});
-		} catch (error) {
-			reportAsyncError(error);
-		}
-	});
-
-	$threadViewer.on('click', 'button.dl-attachment', async function(eventObj) {
-		var $clickedButton = $(eventObj.currentTarget);
-		try {
-			await threadViewerController.downloadAttachment({
-				attachmentId: $clickedButton.data('attachment-id'),
-				attachmentName: $clickedButton.data('attachment-name'),
-				messageId: $clickedButton.parents('.message').data('message-id'),
-				saveAttachment: function(blob, attachmentName) {
-					saveAs(blob, attachmentName);
-				}
-			});
-		} catch (error) {
-			reportAsyncError(error);
-		}
-	});
-
-	$threadViewer.find('button.delete').on('click', async function() {
-		try {
-			var result = await threadViewerController.deleteCurrentThread({
-				hideModal: function() {
-					$threadViewer.modal('hide');
-				},
-				threadId: getThreadViewerThreadId()
-			});
-			if (!result || !result.ok) {
-				return false;
-			}
-		} catch (error) {
-			reportAsyncError(error);
-		}
-		return false;
-	});
-
-	$threadViewer.find('button.archive-thread').on('click', async function() {
-		try {
-			var result = await threadViewerController.archiveCurrentThread({
-				hideModal: function() {
-					$threadViewer.modal('hide');
-				},
-				threadId: getThreadViewerThreadId()
-			});
-			if (!result || !result.ok) {
-				return false;
-			}
-		} catch (error) {
-			reportAsyncError(error);
-		}
-		return false;
-	});
-
-	$threadViewer.find('button.label-thread').on('click', function() {
-		return threadActionController.switchFromThreadViewerToLabelPicker({
-			threadId: getThreadViewerThreadId(),
-			subject: getThreadViewerSubject(),
-			hideThreadViewer: function() {
-				$threadViewer.modal('hide');
-			},
-			setThreadId: function(threadId) {
-				var islandState = islands.ensureLabelPickerIsland();
-				if (islandState) {
-					islandState.instance.open({
-						labels: islands.buildLabelPickerLabels(),
-						threadId: threadId
-					});
-				}
-			},
-			setTitle: function(subject) {
-				$labelPicker.find('.modal-title').text(subject);
-			},
-			show: function() {
-				$labelPicker.modal('show');
-			}
-		});
-	});
-
-	$threadViewer.find('button.later').on('click', function() {
-		return threadViewerController.showLaterPicker({
-			hideModal: function() {
-				$threadViewer.modal('hide');
-			},
-			openLaterPicker: showLaterPicker,
-			subject: getThreadViewerSubject(),
-			threadId: getThreadViewerThreadId()
-		});
-	});
-
-	$threadViewer.find('button.view-on-gmail').on('click', function() {
-		return threadViewerController.viewOnGmail({
-			openWindow: function(url, target) {
-				window.open(url, target);
-			},
-			threadId: getThreadViewerThreadId()
-		});
 	});
 
 	$threadViewer.on('keydown', async function(event) {

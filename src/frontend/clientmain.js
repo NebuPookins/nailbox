@@ -9,8 +9,6 @@ import { createThreadListController } from './thread_list_controller.js';
 import {
 	createThreadActionController,
 } from './thread_action_controller.js';
-import { createThreadViewerAdapter } from './thread_viewer_dom_adapter.js';
-import { createThreadViewerState } from './thread_viewer_state.js';
 import { createThreadViewerController } from './thread_viewer_controller.js';
 import { createIslandManager } from './island_manager.js';
 import { wireModals } from './modal_wiring.js';
@@ -53,6 +51,7 @@ $(function() {
 	var $status = $('#status');
 	var $authControls = $('#auth-controls');
 	var $threadViewer = $('#thread-viewer');
+	var $threadViewerRoot = $('#thread-viewer-root');
 	var $labelPicker = $('#label-picker');
 	var $labelPickerRoot = $('#label-picker-root');
 	var $laterPicker = $('#later-picker');
@@ -68,7 +67,6 @@ $(function() {
 		scopes: []
 	};
 	var labelsCache = [];
-	var threadViewerState = createThreadViewerState();
 
 	String.prototype.hashCode = function() {
 		var hash = 0;
@@ -91,26 +89,14 @@ $(function() {
 		}
 	}
 
-	function setThreadViewerThreadId(threadId) {
-		threadViewerState.setThreadId(threadId);
-		$threadViewer.data('threadId', threadId || null);
-	}
-
 	function getThreadViewerThreadId() {
-		return threadViewerState.getThreadId();
-	}
-
-	function setThreadViewerSubject(subject) {
-		threadViewerState.setSubject(subject);
-	}
-
-	function getThreadViewerSubject() {
-		return threadViewerState.getSubject();
+		return threadViewerIsland ? threadViewerIsland.getThreadId() : null;
 	}
 
 	function clearThreadViewerState() {
-		threadViewerState.clear();
-		$threadViewer.removeData('threadId');
+		if (threadViewerIsland) {
+			threadViewerIsland.clear();
+		}
 	}
 
 	function handleApiError(error, fallbackMessage) {
@@ -353,12 +339,71 @@ $(function() {
 		syncThreadsFromGoogle: syncThreadsFromGoogle,
 		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer
 	});
-	var openThreadViewer = createThreadViewerAdapter({
-		$threadViewer,
-		getThreadViewerThreadId,
-		setThreadViewerThreadId,
-		setThreadViewerSubject,
+	var threadViewerIsland = frontendApi.mountThreadViewerIsland({
+		container: $threadViewerRoot.get(0),
+		showModal: function() { $threadViewer.modal('show'); },
+		hideModal: function() { $threadViewer.modal('hide'); },
+		getEmailAddress: function() { return authStatus.emailAddress; },
+		reportError: reportAsyncError,
+		onReplyAll: function(opts) {
+			return threadViewerController.replyAll(opts);
+		},
+		onDownloadAttachment: function(opts) {
+			return threadViewerController.downloadAttachment({
+				attachmentId: opts.attachmentId,
+				attachmentName: opts.attachmentName,
+				messageId: opts.messageId,
+				saveAttachment: function(blob, attachmentName) {
+					saveAs(blob, attachmentName);
+				},
+			});
+		},
+		onDeleteThread: function(opts) {
+			return threadViewerController.deleteCurrentThread(opts);
+		},
+		onArchiveThread: function(opts) {
+			return threadViewerController.archiveCurrentThread(opts);
+		},
+		onOpenLaterPicker: function(opts) {
+			return threadViewerController.showLaterPicker({
+				threadId: opts.threadId,
+				subject: opts.subject,
+				hideModal: opts.hideModal,
+				openLaterPicker: showLaterPicker,
+			});
+		},
+		onOpenLabelPicker: function({ threadId, subject, hideThreadViewer }) {
+			return threadActionController.switchFromThreadViewerToLabelPicker({
+				threadId: threadId,
+				subject: subject,
+				hideThreadViewer: hideThreadViewer,
+				setThreadId: function(tid) {
+					var islandState = islands.ensureLabelPickerIsland();
+					if (islandState) {
+						islandState.instance.open({
+							labels: islands.buildLabelPickerLabels(),
+							threadId: tid,
+						});
+					}
+				},
+				setTitle: function(s) {
+					$labelPicker.find('.modal-title').text(s);
+				},
+				show: function() {
+					$labelPicker.modal('show');
+				},
+			});
+		},
+		onViewOnGmail: function({ threadId }) {
+			return threadViewerController.viewOnGmail({
+				threadId: threadId,
+				openWindow: function(url, target) { window.open(url, target); },
+			});
+		},
 	});
+	function openThreadViewer(threadSummary) {
+		return threadViewerIsland.open(threadSummary);
+	}
 	var threadListController = createThreadListController({
 		openLabelPicker: function(threadSummary) {
 			return threadActionController.openLabelPicker({
@@ -397,15 +442,11 @@ $(function() {
 		$settingsModal,
 		appShellController,
 		threadViewerController,
-		threadActionController,
 		islands,
 		getThreadViewerThreadId,
-		getThreadViewerSubject,
 		clearThreadViewerState,
-		showLaterPicker,
 		messengerGetter,
 		reportAsyncError,
-		getAuthStatus: function() { return authStatus; },
 	});
 
 	appShellController.initialize().catch(reportAsyncError);
