@@ -7,7 +7,7 @@ function escapeHtml(value) {
 		.replace(/'/g, '&#39;');
 }
 
-function formatPrettyTimestamp(timestamp, momentLib = globalThis.moment) {
+export function formatPrettyTimestamp(timestamp, momentLib = globalThis.moment) {
 	if (!momentLib || typeof momentLib !== 'function') {
 		return escapeHtml(timestamp);
 	}

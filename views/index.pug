@@ -11,16 +11,7 @@ html(lang="en")
 		link(rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/messenger/1.4.2/css/messenger-theme-air.css")
 		link(rel="shortcut icon" type="image/png" href="/public/favicon.png")
 		style(type="text/css").
-			#main:empty {
-				background-image: url('/public/pexels-photo-41830.jpeg');
-				background-size: cover;
-				position:fixed;
-				top:0;
-				right:0;
-				bottom:0;
-				left:0;
-			}
-			.spin {
+				.spin {
 				-webkit-animation:spin 4s linear infinite;
 				-moz-animation:spin 4s linear infinite;
 				animation:spin 4s linear infinite;
@@ -137,7 +128,7 @@ html(lang="en")
 				button.btn.btn-default#settings-btn
 					span.glyphicon.glyphicon-cog
 					|  Email Grouping Settings
-				#main
+				#thread-list-root
 			#thread-viewer.modal.fade(tabindex="-1" role="dialog")
 				.modal-dialog.modal-lg(role="document")
 					.modal-content

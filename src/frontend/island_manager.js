@@ -8,6 +8,7 @@ import { filterSelectableLabels } from './thread_action_controller.js';
  *   $groupingRulesRoot: object,
  *   $labelPickerRoot: object,
  *   $laterPickerRoot: object,
+ *   $threadListRoot: object,
  *   hideSettingsModal: () => void,
  *   hideLabelPicker: () => void,
  *   hideLaterPicker: () => void,
@@ -17,6 +18,11 @@ import { filterSelectableLabels } from './thread_action_controller.js';
  *   updateUiWithThreadsFromServer: (messenger: object) => Promise,
  *   messengerGetter: () => object,
  *   reportAsyncError: (error: Error) => void,
+ *   onArchiveThread: (threadId: string) => void,
+ *   onDeleteThread: (threadId: string) => void,
+ *   onOpenLaterPickerForThread: (threadSummary: object) => void,
+ *   onOpenLabelPickerForThread: (threadSummary: object) => void,
+ *   onOpenThread: (threadSummary: object) => void,
  * }} deps
  */
 export function createIslandManager({
@@ -24,6 +30,7 @@ export function createIslandManager({
 	$groupingRulesRoot,
 	$labelPickerRoot,
 	$laterPickerRoot,
+	$threadListRoot,
 	hideSettingsModal,
 	hideLabelPicker,
 	hideLaterPicker,
@@ -33,10 +40,16 @@ export function createIslandManager({
 	updateUiWithThreadsFromServer,
 	messengerGetter,
 	reportAsyncError,
+	onArchiveThread,
+	onDeleteThread,
+	onOpenLaterPickerForThread,
+	onOpenLabelPickerForThread,
+	onOpenThread,
 }) {
 	var groupingRulesIsland = null;
 	var labelPickerIsland = null;
 	var laterPickerIsland = null;
+	var threadListIsland = null;
 
 	function buildLabelPickerLabels() {
 		return filterSelectableLabels(getLabels()).map(function(label) {
@@ -160,10 +173,46 @@ export function createIslandManager({
 		};
 	}
 
+	function ensureThreadListIsland() {
+		if (threadListIsland) {
+			return {
+				instance: threadListIsland,
+				wasCreated: false
+			};
+		}
+		if (!$threadListRoot.length) {
+			return null;
+		}
+		if (typeof frontendApi.mountThreadListIsland !== 'function') {
+			return null;
+		}
+		threadListIsland = frontendApi.mountThreadListIsland({
+			container: $threadListRoot.get(0),
+			onArchive: onArchiveThread,
+			onDelete: onDeleteThread,
+			onOpenLaterPicker: onOpenLaterPickerForThread,
+			onOpenLabelPicker: onOpenLabelPickerForThread,
+			onOpenThread: onOpenThread,
+		});
+		return {
+			instance: threadListIsland,
+			wasCreated: true
+		};
+	}
+
+	function clearThreadList() {
+		var islandState = ensureThreadListIsland();
+		if (islandState) {
+			islandState.instance.setGroups([]);
+		}
+	}
+
 	return {
 		buildLabelPickerLabels,
+		clearThreadList,
 		ensureGroupingRulesIsland,
 		ensureLabelPickerIsland,
 		ensureLaterPickerIsland,
+		ensureThreadListIsland,
 	};
 }

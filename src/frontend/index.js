@@ -2,6 +2,7 @@ import { createAppApi, createGroupingRulesApi } from './api.js';
 import { mountGroupingRulesIsland } from './grouping_rules_island.jsx';
 import { mountLabelPickerIsland } from './label_picker_island.jsx';
 import { mountLaterPickerIsland } from './later_picker_island.jsx';
+import { mountThreadListIsland } from './thread_list_island.jsx';
 
 export function mountGroupingRulesSettings({ container, notify, onSaved }) {
 	return mountGroupingRulesIsland({
@@ -19,6 +20,7 @@ const frontendApi = {
 	mountGroupingRulesSettings,
 	mountLabelPickerIsland,
 	mountLaterPickerIsland,
+	mountThreadListIsland,
 };
 
 if (typeof window !== 'undefined') {

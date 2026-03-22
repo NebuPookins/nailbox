@@ -5,10 +5,6 @@ import {
 	renderSetupNeededContent,
 } from './auth_status_presenter.js';
 import { createAppShellController } from './app_shell_controller.js';
-import {
-	renderThreadGroup,
-	renderThreadItem,
-} from './thread_list_presenter.js';
 import { createThreadListController } from './thread_list_controller.js';
 import {
 	createThreadActionController,
@@ -53,7 +49,7 @@ $(function() {
 		};
 	})();
 
-	var $main = $('#main');
+	var $threadListRoot = $('#thread-list-root');
 	var $status = $('#status');
 	var $authControls = $('#auth-controls');
 	var $threadViewer = $('#thread-viewer');
@@ -136,15 +132,15 @@ $(function() {
 	function renderSetupNeededState(message) {
 		var content = renderSetupNeededContent(message);
 		$status.show().html(content.statusHtml);
-		$main.empty();
 		$authControls.html(content.authControlsHtml);
+		islands.clearThreadList();
 	}
 
 	function renderDisconnectedState(message) {
 		var content = renderDisconnectedContent(message);
 		$status.show().html(content.statusHtml);
-		$main.empty();
 		$authControls.html(content.authControlsHtml);
+		islands.clearThreadList();
 	}
 
 	function renderConnectedState() {
@@ -156,9 +152,13 @@ $(function() {
 	async function loadLabels() {
 		var labels = await appApi.loadLabels();
 		labelsCache = labels;
-		var islandState = islands.ensureLabelPickerIsland();
-		if (islandState) {
-			islandState.instance.setLabels(islands.buildLabelPickerLabels());
+		var labelPickerIslandState = islands.ensureLabelPickerIsland();
+		if (labelPickerIslandState) {
+			labelPickerIslandState.instance.setLabels(islands.buildLabelPickerLabels());
+		}
+		var threadListIslandState = islands.ensureThreadListIsland();
+		if (threadListIslandState) {
+			threadListIslandState.instance.setLabels(labelsCache);
 		}
 		return labels;
 	}
@@ -212,23 +212,18 @@ $(function() {
 		});
 		try {
 			var groupsOfThreads = await appApi.loadGroupedThreads();
-			$main.empty();
 			$status.hide();
 			groupsOfThreads.forEach(function(group) {
-				$main.append($(renderThreadGroup(group)));
 				group.threads.forEach(function(thread) {
 					if (thread.needsRefreshing) {
 						refreshThreadFromGoogle(thread.threadId);
 					}
 				});
-				group.threads.forEach(function(thread) {
-					var $thread = $(renderThreadItem(thread, {
-						labels: labelsCache,
-					}));
-					$thread.data('labelIds', thread.labelIds);
-					$main.append($thread);
-				});
 			});
+			var islandState = islands.ensureThreadListIsland();
+			if (islandState) {
+				islandState.instance.setGroups(groupsOfThreads);
+			}
 			if (groupsOfThreads.length === 0) {
 				$status.show().html(
 					'<h1>No mail in cache yet</h1>' +
@@ -249,10 +244,10 @@ $(function() {
 	}
 
 	function deleteThreadFromUI(threadId) {
-		var $uiElemToDelete = $main.find('.thread[data-thread-id="' + threadId + '"]');
-		$uiElemToDelete.hide(400, function() {
-			$uiElemToDelete.remove();
-		});
+		var islandState = islands.ensureThreadListIsland();
+		if (islandState) {
+			islandState.instance.removeThread(threadId);
+		}
 	}
 
 	async function getThreadData(threadId, attemptNumber, updateMessenger) {
@@ -315,6 +310,7 @@ $(function() {
 		$groupingRulesRoot: $groupingRulesRoot,
 		$labelPickerRoot: $labelPickerRoot,
 		$laterPickerRoot: $laterPickerRoot,
+		$threadListRoot: $threadListRoot,
 		hideSettingsModal: function() { $settingsModal.modal('hide'); },
 		hideLabelPicker: function() { $labelPicker.modal('hide'); },
 		hideLaterPicker: function() { $laterPicker.modal('hide'); },
@@ -324,6 +320,11 @@ $(function() {
 		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer,
 		messengerGetter: messengerGetter,
 		reportAsyncError: reportAsyncError,
+		onArchiveThread: function(threadId) { threadListController.archiveThread(threadId); },
+		onDeleteThread: function(threadId) { threadListController.deleteThread(threadId); },
+		onOpenLaterPickerForThread: function(threadSummary) { threadListController.openLaterPicker(threadSummary); },
+		onOpenLabelPickerForThread: function(threadSummary) { threadListController.openLabelPicker(threadSummary); },
+		onOpenThread: function(threadSummary) { threadListController.openThread(threadSummary); },
 	});
 	var threadViewerController = createThreadViewerController({
 		appApi: appApi,
@@ -388,7 +389,6 @@ $(function() {
 	});
 
 	wireModals({
-		$main,
 		$authControls,
 		$threadViewer,
 		$labelPicker,
@@ -396,7 +396,6 @@ $(function() {
 		$settingsBtn,
 		$settingsModal,
 		appShellController,
-		threadListController,
 		threadViewerController,
 		threadActionController,
 		islands,
