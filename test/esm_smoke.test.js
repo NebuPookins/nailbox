@@ -11,7 +11,7 @@ import registerThreadActionRoutes from '../src/server/routes/thread_action_route
 import registerSetupRoutes from '../src/server/routes/setup_routes.js';
 import registerThreadRoutes from '../src/server/routes/thread_routes.js';
 import gmailSyncService from '../src/server/services/gmail_sync_service.js';
-import rfc2822Service from '../src/server/services/rfc2822_service.js';
+import { createRfc2822Service } from '../src/server/services/rfc2822_service.js';
 
 test('backend modules load under ESM', () => {
   assert.equal(typeof helpersFileio.readJsonFromOptionalFile, 'function');
@@ -24,5 +24,5 @@ test('backend modules load under ESM', () => {
   assert.equal(typeof registerSetupRoutes, 'function');
   assert.equal(typeof registerThreadRoutes, 'function');
   assert.equal(typeof gmailSyncService.syncRecentThreadsFromGmail, 'function');
-  assert.equal(typeof rfc2822Service.buildRfc2822Message, 'function');
+  assert.equal(typeof createRfc2822Service, 'function');
 });
