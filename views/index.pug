@@ -132,37 +132,7 @@ html(lang="en")
 			#thread-viewer.modal.fade(tabindex="-1" role="dialog")
 				.modal-dialog.modal-lg(role="document")
 					.modal-content
-						.modal-header
-							button.close(type="button" data-dismiss="modal" aria-label="Close")
-								span(aria-hidden="true") &times;
-							h4.modal-title Modal title
-							strong Senders&nbsp;
-							span.senders
-								| Sender 1
-								| Sender 2
-							strong Receivers&nbsp;
-							span.receivers
-								| Receiver 1
-								| Receiver 2
-						.modal-body
-							.loading-img
-								img.spin.img-responsive.center-block(src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Vector_Loading.svg/1024px-Vector_Loading.svg.png" width="100px" height="100px")
-							.threads
-							.reply
-								textarea(rows=3 placeholder="Type reply here").form-control
-								button.btn.btn-primary.reply-all Reply all
-						.modal-footer
-							button.btn.btn-xs.btn-success.archive-thread(title="Done")
-								span.glyphicon.glyphicon-ok
-							button.btn.btn-xs.btn-danger.delete(title="Delete")
-								span.glyphicon.glyphicon-remove
-							button.btn.btn-xs.btn-warning.later(title="Later")
-								span.glyphicon.glyphicon-time
-							button.btn.btn-xs.btn-primary.label-thread(title="Label")
-								span.glyphicon.glyphicon-list
-							button.btn.btn-xs.btn-default.view-on-gmail(title="View on Gmail")
-								span.glyphicon.glyphicon-option-horizontal
-							button.btn.btn-default(type="button" data-dismiss="modal") Close
+						#thread-viewer-root
 		#later-picker.modal.fade(tabindex="-1" role="dialog")
 			.modal-dialog
 				.modal-content
