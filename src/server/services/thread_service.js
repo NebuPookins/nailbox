@@ -5,8 +5,6 @@ import sanitizeHtml from 'sanitize-html';
 import htmlEntities from 'html-entities';
 import nebulog from 'nebulog';
 
-import modelsMessage from '../../../models/message.js';
-import threadRepository from '../repositories/thread_repository.js';
 import {
 	makeValidationError,
 	normalizeThreadMessageDto,
@@ -19,8 +17,7 @@ const entities = new Entities();
 const logger = nebulog.make({filename: 'src/server/services/thread_service.js', level: 'info'});
 
 export function createThreadService(dependencies = {}) {
-	const repository = dependencies.threadRepository || threadRepository;
-	const MessageClass = dependencies.MessageClass || modelsMessage.Message;
+	const { threadRepository: repository, MessageClass } = dependencies;
 
 	async function saveThreadPayload({
 		threadPayload,
@@ -193,8 +190,6 @@ export function createThreadService(dependencies = {}) {
 	};
 }
 
-const threadService = createThreadService();
-
 export function loadRelevantDataFromMessage(objMessage) {
 	const originalBody = objMessage.bestBody();
 	const attachments = objMessage.getAttachments();
@@ -265,5 +260,3 @@ export function loadRelevantDataFromMessage(objMessage) {
 		attachments: attachments
 	});
 }
-
-export default threadService;

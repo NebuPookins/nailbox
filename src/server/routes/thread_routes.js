@@ -1,7 +1,5 @@
 import util from 'util';
 
-import threadRepository from '../repositories/thread_repository.js';
-import threadService from '../services/thread_service.js';
 import { getEmailGroupingRules, groupThreads } from '../domain/grouping_rules.js';
 import {
 	normalizeGroupingRulesConfig,
@@ -16,6 +14,8 @@ export default function registerThreadRoutes(app, dependencies) {
 		hideUntils,
 		lastRefresheds,
 		logger,
+		threadRepository,
+		threadService,
 	} = dependencies;
 
 	app.post('/api/threads', async function(req, res) {

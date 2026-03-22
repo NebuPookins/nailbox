@@ -2,8 +2,6 @@ import util from 'util';
 
 import _ from 'lodash';
 
-import defaultThreadRepository from '../repositories/thread_repository.js';
-import { buildRfc2822Message } from '../services/rfc2822_service.js';
 import { refreshSingleThreadFromGmail, syncRecentThreadsFromGmail } from '../services/gmail_sync_service.js';
 import {
 	normalizeGmailMoveThreadDto,
@@ -15,7 +13,9 @@ export default function registerThreadActionRoutes(app, dependencies) {
 	const {
 		lastRefresheds,
 		logger,
-		threadRepository = defaultThreadRepository,
+		rfc2822Service,
+		threadRepository,
+		threadService,
 		withGmailApi,
 	} = dependencies;
 
@@ -62,6 +62,8 @@ export default function registerThreadActionRoutes(app, dependencies) {
 				return syncRecentThreadsFromGmail({
 					gmailRequest,
 					lastRefresheds,
+					threadRepository,
+					threadService,
 				});
 			});
 			if (syncResult == null) {
@@ -85,6 +87,8 @@ export default function registerThreadActionRoutes(app, dependencies) {
 					gmailRequest,
 					threadId,
 					lastRefresheds,
+					threadRepository,
+					threadService,
 				});
 			});
 			if (refreshResult == null) {
@@ -228,7 +232,7 @@ export default function registerThreadActionRoutes(app, dependencies) {
 		try {
 			const requestDto = normalizeRfc2822RequestDto(req.body);
 			logger.info(util.format('/api/rfc2822 received for thread %s', requestDto.threadId));
-			const encodedMessage = await buildRfc2822Message({
+			const encodedMessage = await rfc2822Service.buildRfc2822Message({
 				threadId: requestDto.threadId,
 				body: requestDto.body,
 				inReplyTo: requestDto.inReplyTo,

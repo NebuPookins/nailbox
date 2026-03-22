@@ -6,6 +6,11 @@ import nebulog from 'nebulog';
 const logger = nebulog.make({filename: 'main.mjs', level: 'debug'});
 import helpers_fileio from './helpers/fileio.js';
 
+import threadModel from './models/thread.js';
+import { Message } from './models/message.js';
+import { createThreadRepository } from './src/server/repositories/thread_repository.js';
+import { createThreadService } from './src/server/services/thread_service.js';
+import { createRfc2822Service } from './src/server/services/rfc2822_service.js';
 import hideUntilRepository from './src/server/repositories/hide_until_repository.js';
 import lastRefreshedRepository from './src/server/repositories/last_refreshed_repository.js';
 import {
@@ -95,6 +100,9 @@ logger.info("Directory structure looks fine.");
 const hideUntils = await hideUntilRepository.load();
 const lastRefresheds = await lastRefreshedRepository.load();
 const config = await configRepository.readConfig();
+const threadRepository = createThreadRepository({ threadModelModule: threadModel });
+const threadService = createThreadService({ threadRepository, MessageClass: Message });
+const rfc2822Service = createRfc2822Service({ threadRepository });
 
 const app = express();
 app.set('views', path.join(process.cwd(), 'views'));
@@ -117,6 +125,9 @@ const routeDependencies = {
 	logger,
 	configRepository,
 	saveConfig,
+	rfc2822Service,
+	threadRepository,
+	threadService,
 	withGmailApi,
 };
 

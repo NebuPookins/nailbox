@@ -8,8 +8,6 @@ import hljs from 'highlight.js';
 import posthtml from 'posthtml';
 import Optional from 'optional-js';
 
-import threadRepository from '../repositories/thread_repository.js';
-
 function renderHighlightedCode(code, lang) {
 	const htmlWithClasses = lang ?
 		hljs.highlight(code, {language: lang, ignoreIllegals: true}).value :
@@ -144,7 +142,7 @@ async function buildMimeMessage(mail, logger) {
 }
 
 export function createRfc2822Service(dependencies = {}) {
-	const repository = dependencies.threadRepository || threadRepository;
+	const repository = dependencies.threadRepository;
 
 	async function buildRfc2822Message({
 		threadId,
@@ -182,9 +180,3 @@ export function createRfc2822Service(dependencies = {}) {
 		buildRfc2822Message,
 	};
 }
-
-const rfc2822Service = createRfc2822Service();
-
-export const { buildRfc2822Message } = rfc2822Service;
-
-export default rfc2822Service;

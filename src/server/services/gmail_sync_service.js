@@ -1,8 +1,5 @@
 import _ from 'lodash';
 
-import threadRepository from '../repositories/thread_repository.js';
-import threadService from './thread_service.js';
-
 export async function listThreadIdsByLabel(gmailRequest, labelId) {
 	const response = await gmailRequest({
 		path: '/threads',
@@ -18,6 +15,8 @@ export async function refreshSingleThreadFromGmail({
 	gmailRequest,
 	threadId,
 	lastRefresheds,
+	threadRepository,
+	threadService,
 }) {
 	try {
 		const gmailThread = await gmailRequest({
@@ -43,6 +42,8 @@ export async function refreshSingleThreadFromGmail({
 export async function syncRecentThreadsFromGmail({
 	gmailRequest,
 	lastRefresheds,
+	threadRepository,
+	threadService,
 }) {
 	const [inboxThreadIds, trashThreadIds] = await Promise.all([
 		listThreadIdsByLabel(gmailRequest, 'INBOX'),
@@ -55,6 +56,8 @@ export async function syncRecentThreadsFromGmail({
 				gmailRequest,
 				threadId,
 				lastRefresheds,
+				threadRepository,
+				threadService,
 			});
 			return {
 				threadId,

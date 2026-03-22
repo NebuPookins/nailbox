@@ -3,7 +3,6 @@ import { readdir, rm } from 'node:fs/promises';
 import nebulog from 'nebulog';
 
 import fileio from '../../../helpers/fileio.js';
-import threadModel from '../../../models/thread.js';
 import { validatePersistedThread } from '../validation/contracts.js';
 
 const logger = nebulog.make({filename: 'src/server/repositories/thread_repository.js', level: 'info'});
@@ -12,7 +11,7 @@ const THREADS_DIRECTORY = 'data/threads';
 /**
  * @param {{
  *  fileioImpl?: typeof fileio,
- *  threadModelModule?: typeof threadModel,
+ *  threadModelModule: {Thread: new (data: object) => import('../types/thread').ThreadModelLike},
  *  threadsDirectory?: string,
  * }} [dependencies]
  * @returns {import('../types/thread').ThreadRepository}
@@ -20,7 +19,7 @@ const THREADS_DIRECTORY = 'data/threads';
 export function createThreadRepository(dependencies = {}) {
 	const {
 		fileioImpl = fileio,
-		threadModelModule = threadModel,
+		threadModelModule,
 		threadsDirectory = THREADS_DIRECTORY,
 	} = dependencies;
 
@@ -70,7 +69,3 @@ export function createThreadRepository(dependencies = {}) {
 		saveThreadJson,
 	};
 }
-
-const threadRepository = createThreadRepository();
-
-export default threadRepository;
