@@ -13,10 +13,7 @@ import { createThreadListController } from './thread_list_controller.js';
 import {
 	createThreadActionController,
 } from './thread_action_controller.js';
-import {
-	renderDeletedMessagesNotice,
-	renderThreadMessage,
-} from './thread_viewer_presenter.js';
+import { createThreadViewerAdapter } from './thread_viewer_dom_adapter.js';
 import { createThreadViewerState } from './thread_viewer_state.js';
 import { createThreadViewerController } from './thread_viewer_controller.js';
 import { createIslandManager } from './island_manager.js';
@@ -355,6 +352,12 @@ $(function() {
 		syncThreadsFromGoogle: syncThreadsFromGoogle,
 		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer
 	});
+	var openThreadViewer = createThreadViewerAdapter({
+		$threadViewer,
+		getThreadViewerThreadId,
+		setThreadViewerThreadId,
+		setThreadViewerSubject,
+	});
 	var threadListController = createThreadListController({
 		openLabelPicker: function(threadSummary) {
 			return threadActionController.openLabelPicker({
@@ -378,53 +381,7 @@ $(function() {
 			});
 		},
 		openLaterPicker: showLaterPicker,
-		openThreadViewer: function(threadSummary) {
-			var $threads = $threadViewer.find('.threads');
-			return {
-				appendDeletedMessages: function(payload) {
-					$threads.append(renderDeletedMessagesNotice(payload));
-				},
-				appendMessage: function(message) {
-					$threads.append(renderThreadMessage(message));
-				},
-				clearThreads: function() {
-					$threads.empty();
-				},
-				getCurrentThreadId: function() {
-					return getThreadViewerThreadId();
-				},
-				hideLoading: function() {
-					$threadViewer.find('.loading-img').hide();
-				},
-				receiversText: threadSummary.receiversText,
-				sendersText: threadSummary.sendersText,
-				setReceivers: function(text) {
-					$threadViewer.find('.receivers').text(text);
-				},
-				setSenders: function(text) {
-					$threadViewer.find('.senders').text(text);
-				},
-				setThreadId: function(threadId) {
-					setThreadViewerThreadId(threadId);
-				},
-				setThreadsLoadingText: function(text) {
-					$threads.text(text);
-				},
-				setTitle: function(subject) {
-					setThreadViewerSubject(subject);
-					$threadViewer.find('.modal-title').text(subject);
-				},
-				showLoading: function() {
-					$threadViewer.find('.loading-img').show();
-				},
-				showModal: function() {
-					$threadViewer.modal('show');
-				},
-				snippet: threadSummary.snippet,
-				subject: threadSummary.subject,
-				threadId: threadSummary.threadId
-			};
-		},
+		openThreadViewer,
 		reportError: reportAsyncError,
 		threadActionController: threadActionController,
 		threadViewerController: threadViewerController
