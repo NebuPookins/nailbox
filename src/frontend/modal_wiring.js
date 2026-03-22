@@ -3,8 +3,10 @@
  * This is the DOM-to-controller adapter layer; all logic lives in the
  * controllers and islands passed as dependencies.
  *
+ * Thread list actions (archive, delete, label, later, open) are handled by
+ * the thread list React island and are no longer wired here.
+ *
  * @param {{
- *   $main: object,
  *   $authControls: object,
  *   $threadViewer: object,
  *   $labelPicker: object,
@@ -12,7 +14,6 @@
  *   $settingsBtn: object,
  *   $settingsModal: object,
  *   appShellController: object,
- *   threadListController: object,
  *   threadViewerController: object,
  *   threadActionController: object,
  *   islands: object,
@@ -26,7 +27,6 @@
  * }} deps
  */
 export function wireModals({
-	$main,
 	$authControls,
 	$threadViewer,
 	$labelPicker,
@@ -34,7 +34,6 @@ export function wireModals({
 	$settingsBtn,
 	$settingsModal,
 	appShellController,
-	threadListController,
 	threadViewerController,
 	threadActionController,
 	islands,
@@ -60,46 +59,6 @@ export function wireModals({
 		} catch (error) {
 			reportAsyncError(error);
 		}
-	});
-
-	$main.on('click', 'button.delete', async function(eventObject) {
-		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
-		return threadListController.deleteThread($divThread.data('threadId'));
-	});
-
-	$main.on('click', 'button.archive-thread', async function(eventObject) {
-		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
-		return threadListController.archiveThread($divThread.data('threadId'));
-	});
-
-	$main.on('click', 'button.label-thread', function(eventObject) {
-		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
-		return threadListController.openLabelPicker({
-			threadId: $divThread.data('threadId'),
-			subject: $divThread.find('.subject').text()
-		});
-	});
-
-	$main.on('click', 'button.later', function(eventObject) {
-		var $divThread = $(eventObject.currentTarget).parents('.thread[data-thread-id]');
-		return threadListController.openLaterPicker({
-			threadId: $divThread.data('threadId'),
-			subject: $divThread.find('.subject').text()
-		});
-	});
-
-	$main.on('click', 'div.thread', async function(eventObject) {
-		if ($(eventObject.target).closest('button, a, input, select, textarea, label').length > 0) {
-			return true;
-		}
-		var $threadDiv = $(eventObject.currentTarget);
-		await threadListController.openThread({
-			receiversText: $threadDiv.find('.receivers').attr('title') || '',
-			sendersText: $threadDiv.find('.senders').attr('title') || '',
-			snippet: $threadDiv.find('.snippet').text(),
-			subject: $threadDiv.find('.subject').text(),
-			threadId: $threadDiv.data('threadId')
-		});
 	});
 
 	$threadViewer.find('button.reply-all').on('click', async function() {
@@ -249,11 +208,6 @@ export function wireModals({
 		if (islandState && typeof islandState.instance.clear === 'function') {
 			islandState.instance.clear();
 		}
-	});
-
-	$main.on('click', 'a.view-on-gmail', function(eventObject) {
-		eventObject.stopPropagation();
-		return true;
 	});
 
 	$settingsBtn.on('click', function() {
