@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
 	formatPrettyTimestamp,
@@ -28,7 +28,25 @@ function renderCountSuffix(items, subtractAmount) {
 	return count <= 0 ? '' : ' (and ' + count + ' more)';
 }
 
-function ThreadRow({ thread, labels, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread }) {
+function ThreadRow({ thread, labels, isRemoving, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread }) {
+	var rowRef = useRef(null);
+
+	useEffect(function() {
+		if (isRemoving && rowRef.current) {
+			var el = rowRef.current;
+			var height = el.offsetHeight;
+			el.style.height = height + 'px';
+			el.style.overflow = 'hidden';
+			// Force reflow so the explicit height is applied before the transition starts
+			void el.offsetHeight;
+			el.style.transition = 'height 0.4s ease-out, opacity 0.4s ease-out, margin-bottom 0.4s, border-bottom-width 0.4s';
+			el.style.height = '0';
+			el.style.opacity = '0';
+			el.style.marginBottom = '0';
+			el.style.borderBottomWidth = '0';
+		}
+	}, [isRemoving]);
+
 	var senders = Array.isArray(thread.senders) ? thread.senders : [];
 	var receivers = Array.isArray(thread.receivers) ? thread.receivers : [];
 	var mainDisplayedLabelIds = getThreadMainDisplayedLabelIds(thread);
@@ -48,6 +66,7 @@ function ThreadRow({ thread, labels, onArchive, onDelete, onOpenLaterPicker, onO
 
 	return (
 		<div
+			ref={rowRef}
 			className={'thread visibility-' + (thread.visibility || '')}
 			data-thread-id={thread.threadId}
 			onClick={handleRowClick}
@@ -142,7 +161,7 @@ function ThreadRow({ thread, labels, onArchive, onDelete, onOpenLaterPicker, onO
 	);
 }
 
-function ThreadListApp({ groups, labels, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread }) {
+function ThreadListApp({ groups, labels, removingThreadIds, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread }) {
 	if (!groups || groups.length === 0) {
 		return null;
 	}
@@ -158,6 +177,7 @@ function ThreadListApp({ groups, labels, onArchive, onDelete, onOpenLaterPicker,
 									key={thread.threadId}
 									thread={thread}
 									labels={labels}
+									isRemoving={removingThreadIds.has(thread.threadId)}
 									onArchive={onArchive}
 									onDelete={onDelete}
 									onOpenLaterPicker={onOpenLaterPicker}
@@ -173,16 +193,20 @@ function ThreadListApp({ groups, labels, onArchive, onDelete, onOpenLaterPicker,
 	);
 }
 
+var REMOVE_ANIMATION_MS = 400;
+
 export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread }) {
 	var root = createRoot(container);
 	var groups = [];
 	var labels = [];
+	var removingThreadIds = new Set();
 
 	function render() {
 		root.render(
 			<ThreadListApp
 				groups={groups}
 				labels={labels}
+				removingThreadIds={removingThreadIds}
 				onArchive={onArchive}
 				onDelete={onDelete}
 				onOpenLaterPicker={onOpenLaterPicker}
@@ -204,15 +228,22 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 			render();
 		},
 		removeThread: function(threadId) {
-			groups = groups
-				.map(function(group) {
-					return {
-						...group,
-						threads: group.threads.filter(function(t) { return t.threadId !== threadId; }),
-					};
-				})
-				.filter(function(group) { return group.threads.length > 0; });
+			removingThreadIds = new Set(removingThreadIds);
+			removingThreadIds.add(threadId);
 			render();
+			setTimeout(function() {
+				removingThreadIds = new Set(removingThreadIds);
+				removingThreadIds.delete(threadId);
+				groups = groups
+					.map(function(group) {
+						return {
+							...group,
+							threads: group.threads.filter(function(t) { return t.threadId !== threadId; }),
+						};
+					})
+					.filter(function(group) { return group.threads.length > 0; });
+				render();
+			}, REMOVE_ANIMATION_MS);
 		},
 		unmount: function() {
 			root.unmount();
