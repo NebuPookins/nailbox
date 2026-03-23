@@ -1,9 +1,4 @@
 import frontendApi from './index.js';
-import {
-	renderConnectedContent,
-	renderDisconnectedContent,
-	renderSetupNeededContent,
-} from './auth_status_presenter.js';
 import { createAppShellController } from './app_shell_controller.js';
 import { createThreadListController } from './thread_list_controller.js';
 import {
@@ -48,8 +43,8 @@ $(function() {
 	})();
 
 	var $threadListRoot = $('#thread-list-root');
-	var $status = $('#status');
-	var $authControls = $('#auth-controls');
+	var $authShellStatusRoot = $('#auth-shell-status-root');
+	var $authShellControlsRoot = $('#auth-shell-controls-root');
 	var $threadViewer = $('#thread-viewer');
 	var $threadViewerRoot = $('#thread-viewer-root');
 	var $labelPicker = $('#label-picker');
@@ -116,23 +111,17 @@ $(function() {
 	}
 
 	function renderSetupNeededState(message) {
-		var content = renderSetupNeededContent(message);
-		$status.show().html(content.statusHtml);
-		$authControls.html(content.authControlsHtml);
+		authShellIsland.setSetupNeeded(message);
 		islands.clearThreadList();
 	}
 
 	function renderDisconnectedState(message) {
-		var content = renderDisconnectedContent(message);
-		$status.show().html(content.statusHtml);
-		$authControls.html(content.authControlsHtml);
+		authShellIsland.setDisconnected(message);
 		islands.clearThreadList();
 	}
 
 	function renderConnectedState() {
-		var content = renderConnectedContent(authStatus);
-		$status.show().html(content.statusHtml);
-		$authControls.html(content.authControlsHtml);
+		authShellIsland.setConnectedLoading({ emailAddress: authStatus.emailAddress });
 	}
 
 	async function loadLabels() {
@@ -198,7 +187,7 @@ $(function() {
 		});
 		try {
 			var groupsOfThreads = await appApi.loadGroupedThreads();
-			$status.hide();
+			authShellIsland.setIdle();
 			groupsOfThreads.forEach(function(group) {
 				group.threads.forEach(function(thread) {
 					if (thread.needsRefreshing) {
@@ -211,20 +200,14 @@ $(function() {
 				islandState.instance.setGroups(groupsOfThreads);
 			}
 			if (groupsOfThreads.length === 0) {
-				$status.show().html(
-					'<h1>No mail in cache yet</h1>' +
-					'<p>Use "Sync Gmail" to download mail into the local cache.</p>'
-				);
+				authShellIsland.setEmpty();
 			}
 			updateMessenger.update({
 				type: 'success',
 				message: 'GUI updated with cached threads.'
 			});
 		} catch (error) {
-			$status.show().html(
-				'<h1>Failed to load cached mail</h1>' +
-				'<p>Check the server logs, then try syncing Gmail again.</p>'
-			);
+			authShellIsland.setError();
 			throw error;
 		}
 	}
@@ -311,6 +294,24 @@ $(function() {
 		onOpenLaterPickerForThread: function(threadSummary) { threadListController.openLaterPicker(threadSummary); },
 		onOpenLabelPickerForThread: function(threadSummary) { threadListController.openLabelPicker(threadSummary); },
 		onOpenThread: function(threadSummary) { threadListController.openThread(threadSummary); },
+	});
+	var authShellIsland = frontendApi.mountAuthShellIsland({
+		statusContainer: $authShellStatusRoot.get(0),
+		authControlsContainer: $authShellControlsRoot.get(0),
+		onDisconnect: async function() {
+			try {
+				await appShellController.disconnectGmail();
+			} catch (error) {
+				reportAsyncError(error);
+			}
+		},
+		onRefreshNow: async function() {
+			try {
+				await appShellController.refreshNow();
+			} catch (error) {
+				reportAsyncError(error);
+			}
+		},
 	});
 	var threadViewerController = createThreadViewerController({
 		appApi: appApi,
@@ -434,13 +435,11 @@ $(function() {
 	});
 
 	wireModals({
-		$authControls,
 		$threadViewer,
 		$labelPicker,
 		$laterPicker,
 		$settingsBtn,
 		$settingsModal,
-		appShellController,
 		threadViewerController,
 		islands,
 		getThreadViewerThreadId,

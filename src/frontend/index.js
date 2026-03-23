@@ -1,4 +1,5 @@
 import { createAppApi, createGroupingRulesApi } from './api.js';
+import { mountAuthShellIsland } from './auth_shell_island.jsx';
 import { mountGroupingRulesIsland } from './grouping_rules_island.jsx';
 import { mountLabelPickerIsland } from './label_picker_island.jsx';
 import { mountLaterPickerIsland } from './later_picker_island.jsx';
@@ -17,6 +18,7 @@ export function mountGroupingRulesSettings({ container, notify, onSaved }) {
 const frontendApi = {
 	createAppApi,
 	createGroupingRulesApi,
+	mountAuthShellIsland,
 	mountGroupingRulesIsland,
 	mountGroupingRulesSettings,
 	mountLabelPickerIsland,
