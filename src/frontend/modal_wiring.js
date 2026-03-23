@@ -1,3 +1,5 @@
+import { showModal, hideModal } from './native_modal.js';
+
 /**
  * Wires all DOM event handlers to their respective controllers and islands.
  * This is the DOM-to-controller adapter layer; all logic lives in the
@@ -14,11 +16,11 @@
  * island and are no longer wired here.
  *
  * @param {{
- *   $threadViewer: object,
- *   $labelPicker: object,
- *   $laterPicker: object,
- *   $settingsBtn: object,
- *   $settingsModal: object,
+ *   threadViewer: Element,
+ *   labelPicker: Element,
+ *   laterPicker: Element,
+ *   settingsBtn: Element,
+ *   settingsModal: Element,
  *   threadViewerController: object,
  *   islands: object,
  *   getThreadViewerThreadId: () => string|null,
@@ -28,11 +30,11 @@
  * }} deps
  */
 export function wireModals({
-	$threadViewer,
-	$labelPicker,
-	$laterPicker,
-	$settingsBtn,
-	$settingsModal,
+	threadViewer,
+	labelPicker,
+	laterPicker,
+	settingsBtn,
+	settingsModal,
 	threadViewerController,
 	islands,
 	getThreadViewerThreadId,
@@ -40,15 +42,15 @@ export function wireModals({
 	messengerGetter,
 	reportAsyncError,
 }) {
-	$threadViewer.on('keydown', async function(event) {
+	threadViewer.addEventListener('keydown', async function(event) {
 		try {
 			await threadViewerController.handleKeydown({
 				event: event,
 				hideModal: function() {
-					$threadViewer.modal('hide');
+					hideModal(threadViewer);
 				},
 				isReplyFocused: function() {
-					return $threadViewer.find('textarea').is(':focus');
+					return threadViewer.querySelector('textarea') === document.activeElement;
 				},
 				threadId: getThreadViewerThreadId()
 			});
@@ -57,25 +59,25 @@ export function wireModals({
 		}
 	});
 
-	$threadViewer.on('hidden.bs.modal', function() {
+	threadViewer.addEventListener('hidden.bs.modal', function() {
 		clearThreadViewerState();
 	});
 
-	$labelPicker.on('hidden.bs.modal', function() {
+	labelPicker.addEventListener('hidden.bs.modal', function() {
 		var islandState = islands.ensureLabelPickerIsland();
 		if (islandState && typeof islandState.instance.clear === 'function') {
 			islandState.instance.clear();
 		}
 	});
 
-	$laterPicker.on('hidden.bs.modal', function() {
+	laterPicker.addEventListener('hidden.bs.modal', function() {
 		var islandState = islands.ensureLaterPickerIsland();
 		if (islandState && typeof islandState.instance.clear === 'function') {
 			islandState.instance.clear();
 		}
 	});
 
-	$settingsBtn.on('click', function() {
+	settingsBtn.addEventListener('click', function() {
 		var islandState = islands.ensureGroupingRulesIsland();
 		if (!islandState) {
 			messengerGetter().error('Failed to load grouping rules editor');
@@ -84,6 +86,12 @@ export function wireModals({
 		if (!islandState.wasCreated) {
 			islandState.instance.refresh();
 		}
-		$settingsModal.modal('show');
+		showModal(settingsModal);
+	});
+
+	settingsModal.querySelectorAll('[data-dismiss="modal"]').forEach(function(btn) {
+		btn.addEventListener('click', function() {
+			hideModal(settingsModal);
+		});
 	});
 }
