@@ -10,14 +10,15 @@
  * download attachment) are handled by the thread viewer React island and are
  * no longer wired here.
  *
+ * Auth controls (disconnect, refresh) are handled by the auth shell React
+ * island and are no longer wired here.
+ *
  * @param {{
- *   $authControls: object,
  *   $threadViewer: object,
  *   $labelPicker: object,
  *   $laterPicker: object,
  *   $settingsBtn: object,
  *   $settingsModal: object,
- *   appShellController: object,
  *   threadViewerController: object,
  *   islands: object,
  *   getThreadViewerThreadId: () => string|null,
@@ -27,13 +28,11 @@
  * }} deps
  */
 export function wireModals({
-	$authControls,
 	$threadViewer,
 	$labelPicker,
 	$laterPicker,
 	$settingsBtn,
 	$settingsModal,
-	appShellController,
 	threadViewerController,
 	islands,
 	getThreadViewerThreadId,
@@ -41,22 +40,6 @@ export function wireModals({
 	messengerGetter,
 	reportAsyncError,
 }) {
-	$authControls.on('click', '#disconnect-gmail-btn', async function() {
-		try {
-			await appShellController.disconnectGmail();
-		} catch (error) {
-			reportAsyncError(error);
-		}
-	});
-
-	$authControls.on('click', '#refresh-now-btn', async function() {
-		try {
-			await appShellController.refreshNow();
-		} catch (error) {
-			reportAsyncError(error);
-		}
-	});
-
 	$threadViewer.on('keydown', async function(event) {
 		try {
 			await threadViewerController.handleKeydown({
