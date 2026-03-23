@@ -7,6 +7,10 @@ import {
 	normalizeWordcountUpdateDto,
 } from '../validation/contracts.js';
 
+/**
+ * @param {import('express').Application} app
+ * @param {any} dependencies
+ */
 export default function registerThreadRoutes(app, dependencies) {
 	const {
 		config,
@@ -18,7 +22,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		threadService,
 	} = dependencies;
 
-	app.post('/api/threads', async function(req, res) {
+	app.post('/api/threads', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		try {
 			const result = await threadService.saveThreadPayload({
 				threadPayload: req.body,
@@ -35,7 +39,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.get('/api/threads', async function(req, res) {
+	app.get('/api/threads', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		try {
 			const formattedThreads = await threadService.getMostRelevantThreads({
 				hideUntils,
@@ -49,7 +53,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.get('/api/email-grouping-rules', function(req, res) {
+	app.get('/api/email-grouping-rules', function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		try {
 			const rules = getEmailGroupingRules(config);
 			res.status(200).type('application/json').send(rules);
@@ -59,15 +63,16 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.post('/api/email-grouping-rules', async function(req, res) {
+	app.post('/api/email-grouping-rules', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		try {
 			logger.info('Updating email grouping rules');
 			config.emailGroupingRules = normalizeGroupingRulesConfig(req.body);
 			await configRepository.saveConfig(config);
 			res.sendStatus(200);
 		} catch (error) {
-			if (error.code === 'INVALID_CONTRACT') {
-				res.status(400).send({humanErrorMessage: error.message});
+			const err = /** @type {Error & {code?: string}} */ (error);
+			if (err.code === 'INVALID_CONTRACT') {
+				res.status(400).send({humanErrorMessage: err.message});
 				return;
 			}
 			logger.error(util.inspect(error));
@@ -75,7 +80,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.get('/api/threads/grouped', async function(req, res) {
+	app.get('/api/threads/grouped', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		try {
 			const allThreads = await threadService.getMostRelevantThreads({
 				hideUntils,
@@ -94,7 +99,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.delete(/^\/api\/threads\/([a-z0-9]+)$/, async function(req, res) {
+	app.delete(/^\/api\/threads\/([a-z0-9]+)$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		const threadId = req.params[0];
 		logger.info(util.format('Receive request to delete thread %s.', threadId));
 		try {
@@ -106,7 +111,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.put(/^\/api\/threads\/([a-z0-9]+)\/hideUntil$/, async function(req, res) {
+	app.put(/^\/api\/threads\/([a-z0-9]+)\/hideUntil$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		const threadId = req.params[0];
 		let hideUntil;
 		try {
@@ -128,8 +133,9 @@ export default function registerThreadRoutes(app, dependencies) {
 			}
 			res.sendStatus(200);
 		} catch (error) {
-			if (error.code === 'INVALID_CONTRACT') {
-				res.status(400).send({humanErrorMessage: error.message});
+			const err = /** @type {Error & {code?: string}} */ (error);
+			if (err.code === 'INVALID_CONTRACT') {
+				res.status(400).send({humanErrorMessage: err.message});
 				return;
 			}
 			logger.error(util.format('Failed to save hideUntils: %j', error));
@@ -137,13 +143,14 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, async function(req, res) {
+	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		const threadId = req.params[0];
 		try {
 			const result = await threadService.getThreadMessages(threadId);
 			res.status(200).send(result.data);
 		} catch (error) {
-			if (error.code === 'ENOENT') {
+			const err = /** @type {Error & {code?: string}} */ (error);
+			if (err.code === 'ENOENT') {
 				res.sendStatus(404);
 				return;
 			}
@@ -152,7 +159,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/, async function(req, res) {
+	app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		const threadId = req.params[0];
 		const messageId = req.params[1];
 		try {
@@ -168,11 +175,12 @@ export default function registerThreadRoutes(app, dependencies) {
 			}
 			res.sendStatus(200);
 		} catch (error) {
-			if (error.code === 'INVALID_CONTRACT') {
-				res.status(400).send({humanErrorMessage: error.message});
+			const err = /** @type {Error & {code?: string}} */ (error);
+			if (err.code === 'INVALID_CONTRACT') {
+				res.status(400).send({humanErrorMessage: err.message});
 				return;
 			}
-			if (error.code === 'ENOENT') {
+			if (err.code === 'ENOENT') {
 				res.sendStatus(404);
 				return;
 			}
@@ -181,7 +189,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)$/, async function(req, res) {
+	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		const threadId = req.params[0];
 		const messageId = req.params[1];
 		try {
@@ -192,7 +200,8 @@ export default function registerThreadRoutes(app, dependencies) {
 			}
 			res.status(200).send(result.data);
 		} catch (error) {
-			if (error.code === 'ENOENT') {
+			const err = /** @type {Error & {code?: string}} */ (error);
+			if (err.code === 'ENOENT') {
 				res.sendStatus(404);
 				return;
 			}

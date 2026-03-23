@@ -1,3 +1,4 @@
+// @ts-nocheck
 export function createThreadViewerState() {
 	var currentThreadId = null;
 	var currentSubject = '';

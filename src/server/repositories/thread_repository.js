@@ -11,10 +11,10 @@ const THREADS_DIRECTORY = 'data/threads';
 /**
  * @param {{
  *  fileioImpl?: typeof fileio,
- *  threadModelModule: {Thread: new (data: object) => import('../types/thread').ThreadModelLike},
+ *  threadModelModule?: {Thread: new (data: object) => import('../types/thread.js').ThreadModelLike},
  *  threadsDirectory?: string,
  * }} [dependencies]
- * @returns {import('../types/thread').ThreadRepository}
+ * @returns {import('../types/thread.js').ThreadRepository}
  */
 export function createThreadRepository(dependencies = {}) {
 	const {
@@ -23,6 +23,9 @@ export function createThreadRepository(dependencies = {}) {
 		threadsDirectory = THREADS_DIRECTORY,
 	} = dependencies;
 
+	/**
+	 * @param {string} threadId
+	 */
 	async function deleteThread(threadId) {
 		const pathToDelete = `${threadsDirectory}/${threadId}`;
 		try {
@@ -30,11 +33,12 @@ export function createThreadRepository(dependencies = {}) {
 			logger.info(`Deleted file ${pathToDelete}`);
 			return true;
 		} catch (error) {
-			if (error.code === 'ENOENT') {
+			const err = /** @type {Error & {code?: string; stack?: string}} */ (error);
+			if (err.code === 'ENOENT') {
 				logger.info(`File ${pathToDelete} already deleted.`);
 				return true;
 			}
-			logger.error(`Error deleting ${pathToDelete}. Code: ${error.code}. Stack: ${error.stack}`);
+			logger.error(`Error deleting ${pathToDelete}. Code: ${err.code}. Stack: ${err.stack}`);
 			return false;
 		}
 	}
@@ -43,11 +47,18 @@ export function createThreadRepository(dependencies = {}) {
 		return readdir(threadsDirectory);
 	}
 
+	/**
+	 * @param {string} threadId
+	 */
 	async function readThread(threadId) {
+		if (!threadModelModule) throw new Error('threadModelModule is required to readThread');
 		const threadJson = await readThreadJson(threadId);
 		return new threadModelModule.Thread(validatePersistedThread(threadJson));
 	}
 
+	/**
+	 * @param {string} threadId
+	 */
 	async function readThreadJson(threadId) {
 		const threadJson = await fileioImpl.readJsonFromOptionalFile(`${threadsDirectory}/${threadId}`);
 		if (!threadJson.id && !threadJson.messages) {
@@ -56,6 +67,10 @@ export function createThreadRepository(dependencies = {}) {
 		return validatePersistedThread(threadJson);
 	}
 
+	/**
+	 * @param {string} threadId
+	 * @param {any} threadPayload
+	 */
 	async function saveThreadJson(threadId, threadPayload) {
 		validatePersistedThread(threadPayload);
 		return fileioImpl.saveJsonToFile(threadPayload, `${threadsDirectory}/${threadId}`);

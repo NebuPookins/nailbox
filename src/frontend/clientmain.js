@@ -1,3 +1,4 @@
+// @ts-nocheck
 import frontendApi from './index.js';
 import { showModal, hideModal } from './native_modal.js';
 import { createMessenger } from './messenger_shim.js';

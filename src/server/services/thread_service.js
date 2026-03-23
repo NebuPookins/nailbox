@@ -16,9 +16,15 @@ const Entities = htmlEntities.AllHtmlEntities;
 const entities = new Entities();
 const logger = nebulog.make({filename: 'src/server/services/thread_service.js', level: 'info'});
 
+/**
+ * @param {{ threadRepository?: any, MessageClass?: any }} [dependencies]
+ */
 export function createThreadService(dependencies = {}) {
 	const { threadRepository: repository, MessageClass } = dependencies;
 
+	/**
+	 * @param {{ threadPayload: any, lastRefresheds: any }} params
+	 */
 	async function saveThreadPayload({
 		threadPayload,
 		lastRefresheds,
@@ -26,10 +32,11 @@ export function createThreadService(dependencies = {}) {
 		try {
 			validateThreadPayload(threadPayload);
 		} catch (error) {
-			if (error.code === 'INVALID_CONTRACT') {
+			const err = /** @type {Error & {code?: string}} */ (error);
+			if (err.code === 'INVALID_CONTRACT') {
 				return {
 					status: 400,
-					body: {humanErrorMessage: error.message},
+					body: {humanErrorMessage: err.message},
 				};
 			}
 			throw error;
@@ -44,7 +51,7 @@ export function createThreadService(dependencies = {}) {
 		}
 
 		const allMessagesInTrash = threadPayload.messages.every(
-			(message) => message.labelIds.indexOf('TRASH') !== -1
+			(/** @type {any} */ message) => message.labelIds.indexOf('TRASH') !== -1
 		);
 		if (allMessagesInTrash) {
 			logger.info(`Deleting thread ${threadId} because all messages in thread are in trash.`);
@@ -53,11 +60,11 @@ export function createThreadService(dependencies = {}) {
 			};
 		}
 
-		threadPayload.messages.forEach((messageData) => {
+		threadPayload.messages.forEach((/** @type {any} */ messageData) => {
 			const messageInstance = new MessageClass(messageData);
 			const originalBody = messageInstance.bestBody();
 			const plainTextBody = sanitizeHtml(originalBody, {allowedTags: [], allowedAttributes: {}});
-			const wordCount = plainTextBody.split(' ').filter((word) => word.length > 0).length;
+			const wordCount = plainTextBody.split(' ').filter((/** @type {string} */ word) => word.length > 0).length;
 			const timeToReadSeconds = Math.round((wordCount * 60) / 200);
 			messageData.calculatedWordCount = wordCount;
 			messageData.calculatedTimeToReadSeconds = timeToReadSeconds;
@@ -66,8 +73,8 @@ export function createThreadService(dependencies = {}) {
 		const existingData = await repository.readThreadJson(threadId);
 		const newData = threadPayload;
 		if (existingData && existingData.messages) {
-			newData.messages.forEach((newMessage) => {
-				const existingMessage = existingData.messages.find((message) => message.id === newMessage.id);
+			newData.messages.forEach((/** @type {any} */ newMessage) => {
+				const existingMessage = existingData.messages.find((/** @type {any} */ message) => message.id === newMessage.id);
 				if (existingMessage && existingMessage.fullBodyWordCount) {
 					newMessage.fullBodyWordCount = existingMessage.fullBodyWordCount;
 				}
@@ -75,12 +82,15 @@ export function createThreadService(dependencies = {}) {
 		}
 
 		await repository.saveThreadJson(threadId, newData);
-		lastRefresheds.markRefreshed(threadId).catch((saveError) => {
+		lastRefresheds.markRefreshed(threadId).catch((/** @type {any} */ saveError) => {
 			logger.error(util.format('Failed to save last refreshed for %s: %s', threadId, util.inspect(saveError)));
 		});
 		return {status: 200};
 	}
 
+	/**
+	 * @param {{ hideUntils: any, lastRefresheds: any, limit?: number }} params
+	 */
 	async function getMostRelevantThreads({
 		hideUntils,
 		lastRefresheds,
@@ -88,7 +98,7 @@ export function createThreadService(dependencies = {}) {
 	}) {
 		const filenames = await repository.listThreadIds();
 		const now = Date.now();
-		let formattedThreads = await Promise.all(filenames.map(async (filename) => {
+		let formattedThreads = await Promise.all(filenames.map(async (/** @type {string} */ filename) => {
 			try {
 				const thread = await repository.readThread(filename);
 				const maybeMostRecentSnippetInThread = thread.snippet();
@@ -96,7 +106,7 @@ export function createThreadService(dependencies = {}) {
 
 				let totalTimeToReadSecondsForThread = 0;
 				const messagesInThread = thread.messages();
-				messagesInThread.forEach((message) => {
+				messagesInThread.forEach((/** @type {any} */ message) => {
 					totalTimeToReadSecondsForThread += message.getBestReadTimeSeconds();
 				});
 
@@ -133,13 +143,16 @@ export function createThreadService(dependencies = {}) {
 		}));
 
 		formattedThreads = formattedThreads
-			.filter((formattedThread) => formattedThread !== null)
-			.filter((formattedThread) => formattedThread.visibility !== 'hidden');
+			.filter((/** @type {any} */ formattedThread) => formattedThread !== null)
+			.filter((/** @type {any} */ formattedThread) => formattedThread.visibility !== 'hidden');
 		formattedThreads.sort(hideUntils.comparator());
 		formattedThreads.length = Math.min(formattedThreads.length, limit);
 		return formattedThreads;
 	}
 
+	/**
+	 * @param {string} threadId
+	 */
 	async function getThreadMessages(threadId) {
 		const thread = await repository.readThread(threadId);
 		return {
@@ -150,6 +163,9 @@ export function createThreadService(dependencies = {}) {
 		};
 	}
 
+	/**
+	 * @param {{ threadId: string, messageId: string, wordcount: number }} params
+	 */
 	async function updateMessageWordCount({
 		threadId,
 		messageId,
@@ -163,11 +179,15 @@ export function createThreadService(dependencies = {}) {
 		if (!message) {
 			return {status: 404};
 		}
-		message._data.fullBodyWordCount = parseInt(wordcount, 10);
+		message._data.fullBodyWordCount = parseInt(String(wordcount), 10);
 		await repository.saveThreadJson(threadId, thread._data);
 		return {status: 200};
 	}
 
+	/**
+	 * @param {string} threadId
+	 * @param {string} messageId
+	 */
 	async function getThreadMessage(threadId, messageId) {
 		const thread = await repository.readThread(threadId);
 		const matchingMessage = thread.message(messageId);
@@ -190,6 +210,9 @@ export function createThreadService(dependencies = {}) {
 	};
 }
 
+/**
+ * @param {any} objMessage
+ */
 export function loadRelevantDataFromMessage(objMessage) {
 	const originalBody = objMessage.bestBody();
 	const attachments = objMessage.getAttachments();
@@ -202,7 +225,7 @@ export function loadRelevantDataFromMessage(objMessage) {
 	const sanitizedBody = sanitizeHtml(originalBody, {
 		transformTags: {
 			'body': 'div',
-			'a': function(tagName, attribs) {
+			'a': function(/** @type {any} */ tagName, /** @type {any} */ attribs) {
 				if (attribs.href) {
 					attribs.target = '_blank';
 				}
@@ -211,7 +234,7 @@ export function loadRelevantDataFromMessage(objMessage) {
 					attribs: attribs
 				};
 			},
-			'*': function(tagName, attribs) {
+			'*': function(/** @type {any} */ tagName, /** @type {any} */ attribs) {
 				if ((typeof attribs.style) === 'string') {
 					attribs.style = attribs.style.replace(/position: *absolute;/, '');
 					return {

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { showModal, hideModal } from './native_modal.js';
 
 /**

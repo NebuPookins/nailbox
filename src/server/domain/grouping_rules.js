@@ -1,9 +1,16 @@
 import { normalizeGroupingRulesConfig } from '../validation/contracts.js';
 
+/**
+ * @param {import('../types/config.js').AppConfig} config
+ */
 export function getEmailGroupingRules(config) {
 	return normalizeGroupingRulesConfig(config.emailGroupingRules);
 }
 
+/**
+ * @param {import('../types/thread.js').ThreadSummaryDto} thread
+ * @param {import('../types/grouping_rules.js').GroupingRule} rule
+ */
 export function threadMatchesRule(thread, rule) {
 	return rule.conditions.some((condition) => {
 		switch (condition.type) {
@@ -23,10 +30,22 @@ export function threadMatchesRule(thread, rule) {
 	});
 }
 
+/**
+ * @param {{
+ *   threads: import('../types/thread.js').ThreadSummaryDto[],
+ *   groupingRules: import('../types/grouping_rules.js').GroupingRulesConfig,
+ *   hideUntilComparator: (a: import('../types/thread.js').ThreadSummaryDto, b: import('../types/thread.js').ThreadSummaryDto) => number,
+ * }} params
+ */
 export function groupThreads({threads, groupingRules, hideUntilComparator}) {
+	/** @type {Record<string, import('../types/thread.js').ThreadSummaryDto[]>} */
 	const groupedThreads = {};
 	const whenIHaveTimeSuffix = ' - When I Have Time';
 
+	/**
+	 * @param {string} group
+	 * @param {import('../types/thread.js').ThreadSummaryDto} thread
+	 */
 	function addToGroupedThreads(group, thread) {
 		const key = thread.visibility === 'when-i-have-time' ? `${group}${whenIHaveTimeSuffix}` : group;
 		if (!Array.isArray(groupedThreads[key])) {
@@ -74,6 +93,7 @@ export function groupThreads({threads, groupingRules, hideUntilComparator}) {
 
 	orderedGroupThreads.sort((groupA, groupB) => hideUntilComparator(groupA.threads[0], groupB.threads[0]));
 
+	/** @type {Record<string, number>} */
 	const groupPriority = {};
 	groupingRules.rules.forEach((rule) => {
 		groupPriority[rule.name] = rule.priority;

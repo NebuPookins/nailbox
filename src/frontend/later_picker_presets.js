@@ -1,3 +1,4 @@
+// @ts-nocheck
 export const LATER_PRESET_OPTIONS = [
 	{
 		glyph: 'time',
