@@ -1,4 +1,6 @@
 import frontendApi from './index.js';
+import { showModal, hideModal } from './native_modal.js';
+import { createMessenger } from './messenger_shim.js';
 import { createAppShellController } from './app_shell_controller.js';
 import { createThreadListController } from './thread_list_controller.js';
 import {
@@ -8,7 +10,7 @@ import { createThreadViewerController } from './thread_viewer_controller.js';
 import { createIslandManager } from './island_manager.js';
 import { wireModals } from './modal_wiring.js';
 
-$(function() {
+document.addEventListener('DOMContentLoaded', function() {
 	'use strict';
 
 	if (!console) {
@@ -18,42 +20,23 @@ $(function() {
 		console.log = function() {};
 	}
 
-	if (typeof Messenger !== 'undefined') {
-		Messenger.options = {
-			theme: 'air',
-			messageDefaults: {
-				showCloseButton: true,
-				closeButtonText: 'x'
-			}
-		};
-	}
-
 	var messengerGetter = (function() {
-		var mockMessenger = {
-			info: function() { return mockMessenger; },
-			update: function() { return mockMessenger; },
-			error: function() { return mockMessenger; }
-		};
-		return function() {
-			if (typeof Messenger === 'undefined') {
-				return mockMessenger;
-			}
-			return Messenger();
-		};
+		var messenger = createMessenger();
+		return function() { return messenger; };
 	})();
 
-	var $threadListRoot = $('#thread-list-root');
-	var $authShellStatusRoot = $('#auth-shell-status-root');
-	var $authShellControlsRoot = $('#auth-shell-controls-root');
-	var $threadViewer = $('#thread-viewer');
-	var $threadViewerRoot = $('#thread-viewer-root');
-	var $labelPicker = $('#label-picker');
-	var $labelPickerRoot = $('#label-picker-root');
-	var $laterPicker = $('#later-picker');
-	var $laterPickerRoot = $('#later-picker-root');
-	var $settingsBtn = $('#settings-btn');
-	var $settingsModal = $('#settings-modal');
-	var $groupingRulesRoot = $('#grouping-rules-root');
+	var threadListRoot = document.getElementById('thread-list-root');
+	var authShellStatusRoot = document.getElementById('auth-shell-status-root');
+	var authShellControlsRoot = document.getElementById('auth-shell-controls-root');
+	var threadViewer = document.getElementById('thread-viewer');
+	var threadViewerRoot = document.getElementById('thread-viewer-root');
+	var labelPicker = document.getElementById('label-picker');
+	var labelPickerRoot = document.getElementById('label-picker-root');
+	var laterPicker = document.getElementById('later-picker');
+	var laterPickerRoot = document.getElementById('later-picker-root');
+	var settingsBtn = document.getElementById('settings-btn');
+	var settingsModal = document.getElementById('settings-modal');
+	var groupingRulesRoot = document.getElementById('grouping-rules-root');
 
 	var authStatus = {
 		configured: false,
@@ -248,7 +231,7 @@ $(function() {
 			messengerGetter().error('Failed to load later picker');
 			return false;
 		}
-		$laterPicker.find('.modal-title').text(subject || '');
+		laterPicker.querySelector('.modal-title').textContent = subject || '';
 		islandState.instance.open({
 			onHideThread: async function(selectedThreadId, hideUntil) {
 				var updateMessenger = messengerGetter().info('Hiding thread ' + selectedThreadId + '.');
@@ -260,7 +243,7 @@ $(function() {
 			},
 			threadId: threadId
 		});
-		$laterPicker.modal('show');
+		showModal(laterPicker);
 		return false;
 	}
 
@@ -276,13 +259,13 @@ $(function() {
 	});
 	var islands = createIslandManager({
 		frontendApi: frontendApi,
-		$groupingRulesRoot: $groupingRulesRoot,
-		$labelPickerRoot: $labelPickerRoot,
-		$laterPickerRoot: $laterPickerRoot,
-		$threadListRoot: $threadListRoot,
-		hideSettingsModal: function() { $settingsModal.modal('hide'); },
-		hideLabelPicker: function() { $labelPicker.modal('hide'); },
-		hideLaterPicker: function() { $laterPicker.modal('hide'); },
+		groupingRulesRoot: groupingRulesRoot,
+		labelPickerRoot: labelPickerRoot,
+		laterPickerRoot: laterPickerRoot,
+		threadListRoot: threadListRoot,
+		hideSettingsModal: function() { hideModal(settingsModal); },
+		hideLabelPicker: function() { hideModal(labelPicker); },
+		hideLaterPicker: function() { hideModal(laterPicker); },
 		threadActionController: threadActionController,
 		getLabels: function() { return labelsCache; },
 		deleteThreadFromUI: deleteThreadFromUI,
@@ -296,8 +279,8 @@ $(function() {
 		onOpenThread: function(threadSummary) { threadListController.openThread(threadSummary); },
 	});
 	var authShellIsland = frontendApi.mountAuthShellIsland({
-		statusContainer: $authShellStatusRoot.get(0),
-		authControlsContainer: $authShellControlsRoot.get(0),
+		statusContainer: authShellStatusRoot,
+		authControlsContainer: authShellControlsRoot,
 		onDisconnect: async function() {
 			try {
 				await appShellController.disconnectGmail();
@@ -341,9 +324,9 @@ $(function() {
 		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer
 	});
 	var threadViewerIsland = frontendApi.mountThreadViewerIsland({
-		container: $threadViewerRoot.get(0),
-		showModal: function() { $threadViewer.modal('show'); },
-		hideModal: function() { $threadViewer.modal('hide'); },
+		container: threadViewerRoot,
+		showModal: function() { showModal(threadViewer); },
+		hideModal: function() { hideModal(threadViewer); },
 		getEmailAddress: function() { return authStatus.emailAddress; },
 		reportError: reportAsyncError,
 		onReplyAll: function(opts) {
@@ -388,10 +371,10 @@ $(function() {
 					}
 				},
 				setTitle: function(s) {
-					$labelPicker.find('.modal-title').text(s);
+					labelPicker.querySelector('.modal-title').textContent = s;
 				},
 				show: function() {
-					$labelPicker.modal('show');
+					showModal(labelPicker);
 				},
 			});
 		},
@@ -420,10 +403,10 @@ $(function() {
 					}
 				},
 				setTitle: function(subject) {
-					$labelPicker.find('.modal-title').text(subject);
+					labelPicker.querySelector('.modal-title').textContent = subject;
 				},
 				show: function() {
-					$labelPicker.modal('show');
+					showModal(labelPicker);
 				}
 			});
 		},
@@ -435,11 +418,11 @@ $(function() {
 	});
 
 	wireModals({
-		$threadViewer,
-		$labelPicker,
-		$laterPicker,
-		$settingsBtn,
-		$settingsModal,
+		threadViewer,
+		labelPicker,
+		laterPicker,
+		settingsBtn,
+		settingsModal,
 		threadViewerController,
 		islands,
 		getThreadViewerThreadId,

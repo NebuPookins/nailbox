@@ -5,10 +5,10 @@ import { filterSelectableLabels } from './thread_action_controller.js';
  *
  * @param {{
  *   frontendApi: object,
- *   $groupingRulesRoot: object,
- *   $labelPickerRoot: object,
- *   $laterPickerRoot: object,
- *   $threadListRoot: object,
+ *   groupingRulesRoot: Element|null,
+ *   labelPickerRoot: Element|null,
+ *   laterPickerRoot: Element|null,
+ *   threadListRoot: Element|null,
  *   hideSettingsModal: () => void,
  *   hideLabelPicker: () => void,
  *   hideLaterPicker: () => void,
@@ -27,10 +27,10 @@ import { filterSelectableLabels } from './thread_action_controller.js';
  */
 export function createIslandManager({
 	frontendApi,
-	$groupingRulesRoot,
-	$labelPickerRoot,
-	$laterPickerRoot,
-	$threadListRoot,
+	groupingRulesRoot,
+	labelPickerRoot,
+	laterPickerRoot,
+	threadListRoot,
 	hideSettingsModal,
 	hideLabelPicker,
 	hideLaterPicker,
@@ -97,14 +97,14 @@ export function createIslandManager({
 				wasCreated: false
 			};
 		}
-		if (!$groupingRulesRoot.length) {
+		if (!groupingRulesRoot) {
 			return null;
 		}
 		if (typeof frontendApi.mountGroupingRulesSettings !== 'function') {
 			return null;
 		}
 		groupingRulesIsland = frontendApi.mountGroupingRulesSettings({
-			container: $groupingRulesRoot.get(0),
+			container: groupingRulesRoot,
 			notify: createGroupingRulesNotify(),
 			onSaved: function() {
 				hideSettingsModal();
@@ -126,14 +126,14 @@ export function createIslandManager({
 				wasCreated: false
 			};
 		}
-		if (!$laterPickerRoot.length) {
+		if (!laterPickerRoot) {
 			return null;
 		}
 		if (typeof frontendApi.mountLaterPickerIsland !== 'function') {
 			return null;
 		}
 		laterPickerIsland = frontendApi.mountLaterPickerIsland({
-			container: $laterPickerRoot.get(0),
+			container: laterPickerRoot,
 			notify: createLaterPickerNotify(),
 			onDismiss: hideLaterPicker,
 			onHidden: function(threadId) {
@@ -153,14 +153,14 @@ export function createIslandManager({
 				wasCreated: false
 			};
 		}
-		if (!$labelPickerRoot.length) {
+		if (!labelPickerRoot) {
 			return null;
 		}
 		if (typeof frontendApi.mountLabelPickerIsland !== 'function') {
 			return null;
 		}
 		labelPickerIsland = frontendApi.mountLabelPickerIsland({
-			container: $labelPickerRoot.get(0),
+			container: labelPickerRoot,
 			notify: createLabelPickerNotify(),
 			onDismiss: hideLabelPicker,
 			onMoveThread: function(threadId, labelId) {
@@ -180,14 +180,14 @@ export function createIslandManager({
 				wasCreated: false
 			};
 		}
-		if (!$threadListRoot.length) {
+		if (!threadListRoot) {
 			return null;
 		}
 		if (typeof frontendApi.mountThreadListIsland !== 'function') {
 			return null;
 		}
 		threadListIsland = frontendApi.mountThreadListIsland({
-			container: $threadListRoot.get(0),
+			container: threadListRoot,
 			onArchive: onArchiveThread,
 			onDelete: onDeleteThread,
 			onOpenLaterPicker: onOpenLaterPickerForThread,
