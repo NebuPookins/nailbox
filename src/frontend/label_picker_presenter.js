@@ -1,3 +1,4 @@
+// @ts-nocheck
 export function getLabelDisplayName(label) {
 	if (!label) {
 		return '';

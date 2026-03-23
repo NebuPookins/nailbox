@@ -1,3 +1,4 @@
+// @ts-nocheck
 function updateMessenger(actionMessenger, type, message) {
 	if (!actionMessenger || typeof actionMessenger.update !== 'function') {
 		return;

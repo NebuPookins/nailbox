@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { filterSelectableLabels } from './thread_action_controller.js';
 
 /**

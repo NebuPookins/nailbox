@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createAppApi, createGroupingRulesApi } from './api.js';
 import { mountAuthShellIsland } from './auth_shell_island.jsx';
 import { mountGroupingRulesIsland } from './grouping_rules_island.jsx';

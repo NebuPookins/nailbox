@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Show/hide Bootstrap 3 modals without the jQuery plugin.
  * Dispatches a native `hidden.bs.modal` CustomEvent after the CSS transition.

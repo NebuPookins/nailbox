@@ -1,45 +1,77 @@
+/**
+ * @param {string} message
+ */
 function makeValidationError(message) {
-	const error = new Error(message);
+	const error = /** @type {Error & {code: string}} */ (new Error(message));
 	error.code = 'INVALID_CONTRACT';
 	return error;
 }
 
+/**
+ * @param {any} value
+ * @param {string} name
+ */
 function assertObject(value, name) {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) {
 		throw makeValidationError(`${name} must be an object`);
 	}
 }
 
+/**
+ * @param {any} value
+ * @param {string} name
+ */
 function assertArray(value, name) {
 	if (!Array.isArray(value)) {
 		throw makeValidationError(`${name} must be an array`);
 	}
 }
 
+/**
+ * @param {any} value
+ * @param {string} name
+ */
 function assertString(value, name) {
 	if (typeof value !== 'string') {
 		throw makeValidationError(`${name} must be a string`);
 	}
 }
 
+/**
+ * @param {any} value
+ * @param {string} name
+ */
 function assertOptionalString(value, name) {
 	if (value !== undefined && value !== null && typeof value !== 'string') {
 		throw makeValidationError(`${name} must be a string when provided`);
 	}
 }
 
+/**
+ * @param {any} value
+ * @param {string} name
+ */
 function assertNumber(value, name) {
 	if (typeof value !== 'number' || Number.isNaN(value)) {
 		throw makeValidationError(`${name} must be a number`);
 	}
 }
 
+/**
+ * @param {any} value
+ * @param {any[]} allowedValues
+ * @param {string} name
+ */
 function assertOneOf(value, allowedValues, name) {
 	if (!allowedValues.includes(value)) {
 		throw makeValidationError(`${name} is invalid`);
 	}
 }
 
+/**
+ * @param {any} condition
+ * @param {number} index
+ */
 function normalizeGroupingCondition(condition, index) {
 	assertObject(condition, `rules[${index}] condition`);
 	assertString(condition.type, `rules[${index}] condition.type`);
@@ -53,6 +85,10 @@ function normalizeGroupingCondition(condition, index) {
 	};
 }
 
+/**
+ * @param {any} rule
+ * @param {number} index
+ */
 function normalizeGroupingRule(rule, index) {
 	assertObject(rule, `rules[${index}]`);
 	assertString(rule.name, `rules[${index}].name`);
@@ -66,10 +102,13 @@ function normalizeGroupingRule(rule, index) {
 		name: rule.name,
 		priority,
 		sortType,
-		conditions: rule.conditions.map((condition) => normalizeGroupingCondition(condition, index)),
+		conditions: rule.conditions.map((/** @type {any} */ condition) => normalizeGroupingCondition(condition, index)),
 	};
 }
 
+/**
+ * @param {any} value
+ */
 export function normalizeGroupingRulesConfig(value) {
 	if (value === undefined || value === null) {
 		return {rules: []};
@@ -78,10 +117,13 @@ export function normalizeGroupingRulesConfig(value) {
 	const rawRules = value.rules === undefined ? [] : value.rules;
 	assertArray(rawRules, 'emailGroupingRules.rules');
 	return {
-		rules: rawRules.map((rule, index) => normalizeGroupingRule(rule, index)),
+		rules: rawRules.map((/** @type {any} */ rule, /** @type {number} */ index) => normalizeGroupingRule(rule, index)),
 	};
 }
 
+/**
+ * @param {any} value
+ */
 function normalizeGoogleOAuthConfig(value) {
 	if (value === undefined || value === null) {
 		return {};
@@ -99,6 +141,9 @@ function normalizeGoogleOAuthConfig(value) {
 	return normalized;
 }
 
+/**
+ * @param {any} value
+ */
 export function normalizeAppConfig(value) {
 	if (value === undefined || value === null) {
 		return {
@@ -117,6 +162,10 @@ export function normalizeAppConfig(value) {
 	return normalized;
 }
 
+/**
+ * @param {any} value
+ * @param {any} defaultRedirectUri
+ */
 export function normalizeGoogleOAuthSetupDto(value, defaultRedirectUri) {
 	assertObject(value, 'googleOAuthSetup');
 	const clientId = typeof value.clientId === 'string' ? value.clientId.trim() : '';
@@ -141,6 +190,10 @@ export function normalizeGoogleOAuthSetupDto(value, defaultRedirectUri) {
 	};
 }
 
+/**
+ * @param {any} message
+ * @param {number} index
+ */
 function normalizePersistedMessage(message, index) {
 	assertObject(message, `thread.messages[${index}]`);
 	assertString(message.id, `thread.messages[${index}].id`);
@@ -156,18 +209,28 @@ function normalizePersistedMessage(message, index) {
 	return message;
 }
 
+/**
+ * @param {any} value
+ */
 export function validatePersistedThread(value) {
 	assertObject(value, 'thread');
 	assertString(value.id, 'thread.id');
 	assertArray(value.messages, 'thread.messages');
-	value.messages.forEach((message, index) => normalizePersistedMessage(message, index));
+	value.messages.forEach((/** @type {any} */ message, /** @type {number} */ index) => normalizePersistedMessage(message, index));
 	return value;
 }
 
+/**
+ * @param {any} value
+ */
 export function validateThreadPayload(value) {
 	return validatePersistedThread(value);
 }
 
+/**
+ * @param {any} value
+ * @param {string} name
+ */
 function normalizePerson(value, name) {
 	assertObject(value, name);
 	assertString(value.name, `${name}.name`);
@@ -178,6 +241,9 @@ function normalizePerson(value, name) {
 	};
 }
 
+/**
+ * @param {any} value
+ */
 export function normalizeThreadSummaryDto(value) {
 	assertObject(value, 'threadSummary');
 	assertString(value.threadId, 'threadSummary.threadId');
@@ -189,9 +255,9 @@ export function normalizeThreadSummaryDto(value) {
 		assertString(value.snippet, 'threadSummary.snippet');
 	}
 	assertArray(value.messageIds, 'threadSummary.messageIds');
-	value.messageIds.forEach((messageId, index) => assertString(messageId, `threadSummary.messageIds[${index}]`));
+	value.messageIds.forEach((/** @type {any} */ messageId, /** @type {number} */ index) => assertString(messageId, `threadSummary.messageIds[${index}]`));
 	assertArray(value.labelIds, 'threadSummary.labelIds');
-	value.labelIds.forEach((labelId, index) => assertString(labelId, `threadSummary.labelIds[${index}]`));
+	value.labelIds.forEach((/** @type {any} */ labelId, /** @type {number} */ index) => assertString(labelId, `threadSummary.labelIds[${index}]`));
 	assertString(value.visibility, 'threadSummary.visibility');
 	assertOneOf(value.visibility, ['updated', 'visible', 'when-i-have-time', 'hidden', 'stale'], 'threadSummary.visibility');
 	if (typeof value.isWhenIHaveTime !== 'boolean') {
@@ -204,8 +270,8 @@ export function normalizeThreadSummaryDto(value) {
 	assertNumber(value.recentMessageReadTimeSeconds, 'threadSummary.recentMessageReadTimeSeconds');
 	return {
 		threadId: value.threadId,
-		senders: value.senders.map((sender, index) => normalizePerson(sender, `threadSummary.senders[${index}]`)),
-		receivers: value.receivers.map((receiver, index) => normalizePerson(receiver, `threadSummary.receivers[${index}]`)),
+		senders: value.senders.map((/** @type {any} */ sender, /** @type {number} */ index) => normalizePerson(sender, `threadSummary.senders[${index}]`)),
+		receivers: value.receivers.map((/** @type {any} */ receiver, /** @type {number} */ index) => normalizePerson(receiver, `threadSummary.receivers[${index}]`)),
 		lastUpdated: value.lastUpdated,
 		subject: value.subject,
 		snippet: value.snippet,
@@ -219,6 +285,9 @@ export function normalizeThreadSummaryDto(value) {
 	};
 }
 
+/**
+ * @param {any} value
+ */
 export function normalizeThreadMessageDto(value) {
 	assertObject(value, 'threadMessage');
 	if (typeof value.deleted !== 'boolean') {
@@ -238,13 +307,13 @@ export function normalizeThreadMessageDto(value) {
 	return {
 		deleted: value.deleted,
 		messageId: value.messageId,
-		from: value.from.map((person, index) => {
+		from: value.from.map((/** @type {any} */ person, /** @type {number} */ index) => {
 			if (person === null) {
 				return null;
 			}
 			return normalizePerson(person, `threadMessage.from[${index}]`);
 		}),
-		to: value.to.map((person, index) => normalizePerson(person, `threadMessage.to[${index}]`)),
+		to: value.to.map((/** @type {any} */ person, /** @type {number} */ index) => normalizePerson(person, `threadMessage.to[${index}]`)),
 		date: value.date,
 		body: {
 			original: value.body.original,
@@ -253,7 +322,7 @@ export function normalizeThreadMessageDto(value) {
 		},
 		wordcount: value.wordcount,
 		timeToReadSeconds: value.timeToReadSeconds,
-		attachments: value.attachments.map((attachment, index) => {
+		attachments: value.attachments.map((/** @type {any} */ attachment, /** @type {number} */ index) => {
 			assertObject(attachment, `threadMessage.attachments[${index}]`);
 			assertString(attachment.filename, `threadMessage.attachments[${index}].filename`);
 			assertNumber(attachment.size, `threadMessage.attachments[${index}].size`);
@@ -267,6 +336,9 @@ export function normalizeThreadMessageDto(value) {
 	};
 }
 
+/**
+ * @param {any} value
+ */
 export function normalizeHideUntilDto(value) {
 	assertObject(value, 'hideUntil');
 	assertString(value.type, 'hideUntil.type');
@@ -288,6 +360,9 @@ export function normalizeHideUntilDto(value) {
 	}
 }
 
+/**
+ * @param {any} value
+ */
 export function normalizeWordcountUpdateDto(value) {
 	assertObject(value, 'wordcountUpdate');
 	const wordcount = Number(value.wordcount);
@@ -297,6 +372,9 @@ export function normalizeWordcountUpdateDto(value) {
 	return {wordcount};
 }
 
+/**
+ * @param {any} value
+ */
 export function normalizeGmailMoveThreadDto(value) {
 	assertObject(value, 'gmailMoveThread');
 	assertString(value.labelId, 'gmailMoveThread.labelId');
@@ -308,6 +386,9 @@ export function normalizeGmailMoveThreadDto(value) {
 	};
 }
 
+/**
+ * @param {any} value
+ */
 export function normalizeGmailSendMessageDto(value) {
 	assertObject(value, 'gmailSendMessage');
 	assertString(value.threadId, 'gmailSendMessage.threadId');
@@ -324,6 +405,9 @@ export function normalizeGmailSendMessageDto(value) {
 	};
 }
 
+/**
+ * @param {any} value
+ */
 export function normalizeRfc2822RequestDto(value) {
 	assertObject(value, 'rfc2822Request');
 	assertString(value.threadId, 'rfc2822Request.threadId');

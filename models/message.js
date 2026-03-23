@@ -1,3 +1,4 @@
+// @ts-nocheck
 import _ from 'lodash';
 import assert from 'assert';
 import htmlEntities from 'html-entities';

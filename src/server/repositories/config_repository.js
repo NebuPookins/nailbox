@@ -8,7 +8,7 @@ const DEFAULT_CONFIG_PATH = 'data/config.json';
  *  fileioImpl?: typeof fileio,
  *  pathToConfig?: string,
  * }} [dependencies]
- * @returns {import('../types/config').ConfigRepository}
+ * @returns {import('../types/config.js').ConfigRepository}
  */
 export function createConfigRepository(dependencies = {}) {
 	const {
@@ -21,6 +21,9 @@ export function createConfigRepository(dependencies = {}) {
 		return normalizeAppConfig(rawConfig);
 	}
 
+	/**
+	 * @param {import('../types/config.js').AppConfig} config
+	 */
 	async function saveConfig(config) {
 		const normalizedConfig = normalizeAppConfig(config);
 		await fileioImpl.saveJsonToFile(normalizedConfig, pathToConfig);

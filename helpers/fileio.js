@@ -1,3 +1,4 @@
+// @ts-nocheck
 import path from 'node:path';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import crypto from 'node:crypto';

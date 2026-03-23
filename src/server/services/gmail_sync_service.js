@@ -1,5 +1,9 @@
 import _ from 'lodash';
 
+/**
+ * @param {any} gmailRequest
+ * @param {string} labelId
+ */
 export async function listThreadIdsByLabel(gmailRequest, labelId) {
 	const response = await gmailRequest({
 		path: '/threads',
@@ -8,9 +12,12 @@ export async function listThreadIdsByLabel(gmailRequest, labelId) {
 			maxResults: '100',
 		},
 	});
-	return Array.isArray(response.threads) ? response.threads.map((thread) => thread.id) : [];
+	return Array.isArray(response.threads) ? response.threads.map((/** @type {any} */ thread) => thread.id) : [];
 }
 
+/**
+ * @param {{ gmailRequest: any, threadId: string, lastRefresheds: any, threadRepository: any, threadService: any }} params
+ */
 export async function refreshSingleThreadFromGmail({
 	gmailRequest,
 	threadId,
@@ -30,7 +37,8 @@ export async function refreshSingleThreadFromGmail({
 			lastRefresheds,
 		});
 	} catch (error) {
-		if (error.status === 404) {
+		const err = /** @type {any} */ (error);
+		if (err.status === 404) {
 			return {
 				status: await threadRepository.deleteThread(threadId) ? 200 : 500,
 			};
@@ -39,6 +47,9 @@ export async function refreshSingleThreadFromGmail({
 	}
 }
 
+/**
+ * @param {{ gmailRequest: any, lastRefresheds: any, threadRepository: any, threadService: any }} params
+ */
 export async function syncRecentThreadsFromGmail({
 	gmailRequest,
 	lastRefresheds,
@@ -64,10 +75,11 @@ export async function syncRecentThreadsFromGmail({
 				status: saveResult.status,
 			};
 		} catch (error) {
+			const err = /** @type {Error} */ (error);
 			return {
 				threadId,
 				status: 500,
-				error: error.message,
+				error: err.message,
 			};
 		}
 	}));

@@ -1,5 +1,5 @@
-import type { GoogleOAuthConfig } from './auth';
-import type { GroupingRulesConfig } from './grouping_rules';
+import type { GoogleOAuthConfig } from './auth.js';
+import type { GroupingRulesConfig } from './grouping_rules.js';
 
 export interface AppConfig {
 	port?: number;

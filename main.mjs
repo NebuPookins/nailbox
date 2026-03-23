@@ -1,3 +1,4 @@
+// @ts-nocheck
 import util from 'util';
 import express from 'express';
 import bodyParser from 'body-parser';

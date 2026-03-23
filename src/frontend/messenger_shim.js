@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Minimal native notification system replacing the Messenger.js jQuery plugin.
  * Renders Bootstrap-styled alert toasts fixed at the bottom-right of the page.

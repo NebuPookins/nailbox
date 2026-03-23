@@ -13,6 +13,12 @@ import {
 } from '../../../services/google_oauth.mjs';
 import { getSetupViewModel } from './setup_routes.js';
 
+/**
+ * @param {import('express').Response} res
+ * @param {string} name
+ * @param {string} value
+ * @param {{ path?: string; sameSite?: string; httpOnly?: boolean; maxAgeSeconds?: number; secure?: boolean }} [options]
+ */
 function setCookie(res, name, value, options = {}) {
 	const parts = [`${name}=${encodeURIComponent(value)}`];
 	parts.push(`Path=${options.path || '/'}`);
@@ -29,10 +35,18 @@ function setCookie(res, name, value, options = {}) {
 	res.append('Set-Cookie', parts.join('; '));
 }
 
+/**
+ * @param {import('express').Response} res
+ * @param {string} name
+ * @param {{ path?: string; sameSite?: string; httpOnly?: boolean; maxAgeSeconds?: number; secure?: boolean }} [options]
+ */
 function clearCookie(res, name, options = {}) {
 	setCookie(res, name, '', Object.assign({}, options, {maxAgeSeconds: 0}));
 }
 
+/**
+ * @param {import('express').Request} req
+ */
 function parseCookies(req) {
 	const rawCookieHeader = req.headers.cookie;
 	if (typeof rawCookieHeader !== 'string' || rawCookieHeader.length === 0) {
@@ -46,15 +60,19 @@ function parseCookies(req) {
 		}
 		const key = trimmedChunk.substring(0, equalsIndex);
 		const value = trimmedChunk.substring(equalsIndex + 1);
-		cookies[key] = decodeURIComponent(value);
+		/** @type {Record<string, string>} */ (cookies)[key] = decodeURIComponent(value);
 		return cookies;
-	}, {});
+	}, /** @type {Record<string, string>} */ ({}));
 }
 
+/**
+ * @param {import('express').Application} app
+ * @param {any} dependencies
+ */
 export default function registerAuthRoutes(app, dependencies) {
 	const {config, logger, saveConfig} = dependencies;
 
-	app.get('/auth/google/start', function(req, res) {
+	app.get('/auth/google/start', function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		if (!isGoogleOAuthConfigured(config)) {
 			res.redirect('/setup');
 			return;
@@ -65,11 +83,11 @@ export default function registerAuthRoutes(app, dependencies) {
 			maxAgeSeconds: 10 * 60,
 		});
 		const authStatus = getGoogleAuthStatus(config);
-		const prompt = authStatus.connected ? null : 'consent';
+		const prompt = authStatus.connected ? undefined : 'consent';
 		res.redirect(getAuthorizationUrl(config, state, prompt));
 	});
 
-	app.get('/auth/google/callback', async function(req, res) {
+	app.get('/auth/google/callback', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		const cookies = parseCookies(req);
 		clearCookie(res, 'google_oauth_state', {path: '/auth/google/callback'});
 		if (!req.query.state || req.query.state !== cookies.google_oauth_state) {
@@ -114,7 +132,7 @@ export default function registerAuthRoutes(app, dependencies) {
 		}
 	});
 
-	app.post('/auth/google/disconnect', async function(req, res) {
+	app.post('/auth/google/disconnect', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
 		clearGoogleTokens(config);
 		try {
 			await saveConfig();
