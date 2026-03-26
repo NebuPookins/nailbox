@@ -1,11 +1,8 @@
 import hideUntilModel from '../../../models/hide_until.js';
 
-/**
- * @param {{
- *   hideUntilModelModule?: typeof hideUntilModel,
- * }} [dependencies]
- */
-export function createHideUntilRepository(dependencies = {}) {
+export function createHideUntilRepository(dependencies: {
+	hideUntilModelModule?: typeof hideUntilModel;
+} = {}) {
 	const {
 		hideUntilModelModule = hideUntilModel,
 	} = dependencies;
@@ -14,7 +11,7 @@ export function createHideUntilRepository(dependencies = {}) {
 		return hideUntilModelModule.load();
 	}
 
-	return { load };
+	return {load};
 }
 
 const hideUntilRepository = createHideUntilRepository();

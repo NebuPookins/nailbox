@@ -1,21 +1,15 @@
 import util from 'util';
 
-import { getGoogleAuthStatus, getGoogleOAuthConfig, isGoogleOAuthConfigured } from '../../../services/google_oauth.mjs';
-import { normalizeGoogleOAuthSetupDto } from '../validation/contracts.js';
+import type {Application, Request, Response} from 'express';
 
-/**
- * @param {import('express').Request} req
- */
-function getDefaultRedirectUri(req) {
+import {getGoogleAuthStatus, getGoogleOAuthConfig, isGoogleOAuthConfigured} from '../../../services/google_oauth.mjs';
+import {normalizeGoogleOAuthSetupDto} from '../validation/contracts.js';
+
+function getDefaultRedirectUri(req: Request): string {
 	return `${req.protocol}://${req.get('host')}/auth/google/callback`;
 }
 
-/**
- * @param {any} config
- * @param {import('express').Request} req
- * @param {Record<string, unknown>} [overrides]
- */
-function getSetupViewModel(config, req, overrides = {}) {
+function getSetupViewModel(config: any, req: Request, overrides: Record<string, unknown> = {}): Record<string, unknown> {
 	const googleOAuth = getGoogleOAuthConfig(config);
 	return Object.assign({
 		googleOAuth,
@@ -26,14 +20,10 @@ function getSetupViewModel(config, req, overrides = {}) {
 	}, overrides);
 }
 
-/**
- * @param {import('express').Application} app
- * @param {any} dependencies
- */
-export default function registerSetupRoutes(app, dependencies) {
+export default function registerSetupRoutes(app: Application, dependencies: any): void {
 	const {config, logger, saveConfig} = dependencies;
 
-	app.get('/', function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get('/', function(req: Request, res: Response) {
 		if (isGoogleOAuthConfigured(config)) {
 			res.render('index');
 		} else {
@@ -41,11 +31,11 @@ export default function registerSetupRoutes(app, dependencies) {
 		}
 	});
 
-	app.get('/setup', function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get('/setup', function(req: Request, res: Response) {
 		res.render('setup', getSetupViewModel(config, req));
 	});
 
-	app.post('/setup', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.post('/setup', async function(req: Request, res: Response) {
 		try {
 			const googleOAuthSetup = normalizeGoogleOAuthSetupDto(req.body, getDefaultRedirectUri(req));
 			const googleOAuth = getGoogleOAuthConfig(config);
@@ -58,7 +48,7 @@ export default function registerSetupRoutes(app, dependencies) {
 				successMessage: 'Google OAuth configuration saved.',
 			}));
 		} catch (error) {
-			const err = /** @type {Error & {code?: string}} */ (error);
+			const err = error as Error & {code?: string};
 			if (err.code === 'INVALID_CONTRACT') {
 				res.status(400).render('setup', getSetupViewModel(config, req, {
 					errorMessage: err.message,
@@ -70,7 +60,7 @@ export default function registerSetupRoutes(app, dependencies) {
 		}
 	});
 
-	app.get('/api/clientId', function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get('/api/clientId', function(req: Request, res: Response) {
 		const clientId = getGoogleOAuthConfig(config).clientId;
 		if (typeof clientId === 'string') {
 			res
@@ -82,7 +72,7 @@ export default function registerSetupRoutes(app, dependencies) {
 		res.sendStatus(404);
 	});
 
-	app.get('/api/auth/status', function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get('/api/auth/status', function(req: Request, res: Response) {
 		res.status(200).send(getGoogleAuthStatus(config));
 	});
 }

@@ -1,10 +1,6 @@
 import _ from 'lodash';
 
-/**
- * @param {any} gmailRequest
- * @param {string} labelId
- */
-export async function listThreadIdsByLabel(gmailRequest, labelId) {
+export async function listThreadIdsByLabel(gmailRequest: any, labelId: string): Promise<string[]> {
 	const response = await gmailRequest({
 		path: '/threads',
 		query: {
@@ -12,19 +8,22 @@ export async function listThreadIdsByLabel(gmailRequest, labelId) {
 			maxResults: '100',
 		},
 	});
-	return Array.isArray(response.threads) ? response.threads.map((/** @type {any} */ thread) => thread.id) : [];
+	return Array.isArray(response.threads) ? response.threads.map((thread: any) => thread.id) : [];
 }
 
-/**
- * @param {{ gmailRequest: any, threadId: string, lastRefresheds: any, threadRepository: any, threadService: any }} params
- */
 export async function refreshSingleThreadFromGmail({
 	gmailRequest,
 	threadId,
 	lastRefresheds,
 	threadRepository,
 	threadService,
-}) {
+}: {
+	gmailRequest: any;
+	threadId: string;
+	lastRefresheds: any;
+	threadRepository: any;
+	threadService: any;
+}): Promise<{status: number}> {
 	try {
 		const gmailThread = await gmailRequest({
 			path: `/threads/${threadId}`,
@@ -37,7 +36,7 @@ export async function refreshSingleThreadFromGmail({
 			lastRefresheds,
 		});
 	} catch (error) {
-		const err = /** @type {any} */ (error);
+		const err = error as {status?: number};
 		if (err.status === 404) {
 			return {
 				status: await threadRepository.deleteThread(threadId) ? 200 : 500,
@@ -47,14 +46,16 @@ export async function refreshSingleThreadFromGmail({
 	}
 }
 
-/**
- * @param {{ gmailRequest: any, lastRefresheds: any, threadRepository: any, threadService: any }} params
- */
 export async function syncRecentThreadsFromGmail({
 	gmailRequest,
 	lastRefresheds,
 	threadRepository,
 	threadService,
+}: {
+	gmailRequest: any;
+	lastRefresheds: any;
+	threadRepository: any;
+	threadService: any;
 }) {
 	const [inboxThreadIds, trashThreadIds] = await Promise.all([
 		listThreadIdsByLabel(gmailRequest, 'INBOX'),
@@ -75,7 +76,7 @@ export async function syncRecentThreadsFromGmail({
 				status: saveResult.status,
 			};
 		} catch (error) {
-			const err = /** @type {Error} */ (error);
+			const err = error as Error;
 			return {
 				threadId,
 				status: 500,

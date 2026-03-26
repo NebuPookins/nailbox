@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 import util from 'util';
 
+import type {Application, Request, Response} from 'express';
+
 import {
 	GOOGLE_SCOPE,
 	clearGoogleTokens,
@@ -11,15 +13,15 @@ import {
 	gmailApiRequest,
 	isGoogleOAuthConfigured,
 } from '../../../services/google_oauth.mjs';
-import { getSetupViewModel } from './setup_routes.js';
+import {getSetupViewModel} from './setup_routes.js';
 
-/**
- * @param {import('express').Response} res
- * @param {string} name
- * @param {string} value
- * @param {{ path?: string; sameSite?: string; httpOnly?: boolean; maxAgeSeconds?: number; secure?: boolean }} [options]
- */
-function setCookie(res, name, value, options = {}) {
+function setCookie(res: Response, name: string, value: string, options: {
+	path?: string;
+	sameSite?: string;
+	httpOnly?: boolean;
+	maxAgeSeconds?: number;
+	secure?: boolean;
+} = {}): void {
 	const parts = [`${name}=${encodeURIComponent(value)}`];
 	parts.push(`Path=${options.path || '/'}`);
 	parts.push(`SameSite=${options.sameSite || 'Lax'}`);
@@ -35,19 +37,17 @@ function setCookie(res, name, value, options = {}) {
 	res.append('Set-Cookie', parts.join('; '));
 }
 
-/**
- * @param {import('express').Response} res
- * @param {string} name
- * @param {{ path?: string; sameSite?: string; httpOnly?: boolean; maxAgeSeconds?: number; secure?: boolean }} [options]
- */
-function clearCookie(res, name, options = {}) {
+function clearCookie(res: Response, name: string, options: {
+	path?: string;
+	sameSite?: string;
+	httpOnly?: boolean;
+	maxAgeSeconds?: number;
+	secure?: boolean;
+} = {}): void {
 	setCookie(res, name, '', Object.assign({}, options, {maxAgeSeconds: 0}));
 }
 
-/**
- * @param {import('express').Request} req
- */
-function parseCookies(req) {
+function parseCookies(req: Request): Record<string, string> {
 	const rawCookieHeader = req.headers.cookie;
 	if (typeof rawCookieHeader !== 'string' || rawCookieHeader.length === 0) {
 		return {};
@@ -60,19 +60,15 @@ function parseCookies(req) {
 		}
 		const key = trimmedChunk.substring(0, equalsIndex);
 		const value = trimmedChunk.substring(equalsIndex + 1);
-		/** @type {Record<string, string>} */ (cookies)[key] = decodeURIComponent(value);
+		(cookies as Record<string, string>)[key] = decodeURIComponent(value);
 		return cookies;
-	}, /** @type {Record<string, string>} */ ({}));
+	}, {} as Record<string, string>);
 }
 
-/**
- * @param {import('express').Application} app
- * @param {any} dependencies
- */
-export default function registerAuthRoutes(app, dependencies) {
+export default function registerAuthRoutes(app: Application, dependencies: any): void {
 	const {config, logger, saveConfig} = dependencies;
 
-	app.get('/auth/google/start', function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get('/auth/google/start', function(req: Request, res: Response) {
 		if (!isGoogleOAuthConfigured(config)) {
 			res.redirect('/setup');
 			return;
@@ -87,7 +83,7 @@ export default function registerAuthRoutes(app, dependencies) {
 		res.redirect(getAuthorizationUrl(config, state, prompt));
 	});
 
-	app.get('/auth/google/callback', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get('/auth/google/callback', async function(req: Request, res: Response) {
 		const cookies = parseCookies(req);
 		clearCookie(res, 'google_oauth_state', {path: '/auth/google/callback'});
 		if (!req.query.state || req.query.state !== cookies.google_oauth_state) {
@@ -132,7 +128,7 @@ export default function registerAuthRoutes(app, dependencies) {
 		}
 	});
 
-	app.post('/auth/google/disconnect', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.post('/auth/google/disconnect', async function(req: Request, res: Response) {
 		clearGoogleTokens(config);
 		try {
 			await saveConfig();

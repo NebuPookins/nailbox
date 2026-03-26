@@ -2,18 +2,16 @@ import util from 'util';
 
 import _ from 'lodash';
 
-import { refreshSingleThreadFromGmail, syncRecentThreadsFromGmail } from '../services/gmail_sync_service.js';
+import type {Application, Request, Response} from 'express';
+
+import {refreshSingleThreadFromGmail, syncRecentThreadsFromGmail} from '../services/gmail_sync_service.js';
 import {
 	normalizeGmailMoveThreadDto,
 	normalizeGmailSendMessageDto,
 	normalizeRfc2822RequestDto,
 } from '../validation/contracts.js';
 
-/**
- * @param {import('express').Application} app
- * @param {any} dependencies
- */
-export default function registerThreadActionRoutes(app, dependencies) {
+export default function registerThreadActionRoutes(app: Application, dependencies: any): void {
 	const {
 		lastRefresheds,
 		logger,
@@ -23,9 +21,9 @@ export default function registerThreadActionRoutes(app, dependencies) {
 		withGmailApi,
 	} = dependencies;
 
-	app.get('/api/threads/profile', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get('/api/threads/profile', async function(req: Request, res: Response) {
 		try {
-			const profile = await withGmailApi(res, async (/** @type {any} */ gmailRequest) => {
+			const profile = await withGmailApi(res, async (gmailRequest: any) => {
 				return gmailRequest({
 					path: '/profile',
 				});
@@ -40,9 +38,9 @@ export default function registerThreadActionRoutes(app, dependencies) {
 		}
 	});
 
-	app.get('/api/threads/labels', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get('/api/threads/labels', async function(req: Request, res: Response) {
 		try {
-			const labelsResponse = await withGmailApi(res, async (/** @type {any} */ gmailRequest) => {
+			const labelsResponse = await withGmailApi(res, async (gmailRequest: any) => {
 				return gmailRequest({
 					path: '/labels',
 				});
@@ -51,7 +49,7 @@ export default function registerThreadActionRoutes(app, dependencies) {
 				return;
 			}
 			const labels = Array.isArray(labelsResponse.labels) ? labelsResponse.labels : [];
-			res.status(200).send(_.sortBy(labels, function(label) {
+			res.status(200).send(_.sortBy(labels, function(label: any) {
 				return (label.type === 'system' ? 'A' : 'B') + label.name.toLowerCase();
 			}));
 		} catch (error) {
@@ -60,9 +58,9 @@ export default function registerThreadActionRoutes(app, dependencies) {
 		}
 	});
 
-	app.post('/api/threads/sync', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.post('/api/threads/sync', async function(req: Request, res: Response) {
 		try {
-			const syncResult = await withGmailApi(res, async (/** @type {any} */ gmailRequest) => {
+			const syncResult = await withGmailApi(res, async (gmailRequest: any) => {
 				return syncRecentThreadsFromGmail({
 					gmailRequest,
 					lastRefresheds,
@@ -83,10 +81,10 @@ export default function registerThreadActionRoutes(app, dependencies) {
 		}
 	});
 
-	app.post(/^\/api\/threads\/([a-z0-9]+)\/refresh$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.post(/^\/api\/threads\/([a-z0-9]+)\/refresh$/, async function(req: Request, res: Response) {
 		const threadId = req.params[0];
 		try {
-			const refreshResult = await withGmailApi(res, async (/** @type {any} */ gmailRequest) => {
+			const refreshResult = await withGmailApi(res, async (gmailRequest: any) => {
 				return refreshSingleThreadFromGmail({
 					gmailRequest,
 					threadId,
@@ -105,10 +103,10 @@ export default function registerThreadActionRoutes(app, dependencies) {
 		}
 	});
 
-	app.post(/^\/api\/threads\/([a-z0-9]+)\/trash$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.post(/^\/api\/threads\/([a-z0-9]+)\/trash$/, async function(req: Request, res: Response) {
 		const threadId = req.params[0];
 		try {
-			const gmailResponse = await withGmailApi(res, async (/** @type {any} */ gmailRequest) => {
+			const gmailResponse = await withGmailApi(res, async (gmailRequest: any) => {
 				return gmailRequest({
 					method: 'POST',
 					path: `/threads/${threadId}/trash`,
@@ -129,10 +127,10 @@ export default function registerThreadActionRoutes(app, dependencies) {
 		}
 	});
 
-	app.post(/^\/api\/threads\/([a-z0-9]+)\/archive$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.post(/^\/api\/threads\/([a-z0-9]+)\/archive$/, async function(req: Request, res: Response) {
 		const threadId = req.params[0];
 		try {
-			const gmailResponse = await withGmailApi(res, async (/** @type {any} */ gmailRequest) => {
+			const gmailResponse = await withGmailApi(res, async (gmailRequest: any) => {
 				return gmailRequest({
 					method: 'POST',
 					path: `/threads/${threadId}/modify`,
@@ -156,11 +154,11 @@ export default function registerThreadActionRoutes(app, dependencies) {
 		}
 	});
 
-	app.post(/^\/api\/threads\/([a-z0-9]+)\/move$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.post(/^\/api\/threads\/([a-z0-9]+)\/move$/, async function(req: Request, res: Response) {
 		const threadId = req.params[0];
 		try {
-			const { labelId } = normalizeGmailMoveThreadDto(req.body);
-			const gmailResponse = await withGmailApi(res, async (/** @type {any} */ gmailRequest) => {
+			const {labelId} = normalizeGmailMoveThreadDto(req.body);
+			const gmailResponse = await withGmailApi(res, async (gmailRequest: any) => {
 				return gmailRequest({
 					method: 'POST',
 					path: `/threads/${threadId}/modify`,
@@ -180,7 +178,7 @@ export default function registerThreadActionRoutes(app, dependencies) {
 			}
 			res.sendStatus(500);
 		} catch (error) {
-			const err = /** @type {Error & {code?: string}} */ (error);
+			const err = error as Error & {code?: string};
 			if (err.code === 'INVALID_CONTRACT') {
 				res.status(400).send({humanErrorMessage: err.message});
 				return;
@@ -190,10 +188,10 @@ export default function registerThreadActionRoutes(app, dependencies) {
 		}
 	});
 
-	app.post('/api/threads/messages/send', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.post('/api/threads/messages/send', async function(req: Request, res: Response) {
 		try {
 			const messagePayload = normalizeGmailSendMessageDto(req.body);
-			const gmailResponse = await withGmailApi(res, async (/** @type {any} */ gmailRequest) => {
+			const gmailResponse = await withGmailApi(res, async (gmailRequest: any) => {
 				return gmailRequest({
 					method: 'POST',
 					path: '/messages/send',
@@ -205,7 +203,7 @@ export default function registerThreadActionRoutes(app, dependencies) {
 			}
 			res.status(200).send(gmailResponse);
 		} catch (error) {
-			const err = /** @type {Error & {code?: string}} */ (error);
+			const err = error as Error & {code?: string};
 			if (err.code === 'INVALID_CONTRACT') {
 				res.status(400).send({humanErrorMessage: err.message});
 				return;
@@ -215,11 +213,11 @@ export default function registerThreadActionRoutes(app, dependencies) {
 		}
 	});
 
-	app.get(/^\/api\/threads\/messages\/([a-z0-9]+)\/attachments\/([a-zA-Z0-9_-]+)$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get(/^\/api\/threads\/messages\/([a-z0-9]+)\/attachments\/([a-zA-Z0-9_-]+)$/, async function(req: Request, res: Response) {
 		const messageId = req.params[0];
 		const attachmentId = req.params[1];
 		try {
-			const attachment = await withGmailApi(res, async (/** @type {any} */ gmailRequest) => {
+			const attachment = await withGmailApi(res, async (gmailRequest: any) => {
 				return gmailRequest({
 					path: `/messages/${messageId}/attachments/${attachmentId}`,
 				});
@@ -234,7 +232,7 @@ export default function registerThreadActionRoutes(app, dependencies) {
 		}
 	});
 
-	app.post('/api/rfc2822', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.post('/api/rfc2822', async function(req: Request, res: Response) {
 		try {
 			const requestDto = normalizeRfc2822RequestDto(req.body);
 			logger.info(util.format('/api/rfc2822 received for thread %s', requestDto.threadId));
@@ -247,7 +245,7 @@ export default function registerThreadActionRoutes(app, dependencies) {
 			});
 			res.status(200).send(encodedMessage);
 		} catch (error) {
-			const err = /** @type {Error & {code?: string; status?: number; message: string}} */ (error);
+			const err = error as Error & {code?: string; status?: number; message: string};
 			if (err.code === 'INVALID_CONTRACT') {
 				res.status(400).send({humanErrorMessage: err.message});
 				return;
@@ -260,5 +258,4 @@ export default function registerThreadActionRoutes(app, dependencies) {
 			res.sendStatus(500);
 		}
 	});
-
 }
