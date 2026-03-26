@@ -1,30 +1,24 @@
 import fileio from '../../../helpers/fileio.js';
-import { normalizeAppConfig } from '../validation/contracts.js';
+import {normalizeAppConfig} from '../validation/contracts.js';
+import type {AppConfig, ConfigRepository} from '../types/config.js';
 
 const DEFAULT_CONFIG_PATH = 'data/config.json';
 
-/**
- * @param {{
- *  fileioImpl?: typeof fileio,
- *  pathToConfig?: string,
- * }} [dependencies]
- * @returns {import('../types/config.js').ConfigRepository}
- */
-export function createConfigRepository(dependencies = {}) {
+export function createConfigRepository(dependencies: {
+	fileioImpl?: typeof fileio;
+	pathToConfig?: string;
+} = {}): ConfigRepository {
 	const {
 		fileioImpl = fileio,
 		pathToConfig = DEFAULT_CONFIG_PATH,
 	} = dependencies;
 
-	async function readConfig() {
+	async function readConfig(): Promise<AppConfig> {
 		const rawConfig = await fileioImpl.readJsonFromOptionalFile(pathToConfig);
 		return normalizeAppConfig(rawConfig);
 	}
 
-	/**
-	 * @param {import('../types/config.js').AppConfig} config
-	 */
-	async function saveConfig(config) {
+	async function saveConfig(config: AppConfig): Promise<AppConfig> {
 		const normalizedConfig = normalizeAppConfig(config);
 		await fileioImpl.saveJsonToFile(normalizedConfig, pathToConfig);
 		return normalizedConfig;
