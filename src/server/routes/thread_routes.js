@@ -127,7 +127,7 @@ export default function registerThreadRoutes(app, dependencies) {
 					await hideUntils.hideUntilIHaveTime(threadId);
 					break;
 				default:
-					logger.error(`Don't know how to handle hideUntil.type ${hideUntil.type}.`);
+					logger.error(`Don't know how to handle hideUntil type: ${JSON.stringify(hideUntil)}`);
 					res.status(400).send('Invalid hideUntil.type');
 					return;
 			}

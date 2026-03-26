@@ -1,17 +1,13 @@
-import { normalizeGroupingRulesConfig } from '../validation/contracts.js';
+import type {AppConfig} from '../types/config.js';
+import type {GroupingRule, GroupingRulesConfig} from '../types/grouping_rules.js';
+import type {ThreadSummaryDto, ThreadGroupDto} from '../types/thread.js';
+import {normalizeGroupingRulesConfig} from '../validation/contracts.js';
 
-/**
- * @param {import('../types/config.js').AppConfig} config
- */
-export function getEmailGroupingRules(config) {
+export function getEmailGroupingRules(config: AppConfig): GroupingRulesConfig {
 	return normalizeGroupingRulesConfig(config.emailGroupingRules);
 }
 
-/**
- * @param {import('../types/thread.js').ThreadSummaryDto} thread
- * @param {import('../types/grouping_rules.js').GroupingRule} rule
- */
-export function threadMatchesRule(thread, rule) {
+export function threadMatchesRule(thread: ThreadSummaryDto, rule: GroupingRule): boolean {
 	return rule.conditions.some((condition) => {
 		switch (condition.type) {
 			case 'sender_name':
@@ -23,30 +19,22 @@ export function threadMatchesRule(thread, rule) {
 					sender.email && sender.email.includes(condition.value)
 				);
 			case 'subject':
-				return thread.subject && thread.subject.includes(condition.value);
+				return Boolean(thread.subject && thread.subject.includes(condition.value));
 			default:
 				return false;
 		}
 	});
 }
 
-/**
- * @param {{
- *   threads: import('../types/thread.js').ThreadSummaryDto[],
- *   groupingRules: import('../types/grouping_rules.js').GroupingRulesConfig,
- *   hideUntilComparator: (a: import('../types/thread.js').ThreadSummaryDto, b: import('../types/thread.js').ThreadSummaryDto) => number,
- * }} params
- */
-export function groupThreads({threads, groupingRules, hideUntilComparator}) {
-	/** @type {Record<string, import('../types/thread.js').ThreadSummaryDto[]>} */
-	const groupedThreads = {};
+export function groupThreads({threads, groupingRules, hideUntilComparator}: {
+	threads: ThreadSummaryDto[];
+	groupingRules: GroupingRulesConfig;
+	hideUntilComparator: (a: ThreadSummaryDto, b: ThreadSummaryDto) => number;
+}): ThreadGroupDto[] {
+	const groupedThreads: Record<string, ThreadSummaryDto[]> = {};
 	const whenIHaveTimeSuffix = ' - When I Have Time';
 
-	/**
-	 * @param {string} group
-	 * @param {import('../types/thread.js').ThreadSummaryDto} thread
-	 */
-	function addToGroupedThreads(group, thread) {
+	function addToGroupedThreads(group: string, thread: ThreadSummaryDto): void {
 		const key = thread.visibility === 'when-i-have-time' ? `${group}${whenIHaveTimeSuffix}` : group;
 		if (!Array.isArray(groupedThreads[key])) {
 			groupedThreads[key] = [];
@@ -68,8 +56,8 @@ export function groupThreads({threads, groupingRules, hideUntilComparator}) {
 		}
 	});
 
-	const orderedGroupThreads = Object.keys(groupedThreads).map((group) => {
-		let sortType = 'mostRecent';
+	const orderedGroupThreads: ThreadGroupDto[] = Object.keys(groupedThreads).map((group) => {
+		let sortType: 'mostRecent' | 'shortest' = 'mostRecent';
 		for (const rule of groupingRules.rules) {
 			if (rule.name === group || (group.endsWith(whenIHaveTimeSuffix) && rule.name === group.replace(whenIHaveTimeSuffix, ''))) {
 				sortType = rule.sortType || 'mostRecent';
@@ -93,8 +81,7 @@ export function groupThreads({threads, groupingRules, hideUntilComparator}) {
 
 	orderedGroupThreads.sort((groupA, groupB) => hideUntilComparator(groupA.threads[0], groupB.threads[0]));
 
-	/** @type {Record<string, number>} */
-	const groupPriority = {};
+	const groupPriority: Record<string, number> = {};
 	groupingRules.rules.forEach((rule) => {
 		groupPriority[rule.name] = rule.priority;
 	});
