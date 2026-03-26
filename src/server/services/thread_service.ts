@@ -11,28 +11,29 @@ import {
 	normalizeThreadSummaryDto,
 	validateThreadPayload,
 } from '../validation/contracts.js';
+import type {ThreadSummaryDto, ThreadMessageDto} from '../types/thread.js';
 
 const Entities = htmlEntities.AllHtmlEntities;
 const entities = new Entities();
 const logger = nebulog.make({filename: 'src/server/services/thread_service.js', level: 'info'});
 
-/**
- * @param {{ threadRepository?: any, MessageClass?: any }} [dependencies]
- */
-export function createThreadService(dependencies = {}) {
-	const { threadRepository: repository, MessageClass } = dependencies;
+export function createThreadService(dependencies: {
+	threadRepository?: any;
+	MessageClass?: any;
+} = {}) {
+	const {threadRepository: repository, MessageClass} = dependencies;
 
-	/**
-	 * @param {{ threadPayload: any, lastRefresheds: any }} params
-	 */
 	async function saveThreadPayload({
 		threadPayload,
 		lastRefresheds,
-	}) {
+	}: {
+		threadPayload: any;
+		lastRefresheds: any;
+	}): Promise<{status: number; body?: {humanErrorMessage: string}}> {
 		try {
 			validateThreadPayload(threadPayload);
 		} catch (error) {
-			const err = /** @type {Error & {code?: string}} */ (error);
+			const err = error as Error & {code?: string};
 			if (err.code === 'INVALID_CONTRACT') {
 				return {
 					status: 400,
@@ -42,7 +43,7 @@ export function createThreadService(dependencies = {}) {
 			throw error;
 		}
 
-		const threadId = threadPayload.id;
+		const threadId: string = threadPayload.id;
 		if (!threadId.match(/^[0-9a-z]+$/)) {
 			return {
 				status: 400,
@@ -51,7 +52,7 @@ export function createThreadService(dependencies = {}) {
 		}
 
 		const allMessagesInTrash = threadPayload.messages.every(
-			(/** @type {any} */ message) => message.labelIds.indexOf('TRASH') !== -1
+			(message: any) => message.labelIds.indexOf('TRASH') !== -1
 		);
 		if (allMessagesInTrash) {
 			logger.info(`Deleting thread ${threadId} because all messages in thread are in trash.`);
@@ -60,11 +61,11 @@ export function createThreadService(dependencies = {}) {
 			};
 		}
 
-		threadPayload.messages.forEach((/** @type {any} */ messageData) => {
+		threadPayload.messages.forEach((messageData: any) => {
 			const messageInstance = new MessageClass(messageData);
 			const originalBody = messageInstance.bestBody();
 			const plainTextBody = sanitizeHtml(originalBody, {allowedTags: [], allowedAttributes: {}});
-			const wordCount = plainTextBody.split(' ').filter((/** @type {string} */ word) => word.length > 0).length;
+			const wordCount = plainTextBody.split(' ').filter((word: string) => word.length > 0).length;
 			const timeToReadSeconds = Math.round((wordCount * 60) / 200);
 			messageData.calculatedWordCount = wordCount;
 			messageData.calculatedTimeToReadSeconds = timeToReadSeconds;
@@ -73,8 +74,8 @@ export function createThreadService(dependencies = {}) {
 		const existingData = await repository.readThreadJson(threadId);
 		const newData = threadPayload;
 		if (existingData && existingData.messages) {
-			newData.messages.forEach((/** @type {any} */ newMessage) => {
-				const existingMessage = existingData.messages.find((/** @type {any} */ message) => message.id === newMessage.id);
+			newData.messages.forEach((newMessage: any) => {
+				const existingMessage = existingData.messages.find((message: any) => message.id === newMessage.id);
 				if (existingMessage && existingMessage.fullBodyWordCount) {
 					newMessage.fullBodyWordCount = existingMessage.fullBodyWordCount;
 				}
@@ -82,23 +83,24 @@ export function createThreadService(dependencies = {}) {
 		}
 
 		await repository.saveThreadJson(threadId, newData);
-		lastRefresheds.markRefreshed(threadId).catch((/** @type {any} */ saveError) => {
+		lastRefresheds.markRefreshed(threadId).catch((saveError: any) => {
 			logger.error(util.format('Failed to save last refreshed for %s: %s', threadId, util.inspect(saveError)));
 		});
 		return {status: 200};
 	}
 
-	/**
-	 * @param {{ hideUntils: any, lastRefresheds: any, limit?: number }} params
-	 */
 	async function getMostRelevantThreads({
 		hideUntils,
 		lastRefresheds,
 		limit = 100,
-	}) {
-		const filenames = await repository.listThreadIds();
+	}: {
+		hideUntils: any;
+		lastRefresheds: any;
+		limit?: number;
+	}): Promise<ThreadSummaryDto[]> {
+		const filenames: string[] = await repository.listThreadIds();
 		const now = Date.now();
-		let formattedThreads = await Promise.all(filenames.map(async (/** @type {string} */ filename) => {
+		const rawThreads: (ThreadSummaryDto | null)[] = await Promise.all(filenames.map(async (filename: string) => {
 			try {
 				const thread = await repository.readThread(filename);
 				const maybeMostRecentSnippetInThread = thread.snippet();
@@ -106,7 +108,7 @@ export function createThreadService(dependencies = {}) {
 
 				let totalTimeToReadSecondsForThread = 0;
 				const messagesInThread = thread.messages();
-				messagesInThread.forEach((/** @type {any} */ message) => {
+				messagesInThread.forEach((message: any) => {
 					totalTimeToReadSecondsForThread += message.getBestReadTimeSeconds();
 				});
 
@@ -142,18 +144,15 @@ export function createThreadService(dependencies = {}) {
 			}
 		}));
 
-		formattedThreads = formattedThreads
-			.filter((/** @type {any} */ formattedThread) => formattedThread !== null)
-			.filter((/** @type {any} */ formattedThread) => formattedThread.visibility !== 'hidden');
+		const formattedThreads = rawThreads
+			.filter((x): x is ThreadSummaryDto => x !== null)
+			.filter((x) => x.visibility !== 'hidden');
 		formattedThreads.sort(hideUntils.comparator());
 		formattedThreads.length = Math.min(formattedThreads.length, limit);
 		return formattedThreads;
 	}
 
-	/**
-	 * @param {string} threadId
-	 */
-	async function getThreadMessages(threadId) {
+	async function getThreadMessages(threadId: string): Promise<{thread: any; data: {messages: ThreadMessageDto[]}}> {
 		const thread = await repository.readThread(threadId);
 		return {
 			thread,
@@ -163,14 +162,15 @@ export function createThreadService(dependencies = {}) {
 		};
 	}
 
-	/**
-	 * @param {{ threadId: string, messageId: string, wordcount: number }} params
-	 */
 	async function updateMessageWordCount({
 		threadId,
 		messageId,
 		wordcount,
-	}) {
+	}: {
+		threadId: string;
+		messageId: string;
+		wordcount: number;
+	}): Promise<{status: number}> {
 		if (!(typeof threadId === 'string' && typeof messageId === 'string')) {
 			throw makeValidationError('threadId and messageId must be strings');
 		}
@@ -184,11 +184,7 @@ export function createThreadService(dependencies = {}) {
 		return {status: 200};
 	}
 
-	/**
-	 * @param {string} threadId
-	 * @param {string} messageId
-	 */
-	async function getThreadMessage(threadId, messageId) {
+	async function getThreadMessage(threadId: string, messageId: string): Promise<{status: number; data?: ThreadMessageDto}> {
 		const thread = await repository.readThread(threadId);
 		const matchingMessage = thread.message(messageId);
 		if (!matchingMessage) {
@@ -210,43 +206,40 @@ export function createThreadService(dependencies = {}) {
 	};
 }
 
-/**
- * @param {any} objMessage
- */
-export function loadRelevantDataFromMessage(objMessage) {
+export function loadRelevantDataFromMessage(objMessage: any): ThreadMessageDto {
 	const originalBody = objMessage.bestBody();
 	const attachments = objMessage.getAttachments();
 	const plainTextBody = sanitizeHtml(originalBody, {
 		allowedTags: [],
-		allowedAttributes: {}
+		allowedAttributes: {},
 	});
 	const wordCount = plainTextBody.split(' ').length;
 	const timeToReadSeconds = wordCount * 60 / 200;
 	const sanitizedBody = sanitizeHtml(originalBody, {
 		transformTags: {
 			'body': 'div',
-			'a': function(/** @type {any} */ tagName, /** @type {any} */ attribs) {
+			'a': function(tagName: any, attribs: any) {
 				if (attribs.href) {
 					attribs.target = '_blank';
 				}
 				return {
 					tagName: 'a',
-					attribs: attribs
+					attribs: attribs,
 				};
 			},
-			'*': function(/** @type {any} */ tagName, /** @type {any} */ attribs) {
+			'*': function(tagName: any, attribs: any) {
 				if ((typeof attribs.style) === 'string') {
 					attribs.style = attribs.style.replace(/position: *absolute;/, '');
 					return {
 						tagName: tagName,
-						attribs: attribs
+						attribs: attribs,
 					};
 				}
 				return {
 					tagName: tagName,
-					attribs: attribs
+					attribs: attribs,
 				};
-			}
+			},
 		},
 		allowedTags: [
 			'a', 'area', 'b', 'blockquote', 'br', 'caption', 'center', 'code',
@@ -265,7 +258,7 @@ export function loadRelevantDataFromMessage(objMessage) {
 			table: ['align', 'bgcolor', 'border', 'cellpadding', 'cellspacing', 'style', 'width'],
 			td: ['align', 'background', 'bgcolor', 'colspan', 'height', 'rowspan', 'style', 'valign', 'width'],
 		},
-		nonTextTags: ['style', 'script', 'textarea', 'title']
+		nonTextTags: ['style', 'script', 'textarea', 'title'],
 	});
 	return normalizeThreadMessageDto({
 		deleted: objMessage.labelIds().indexOf('TRASH') !== -1,
@@ -280,6 +273,6 @@ export function loadRelevantDataFromMessage(objMessage) {
 		},
 		wordcount: plainTextBody.split(' ').length,
 		timeToReadSeconds: timeToReadSeconds,
-		attachments: attachments
+		attachments: attachments,
 	});
 }

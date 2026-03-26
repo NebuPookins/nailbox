@@ -1,11 +1,8 @@
 import lastRefreshedModel from '../../../models/last_refreshed.js';
 
-/**
- * @param {{
- *   lastRefreshedModelModule?: typeof lastRefreshedModel,
- * }} [dependencies]
- */
-export function createLastRefreshedRepository(dependencies = {}) {
+export function createLastRefreshedRepository(dependencies: {
+	lastRefreshedModelModule?: typeof lastRefreshedModel;
+} = {}) {
 	const {
 		lastRefreshedModelModule = lastRefreshedModel,
 	} = dependencies;
@@ -14,7 +11,7 @@ export function createLastRefreshedRepository(dependencies = {}) {
 		return lastRefreshedModelModule.load();
 	}
 
-	return { load };
+	return {load};
 }
 
 const lastRefreshedRepository = createLastRefreshedRepository();

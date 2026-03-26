@@ -1,17 +1,15 @@
 import util from 'util';
 
-import { getEmailGroupingRules, groupThreads } from '../domain/grouping_rules.js';
+import type {Application, Request, Response} from 'express';
+
+import {getEmailGroupingRules, groupThreads} from '../domain/grouping_rules.js';
 import {
 	normalizeGroupingRulesConfig,
 	normalizeHideUntilDto,
 	normalizeWordcountUpdateDto,
 } from '../validation/contracts.js';
 
-/**
- * @param {import('express').Application} app
- * @param {any} dependencies
- */
-export default function registerThreadRoutes(app, dependencies) {
+export default function registerThreadRoutes(app: Application, dependencies: any): void {
 	const {
 		config,
 		configRepository,
@@ -22,7 +20,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		threadService,
 	} = dependencies;
 
-	app.post('/api/threads', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.post('/api/threads', async function(req: Request, res: Response) {
 		try {
 			const result = await threadService.saveThreadPayload({
 				threadPayload: req.body,
@@ -39,7 +37,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.get('/api/threads', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get('/api/threads', async function(req: Request, res: Response) {
 		try {
 			const formattedThreads = await threadService.getMostRelevantThreads({
 				hideUntils,
@@ -53,7 +51,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.get('/api/email-grouping-rules', function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get('/api/email-grouping-rules', function(req: Request, res: Response) {
 		try {
 			const rules = getEmailGroupingRules(config);
 			res.status(200).type('application/json').send(rules);
@@ -63,14 +61,14 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.post('/api/email-grouping-rules', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.post('/api/email-grouping-rules', async function(req: Request, res: Response) {
 		try {
 			logger.info('Updating email grouping rules');
 			config.emailGroupingRules = normalizeGroupingRulesConfig(req.body);
 			await configRepository.saveConfig(config);
 			res.sendStatus(200);
 		} catch (error) {
-			const err = /** @type {Error & {code?: string}} */ (error);
+			const err = error as Error & {code?: string};
 			if (err.code === 'INVALID_CONTRACT') {
 				res.status(400).send({humanErrorMessage: err.message});
 				return;
@@ -80,7 +78,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.get('/api/threads/grouped', async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get('/api/threads/grouped', async function(req: Request, res: Response) {
 		try {
 			const allThreads = await threadService.getMostRelevantThreads({
 				hideUntils,
@@ -99,7 +97,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.delete(/^\/api\/threads\/([a-z0-9]+)$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.delete(/^\/api\/threads\/([a-z0-9]+)$/, async function(req: Request, res: Response) {
 		const threadId = req.params[0];
 		logger.info(util.format('Receive request to delete thread %s.', threadId));
 		try {
@@ -111,7 +109,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.put(/^\/api\/threads\/([a-z0-9]+)\/hideUntil$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.put(/^\/api\/threads\/([a-z0-9]+)\/hideUntil$/, async function(req: Request, res: Response) {
 		const threadId = req.params[0];
 		let hideUntil;
 		try {
@@ -133,7 +131,7 @@ export default function registerThreadRoutes(app, dependencies) {
 			}
 			res.sendStatus(200);
 		} catch (error) {
-			const err = /** @type {Error & {code?: string}} */ (error);
+			const err = error as Error & {code?: string};
 			if (err.code === 'INVALID_CONTRACT') {
 				res.status(400).send({humanErrorMessage: err.message});
 				return;
@@ -143,13 +141,13 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages$/, async function(req: Request, res: Response) {
 		const threadId = req.params[0];
 		try {
 			const result = await threadService.getThreadMessages(threadId);
 			res.status(200).send(result.data);
 		} catch (error) {
-			const err = /** @type {Error & {code?: string}} */ (error);
+			const err = error as Error & {code?: string};
 			if (err.code === 'ENOENT') {
 				res.sendStatus(404);
 				return;
@@ -159,11 +157,11 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/, async function(req: Request, res: Response) {
 		const threadId = req.params[0];
 		const messageId = req.params[1];
 		try {
-			const { wordcount } = normalizeWordcountUpdateDto(req.body);
+			const {wordcount} = normalizeWordcountUpdateDto(req.body);
 			const result = await threadService.updateMessageWordCount({
 				threadId,
 				messageId,
@@ -175,7 +173,7 @@ export default function registerThreadRoutes(app, dependencies) {
 			}
 			res.sendStatus(200);
 		} catch (error) {
-			const err = /** @type {Error & {code?: string}} */ (error);
+			const err = error as Error & {code?: string};
 			if (err.code === 'INVALID_CONTRACT') {
 				res.status(400).send({humanErrorMessage: err.message});
 				return;
@@ -189,7 +187,7 @@ export default function registerThreadRoutes(app, dependencies) {
 		}
 	});
 
-	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)$/, async function(/** @type {import('express').Request} */ req, /** @type {import('express').Response} */ res) {
+	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)$/, async function(req: Request, res: Response) {
 		const threadId = req.params[0];
 		const messageId = req.params[1];
 		try {
@@ -200,7 +198,7 @@ export default function registerThreadRoutes(app, dependencies) {
 			}
 			res.status(200).send(result.data);
 		} catch (error) {
-			const err = /** @type {Error & {code?: string}} */ (error);
+			const err = error as Error & {code?: string};
 			if (err.code === 'ENOENT') {
 				res.sendStatus(404);
 				return;
