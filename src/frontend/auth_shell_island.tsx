@@ -1,7 +1,19 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 
-function StatusBanner({ state }) {
+type AuthStateType = 'idle' | 'setup-needed' | 'disconnected' | 'connected-loading' | 'empty' | 'error';
+
+interface AuthState {
+	type: AuthStateType;
+	message: string | null;
+	emailAddress: string | null;
+}
+
+interface StatusBannerProps {
+	state: AuthState;
+}
+
+function StatusBanner({ state }: StatusBannerProps) {
 	if (state.type === 'idle') {
 		return null;
 	}
@@ -53,7 +65,13 @@ function StatusBanner({ state }) {
 	return null;
 }
 
-function AuthControls({ state, onDisconnect, onRefreshNow }) {
+interface AuthControlsProps {
+	state: AuthState;
+	onDisconnect: () => void;
+	onRefreshNow: () => void;
+}
+
+function AuthControls({ state, onDisconnect, onRefreshNow }: AuthControlsProps) {
 	if (state.type === 'setup-needed') {
 		return null;
 	}
@@ -86,10 +104,17 @@ function AuthControls({ state, onDisconnect, onRefreshNow }) {
 	);
 }
 
-export function mountAuthShellIsland({ statusContainer, authControlsContainer, onDisconnect, onRefreshNow }) {
+interface AuthShellIslandDeps {
+	statusContainer: Element;
+	authControlsContainer: Element;
+	onDisconnect: () => void;
+	onRefreshNow: () => void;
+}
+
+export function mountAuthShellIsland({ statusContainer, authControlsContainer, onDisconnect, onRefreshNow }: AuthShellIslandDeps) {
 	const statusRoot = createRoot(statusContainer);
 	const authControlsRoot = createRoot(authControlsContainer);
-	const state = { type: 'connected-loading', message: null, emailAddress: null };
+	const state: AuthState = { type: 'connected-loading', message: null, emailAddress: null };
 
 	function renderAll() {
 		statusRoot.render(<StatusBanner state={state} />);
@@ -105,19 +130,19 @@ export function mountAuthShellIsland({ statusContainer, authControlsContainer, o
 	renderAll();
 
 	return {
-		setSetupNeeded(message) {
+		setSetupNeeded(message?: string | null) {
 			state.type = 'setup-needed';
 			state.message = message || null;
 			state.emailAddress = null;
 			renderAll();
 		},
-		setDisconnected(message) {
+		setDisconnected(message?: string | null) {
 			state.type = 'disconnected';
 			state.message = message || null;
 			state.emailAddress = null;
 			renderAll();
 		},
-		setConnectedLoading({ emailAddress } = {}) {
+		setConnectedLoading({ emailAddress }: { emailAddress?: string | null } = {}) {
 			state.type = 'connected-loading';
 			state.message = null;
 			state.emailAddress = emailAddress || null;

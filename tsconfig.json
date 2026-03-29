@@ -10,10 +10,13 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
   "include": [
     "src/**/*.ts",
+    "src/**/*.tsx",
     "src/**/*.js",
     "main.mjs",
     "models/**/*.js",

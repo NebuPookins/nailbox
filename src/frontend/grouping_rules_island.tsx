@@ -1,7 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-function createEmptyRule() {
+type ConditionType = 'sender_name' | 'sender_email' | 'subject';
+type SortType = 'mostRecent' | 'shortest';
+
+interface Condition {
+	type: ConditionType;
+	value: string;
+}
+
+interface Rule {
+	name: string;
+	priority: number;
+	sortType: SortType;
+	conditions: Condition[];
+}
+
+interface GroupingRulesApi {
+	loadRules(): Promise<{ rules: unknown[] }>;
+	saveRules(data: { rules: Rule[] }): Promise<unknown>;
+}
+
+interface Notify {
+	error?: (msg: string) => void;
+	success?: (msg: string) => void;
+}
+
+function createEmptyRule(): Rule {
 	return {
 		name: 'New Rule',
 		priority: 50,
@@ -10,22 +35,33 @@ function createEmptyRule() {
 	};
 }
 
-function normalizeRule(rule) {
+function normalizeRule(rule: unknown): Rule {
+	const r = rule as Record<string, unknown>;
 	return {
-		name: typeof rule?.name === 'string' ? rule.name : '',
-		priority: Number.isFinite(Number(rule?.priority)) ? Number(rule.priority) : 50,
-		sortType: rule?.sortType === 'shortest' ? 'shortest' : 'mostRecent',
-		conditions: Array.isArray(rule?.conditions) ? rule.conditions.map((condition) => ({
-			type: condition?.type === 'sender_name' || condition?.type === 'sender_email' || condition?.type === 'subject'
-				? condition.type
-				: 'sender_email',
-			value: typeof condition?.value === 'string' ? condition.value : '',
-		})) : [],
+		name: typeof r?.name === 'string' ? r.name : '',
+		priority: Number.isFinite(Number(r?.priority)) ? Number(r.priority) : 50,
+		sortType: r?.sortType === 'shortest' ? 'shortest' : 'mostRecent',
+		conditions: Array.isArray(r?.conditions) ? r.conditions.map((condition: unknown) => {
+			const c = condition as Record<string, unknown>;
+			return {
+				type: c?.type === 'sender_name' || c?.type === 'sender_email' || c?.type === 'subject'
+					? (c.type as ConditionType)
+					: 'sender_email' as ConditionType,
+				value: typeof c?.value === 'string' ? c.value : '',
+			};
+		}) : [],
 	};
 }
 
-function GroupingRulesApp({ api, notify, onSaved, reloadToken }) {
-	const [rules, setRules] = useState([]);
+interface GroupingRulesAppProps {
+	api: GroupingRulesApi;
+	notify: Notify | undefined;
+	onSaved: (() => void) | undefined;
+	reloadToken: number;
+}
+
+function GroupingRulesApp({ api, notify, onSaved, reloadToken }: GroupingRulesAppProps) {
+	const [rules, setRules] = useState<Rule[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
@@ -42,7 +78,7 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }) {
 				const nextRules = Array.isArray(data?.rules) ? data.rules.map(normalizeRule) : [];
 				setRules(nextRules);
 			})
-			.catch((error) => {
+			.catch((error: unknown) => {
 				if (isCancelled) {
 					return;
 				}
@@ -62,7 +98,7 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }) {
 		};
 	}, [api, notify, reloadToken]);
 
-	function updateRule(ruleIndex, updater) {
+	function updateRule(ruleIndex: number, updater: (rule: Rule) => Rule) {
 		setRules((currentRules) => currentRules.map((rule, index) => (
 			index === ruleIndex ? updater(rule) : rule
 		)));
@@ -72,18 +108,18 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }) {
 		setRules((currentRules) => currentRules.concat(createEmptyRule()));
 	}
 
-	function removeRule(ruleIndex) {
+	function removeRule(ruleIndex: number) {
 		setRules((currentRules) => currentRules.filter((_, index) => index !== ruleIndex));
 	}
 
-	function addCondition(ruleIndex) {
+	function addCondition(ruleIndex: number) {
 		updateRule(ruleIndex, (rule) => ({
 			...rule,
 			conditions: rule.conditions.concat({ type: 'sender_email', value: '' }),
 		}));
 	}
 
-	function updateCondition(ruleIndex, conditionIndex, updater) {
+	function updateCondition(ruleIndex: number, conditionIndex: number, updater: (condition: Condition) => Condition) {
 		updateRule(ruleIndex, (rule) => ({
 			...rule,
 			conditions: rule.conditions.map((condition, index) => (
@@ -92,7 +128,7 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }) {
 		}));
 	}
 
-	function removeCondition(ruleIndex, conditionIndex) {
+	function removeCondition(ruleIndex: number, conditionIndex: number) {
 		updateRule(ruleIndex, (rule) => ({
 			...rule,
 			conditions: rule.conditions.filter((_, index) => index !== conditionIndex),
@@ -107,7 +143,7 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }) {
 				notify?.success?.('Email grouping rules saved successfully');
 				onSaved?.();
 			})
-			.catch((error) => {
+			.catch((error: unknown) => {
 				const message = error instanceof Error && error.message
 					? error.message
 					: 'Failed to save email grouping rules.';
@@ -165,7 +201,7 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }) {
 								<div className="col-xs-12 col-sm-3">
 									<select
 										className="form-control"
-										onChange={(event) => updateRule(ruleIndex, (currentRule) => ({ ...currentRule, sortType: event.target.value }))}
+										onChange={(event) => updateRule(ruleIndex, (currentRule) => ({ ...currentRule, sortType: event.target.value as SortType }))}
 										value={rule.sortType}
 									>
 										<option value="mostRecent">Most Recent</option>
@@ -189,7 +225,7 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }) {
 											className="form-control"
 											onChange={(event) => updateCondition(ruleIndex, conditionIndex, (currentCondition) => ({
 												...currentCondition,
-												type: event.target.value,
+												type: event.target.value as ConditionType,
 											}))}
 											value={condition.type}
 										>
@@ -233,7 +269,14 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }) {
 	);
 }
 
-export function mountGroupingRulesIsland({ api, container, notify, onSaved }) {
+interface MountGroupingRulesIslandDeps {
+	api: GroupingRulesApi;
+	container: Element;
+	notify?: Notify;
+	onSaved?: () => void;
+}
+
+export function mountGroupingRulesIsland({ api, container, notify, onSaved }: MountGroupingRulesIslandDeps) {
 	const root = createRoot(container);
 	let reloadToken = 0;
 

@@ -1,40 +1,86 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 
-function pluralize(n, singular, plural) {
+interface Attachment {
+	filename: string;
+	size: number;
+	attachmentId: string;
+}
+
+interface Person {
+	name: string;
+	email: string;
+}
+
+interface ThreadMessage {
+	messageId: string;
+	from: Array<Person | null>;
+	to: Person[];
+	date: number;
+	body: { sanitized: string };
+	wordcount: number;
+	duration?: string;
+	attachments: Attachment[];
+}
+
+interface DeletedMessagesPayload {
+	num: number;
+	threadId: string;
+}
+
+interface ThreadViewerState {
+	threadId: string | null;
+	subject: string;
+	senders: string;
+	receivers: string;
+	loadingText: string;
+	isLoading: boolean;
+	messages: ThreadMessage[];
+	deletedMessages: DeletedMessagesPayload | null;
+	replyText: string;
+}
+
+function pluralize(n: number, singular: string, plural: string): string {
 	return n === 1 ? singular : plural;
 }
 
-function renderPeople(people) {
+function renderPeople(people: Array<Person | null> | undefined): string {
 	return (people || [])
 		.map(function(p) { return p && p.name ? p.name : ''; })
 		.filter(Boolean)
 		.join(' ');
 }
 
-function formatPrettyTimestamp(timestamp) {
-	if (typeof globalThis.moment !== 'function') {
+function formatPrettyTimestamp(timestamp: number): string {
+	const momentLib = (globalThis as Record<string, unknown>).moment as ((arg?: unknown) => { isSame: (ref: unknown, unit: string) => boolean; format: (fmt: string) => string }) | undefined;
+	if (typeof momentLib !== 'function') {
 		return String(timestamp || '');
 	}
-	var now = globalThis.moment();
-	var m = globalThis.moment(timestamp);
+	const now = momentLib();
+	const m = momentLib(timestamp);
 	if (m.isSame(now, 'day')) return m.format('h:mm A');
 	if (m.isSame(now, 'week')) return m.format('ddd h:mm A');
 	if (m.isSame(now, 'year')) return m.format('MMM Do');
 	return m.format('YYYY-MMM-DD');
 }
 
-function formatFilesize(size) {
-	if (typeof globalThis.filesize === 'function') {
-		return globalThis.filesize(size);
+function formatFilesize(size: number): string {
+	const filesizeLib = (globalThis as Record<string, unknown>).filesize as ((size: number) => string) | undefined;
+	if (typeof filesizeLib === 'function') {
+		return filesizeLib(size);
 	}
 	return String(size) + ' bytes';
 }
 
-function DeletedMessagesNotice({ num, threadId }) {
-	var trashUrl = 'https://mail.google.com/mail/u/0/#trash/' + (threadId || '');
-	var label = pluralize(num, 'message', 'messages');
-	var pronoun = pluralize(num, 'it', 'them');
+interface DeletedMessagesNoticeProps {
+	num: number;
+	threadId: string;
+}
+
+function DeletedMessagesNotice({ num, threadId }: DeletedMessagesNoticeProps) {
+	const trashUrl = 'https://mail.google.com/mail/u/0/#trash/' + (threadId || '');
+	const label = pluralize(num, 'message', 'messages');
+	const pronoun = pluralize(num, 'it', 'them');
 	return (
 		<div className="panel panel-danger">
 			<div className="panel-heading">
@@ -49,7 +95,12 @@ function DeletedMessagesNotice({ num, threadId }) {
 	);
 }
 
-function MessagePanel({ message, onDownloadAttachment }) {
+interface MessagePanelProps {
+	message: ThreadMessage;
+	onDownloadAttachment: (opts: { messageId: string; attachmentId: string; attachmentName: string }) => void;
+}
+
+function MessagePanel({ message, onDownloadAttachment }: MessagePanelProps) {
 	return (
 		<div className="message panel panel-default" data-message-id={message.messageId}>
 			<div className="panel-heading">
@@ -102,6 +153,27 @@ function MessagePanel({ message, onDownloadAttachment }) {
 	);
 }
 
+interface ThreadViewerAppProps {
+	subject: string;
+	senders: string;
+	receivers: string;
+	loadingText: string;
+	isLoading: boolean;
+	messages: ThreadMessage[];
+	deletedMessages: DeletedMessagesPayload | null;
+	replyText: string;
+	lastMessageId: string | null;
+	onReplyTextChange: (text: string) => void;
+	onReplyAll: (body: string, inReplyTo: string | null) => void;
+	onDownloadAttachment: (opts: { messageId: string; attachmentId: string; attachmentName: string }) => void;
+	onDelete: () => void;
+	onArchive: () => void;
+	onOpenLaterPicker: () => void;
+	onOpenLabelPicker: () => void;
+	onViewOnGmail: () => void;
+	onClose: () => void;
+}
+
 function ThreadViewerApp({
 	subject,
 	senders,
@@ -121,7 +193,7 @@ function ThreadViewerApp({
 	onOpenLabelPicker,
 	onViewOnGmail,
 	onClose,
-}) {
+}: ThreadViewerAppProps) {
 	return (
 		<>
 			<div className="modal-header">
@@ -201,31 +273,90 @@ function ThreadViewerApp({
 	);
 }
 
-/**
- * Mounts the thread viewer React island into the given container.
- *
- * Returns an imperative API:
- *   open(threadSummary) → adapter — the adapter object consumed by
- *     createThreadViewerController.openThread; calling open() resets state
- *     and returns the adapter.
- *   getThreadId() → string|null — current thread id (for keydown handler).
- *   clear() — resets all state (called when the Bootstrap modal is hidden).
- *
- * @param {{
- *   container: Element,
- *   showModal: () => void,
- *   hideModal: () => void,
- *   getEmailAddress: () => string|null,
- *   reportError: (error: Error) => void,
- *   onReplyAll: (opts: object) => Promise,
- *   onDownloadAttachment: (opts: object) => Promise,
- *   onDeleteThread: (opts: object) => Promise,
- *   onArchiveThread: (opts: object) => Promise,
- *   onOpenLaterPicker: (opts: object) => void,
- *   onOpenLabelPicker: (opts: object) => void,
- *   onViewOnGmail: (opts: object) => void,
- * }} deps
- */
+interface ThreadSummaryInput {
+	threadId?: string;
+	subject?: string;
+	snippet?: string;
+	sendersText?: string;
+	receiversText?: string;
+}
+
+interface ReplyAllOpts {
+	body: string;
+	threadId: string | null;
+	inReplyTo: string | null;
+	emailAddress: string | null;
+	clearReply: () => void;
+	hideModal: () => void;
+}
+
+interface DeleteThreadOpts {
+	threadId: string | null;
+	hideModal: () => void;
+}
+
+interface ArchiveThreadOpts {
+	threadId: string | null;
+	hideModal: () => void;
+}
+
+interface LaterPickerOpts {
+	threadId: string | null;
+	subject: string;
+	hideModal: () => void;
+}
+
+interface LabelPickerOpts {
+	threadId: string | null;
+	subject: string;
+	hideThreadViewer: () => void;
+}
+
+interface ViewOnGmailOpts {
+	threadId: string | null;
+}
+
+interface DownloadAttachmentOpts {
+	messageId: string;
+	attachmentId: string;
+	attachmentName: string;
+}
+
+interface MountThreadViewerIslandDeps {
+	container: Element;
+	showModal: () => void;
+	hideModal: () => void;
+	getEmailAddress: () => string | null;
+	reportError: (error: Error) => void;
+	onReplyAll: (opts: ReplyAllOpts) => Promise<unknown>;
+	onDownloadAttachment: (opts: DownloadAttachmentOpts) => Promise<unknown>;
+	onDeleteThread: (opts: DeleteThreadOpts) => Promise<unknown>;
+	onArchiveThread: (opts: ArchiveThreadOpts) => Promise<unknown>;
+	onOpenLaterPicker: (opts: LaterPickerOpts) => void;
+	onOpenLabelPicker: (opts: LabelPickerOpts) => void;
+	onViewOnGmail: (opts: ViewOnGmailOpts) => void;
+}
+
+export interface ThreadViewerAdapter {
+	appendDeletedMessages: (payload: DeletedMessagesPayload) => void;
+	appendMessage: (message: ThreadMessage) => void;
+	clearThreads: () => void;
+	getCurrentThreadId: () => string | null;
+	hideLoading: () => void;
+	receiversText: string | undefined;
+	sendersText: string | undefined;
+	setReceivers: (text: string) => void;
+	setSenders: (text: string) => void;
+	setThreadId: (threadId: string) => void;
+	setThreadsLoadingText: (text: string) => void;
+	setTitle: (subject: string) => void;
+	showLoading: () => void;
+	showModal: () => void;
+	snippet: string | undefined;
+	subject: string | undefined;
+	threadId: string | undefined;
+}
+
 export function mountThreadViewerIsland({
 	container,
 	showModal,
@@ -239,10 +370,10 @@ export function mountThreadViewerIsland({
 	onOpenLaterPicker,
 	onOpenLabelPicker,
 	onViewOnGmail,
-}) {
-	var root = createRoot(container);
+}: MountThreadViewerIslandDeps) {
+	const root = createRoot(container);
 
-	var state = {
+	let state: ThreadViewerState = {
 		threadId: null,
 		subject: '',
 		senders: '',
@@ -255,7 +386,7 @@ export function mountThreadViewerIsland({
 	};
 
 	function render() {
-		var lastMessageId = state.messages.length > 0
+		const lastMessageId = state.messages.length > 0
 			? state.messages[state.messages.length - 1].messageId
 			: null;
 		root.render(
@@ -325,11 +456,7 @@ export function mountThreadViewerIsland({
 
 	render();
 
-	/**
-	 * Resets island state for the given thread and returns the adapter object
-	 * that createThreadViewerController.openThread expects.
-	 */
-	function open(threadSummary) {
+	function open(threadSummary: ThreadSummaryInput): ThreadViewerAdapter {
 		state = {
 			threadId: null,
 			subject: threadSummary.subject || '',

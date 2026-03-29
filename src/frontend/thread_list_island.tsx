@@ -7,34 +7,87 @@ import {
 	getLabelName,
 } from './thread_list_presenter.js';
 
-function renderParticipants(people) {
+interface Person {
+	name: string;
+	email: string;
+}
+
+interface ThreadSummary {
+	threadId: string;
+	senders: Person[];
+	receivers: Person[];
+	lastUpdated: number;
+	subject: string;
+	snippet: string | null;
+	messageIds: string[];
+	labelIds: string[];
+	visibility: string;
+	totalTimeToReadSeconds: number;
+	recentMessageReadTimeSeconds: number;
+}
+
+interface ThreadGroup {
+	label: string;
+	threads: ThreadSummary[];
+}
+
+interface LabelInfo {
+	id: string;
+	name: string;
+}
+
+interface ThreadOpenPayload {
+	threadId: string;
+	subject: string;
+	snippet: string;
+	sendersText: string;
+	receiversText: string;
+}
+
+interface LaterPickerPayload {
+	threadId: string;
+	subject: string;
+}
+
+function renderParticipants(people: Person[]): string {
 	return (people || []).map(function(p) {
 		return p && p.name ? p.name : '';
 	}).filter(Boolean).join(' ');
 }
 
-function renderPrimaryPerson(person) {
+function renderPrimaryPerson(person: Person | undefined): string {
 	if (!person) return '';
-	var name = person.name || '';
-	var email = person.email || '';
+	const name = person.name || '';
+	const email = person.email || '';
 	if (!name && !email) return '';
 	if (!name) return email;
 	if (!email) return name;
 	return name + ' (' + email + ')';
 }
 
-function renderCountSuffix(items, subtractAmount) {
-	var count = Math.max((items || []).length - subtractAmount, 0);
+function renderCountSuffix(items: unknown[], subtractAmount: number): string {
+	const count = Math.max((items || []).length - subtractAmount, 0);
 	return count <= 0 ? '' : ' (and ' + count + ' more)';
 }
 
-function ThreadRow({ thread, labels, isRemoving, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread }) {
-	var rowRef = useRef(null);
+interface ThreadRowProps {
+	thread: ThreadSummary;
+	labels: LabelInfo[];
+	isRemoving: boolean;
+	onArchive: (threadId: string) => void;
+	onDelete: (threadId: string) => void;
+	onOpenLaterPicker: (payload: LaterPickerPayload) => void;
+	onOpenLabelPicker: (payload: LaterPickerPayload) => void;
+	onOpenThread: (payload: ThreadOpenPayload) => void;
+}
+
+function ThreadRow({ thread, labels, isRemoving, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread }: ThreadRowProps) {
+	const rowRef = useRef<HTMLDivElement>(null);
 
 	useEffect(function() {
 		if (isRemoving && rowRef.current) {
-			var el = rowRef.current;
-			var height = el.offsetHeight;
+			const el = rowRef.current;
+			const height = el.offsetHeight;
 			el.style.height = height + 'px';
 			el.style.overflow = 'hidden';
 			// Force reflow so the explicit height is applied before the transition starts
@@ -47,12 +100,12 @@ function ThreadRow({ thread, labels, isRemoving, onArchive, onDelete, onOpenLate
 		}
 	}, [isRemoving]);
 
-	var senders = Array.isArray(thread.senders) ? thread.senders : [];
-	var receivers = Array.isArray(thread.receivers) ? thread.receivers : [];
-	var mainDisplayedLabelIds = getThreadMainDisplayedLabelIds(thread);
+	const senders = Array.isArray(thread.senders) ? thread.senders : [];
+	const receivers = Array.isArray(thread.receivers) ? thread.receivers : [];
+	const mainDisplayedLabelIds = getThreadMainDisplayedLabelIds(thread) as string[];
 
-	function handleRowClick(e) {
-		if (e.target.closest('button, a, input, select, textarea, label')) {
+	function handleRowClick(e: React.MouseEvent<HTMLDivElement>) {
+		if ((e.target as Element).closest('button, a, input, select, textarea, label')) {
 			return;
 		}
 		onOpenThread({
@@ -91,17 +144,17 @@ function ThreadRow({ thread, labels, isRemoving, onArchive, onDelete, onOpenLate
 				<div className="col-xs-2">
 					{(thread.messageIds || []).length}
 					<span className="glyphicon glyphicon-envelope"></span>&nbsp;
-					{formatPrettyTimestamp(thread.lastUpdated)}
+					{formatPrettyTimestamp(thread.lastUpdated) as string}
 				</div>
 			</div>
 			<div className="row">
 				<div className="col-xs-10">
 					<strong className="subject">{thread.subject || ''}</strong>
 					<span>
-						{mainDisplayedLabelIds.map(function(labelId) {
+						{mainDisplayedLabelIds.map(function(labelId: string) {
 							return (
 								<span key={labelId} className="badge">
-									{getLabelName(labelId, labels)}
+									{getLabelName(labelId, labels) as string}
 								</span>
 							);
 						})}
@@ -111,11 +164,11 @@ function ThreadRow({ thread, labels, isRemoving, onArchive, onDelete, onOpenLate
 				<div className="col-xs-2">
 					<small>Total:</small>
 					<span className="glyphicon glyphicon-time"></span>{' '}
-					{formatReadTime(thread.totalTimeToReadSeconds)}
+					{formatReadTime(thread.totalTimeToReadSeconds) as string}
 					<br />
 					<small>Recent:</small>
 					<span className="glyphicon glyphicon-time"></span>{' '}
-					{formatReadTime(thread.recentMessageReadTimeSeconds)}
+					{formatReadTime(thread.recentMessageReadTimeSeconds) as string}
 					<br />
 					<button
 						className="btn btn-xs btn-success archive-thread"
@@ -161,7 +214,18 @@ function ThreadRow({ thread, labels, isRemoving, onArchive, onDelete, onOpenLate
 	);
 }
 
-function ThreadListApp({ groups, labels, removingThreadIds, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread }) {
+interface ThreadListAppProps {
+	groups: ThreadGroup[];
+	labels: LabelInfo[];
+	removingThreadIds: Set<string>;
+	onArchive: (threadId: string) => void;
+	onDelete: (threadId: string) => void;
+	onOpenLaterPicker: (payload: LaterPickerPayload) => void;
+	onOpenLabelPicker: (payload: LaterPickerPayload) => void;
+	onOpenThread: (payload: ThreadOpenPayload) => void;
+}
+
+function ThreadListApp({ groups, labels, removingThreadIds, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread }: ThreadListAppProps) {
 	if (!groups || groups.length === 0) {
 		return null;
 	}
@@ -193,13 +257,22 @@ function ThreadListApp({ groups, labels, removingThreadIds, onArchive, onDelete,
 	);
 }
 
-var REMOVE_ANIMATION_MS = 400;
+const REMOVE_ANIMATION_MS = 400;
 
-export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread }) {
-	var root = createRoot(container);
-	var groups = [];
-	var labels = [];
-	var removingThreadIds = new Set();
+interface MountThreadListIslandDeps {
+	container: Element;
+	onArchive: (threadId: string) => void;
+	onDelete: (threadId: string) => void;
+	onOpenLaterPicker: (payload: LaterPickerPayload) => void;
+	onOpenLabelPicker: (payload: LaterPickerPayload) => void;
+	onOpenThread: (payload: ThreadOpenPayload) => void;
+}
+
+export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread }: MountThreadListIslandDeps) {
+	const root = createRoot(container);
+	let groups: ThreadGroup[] = [];
+	let labels: LabelInfo[] = [];
+	let removingThreadIds = new Set<string>();
 
 	function render() {
 		root.render(
@@ -219,15 +292,15 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 	render();
 
 	return {
-		setGroups: function(newGroups) {
+		setGroups: function(newGroups: ThreadGroup[]) {
 			groups = newGroups;
 			render();
 		},
-		setLabels: function(newLabels) {
+		setLabels: function(newLabels: LabelInfo[]) {
 			labels = newLabels;
 			render();
 		},
-		removeThread: function(threadId) {
+		removeThread: function(threadId: string) {
 			removingThreadIds = new Set(removingThreadIds);
 			removingThreadIds.add(threadId);
 			render();
