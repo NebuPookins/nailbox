@@ -52,7 +52,7 @@ function parseCookies(req: Request): Record<string, string> {
 	if (typeof rawCookieHeader !== 'string' || rawCookieHeader.length === 0) {
 		return {};
 	}
-	return rawCookieHeader.split(';').reduce((cookies, chunk) => {
+	return rawCookieHeader.split(';').reduce<Record<string, string>>((cookies, chunk) => {
 		const trimmedChunk = chunk.trim();
 		const equalsIndex = trimmedChunk.indexOf('=');
 		if (equalsIndex === -1) {
@@ -60,9 +60,9 @@ function parseCookies(req: Request): Record<string, string> {
 		}
 		const key = trimmedChunk.substring(0, equalsIndex);
 		const value = trimmedChunk.substring(equalsIndex + 1);
-		(cookies as Record<string, string>)[key] = decodeURIComponent(value);
+		cookies[key] = decodeURIComponent(value);
 		return cookies;
-	}, {} as Record<string, string>);
+	}, {});
 }
 
 export default function registerAuthRoutes(app: Application, dependencies: any): void {

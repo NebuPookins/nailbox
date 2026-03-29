@@ -102,7 +102,7 @@ function ThreadRow({ thread, labels, isRemoving, onArchive, onDelete, onOpenLate
 
 	const senders = Array.isArray(thread.senders) ? thread.senders : [];
 	const receivers = Array.isArray(thread.receivers) ? thread.receivers : [];
-	const mainDisplayedLabelIds = getThreadMainDisplayedLabelIds(thread) as string[];
+	const mainDisplayedLabelIds = getThreadMainDisplayedLabelIds(thread);
 
 	function handleRowClick(e: React.MouseEvent<HTMLDivElement>) {
 		if ((e.target as Element).closest('button, a, input, select, textarea, label')) {
@@ -144,7 +144,7 @@ function ThreadRow({ thread, labels, isRemoving, onArchive, onDelete, onOpenLate
 				<div className="col-xs-2">
 					{(thread.messageIds || []).length}
 					<span className="glyphicon glyphicon-envelope"></span>&nbsp;
-					{formatPrettyTimestamp(thread.lastUpdated) as string}
+					{formatPrettyTimestamp(thread.lastUpdated)}
 				</div>
 			</div>
 			<div className="row">
