@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Minimal native notification system replacing the Messenger.js jQuery plugin.
  * Renders Bootstrap-styled alert toasts fixed at the bottom-right of the page.
@@ -11,7 +10,11 @@
 const CONTAINER_ID = 'nailbox-messenger-container';
 const AUTO_DISMISS_MS = 5000;
 
-function getOrCreateContainer() {
+export interface MsgHandle {
+	update(opts: { type: string; message: string }): MsgHandle;
+}
+
+function getOrCreateContainer(): HTMLElement {
 	let el = document.getElementById(CONTAINER_ID);
 	if (!el) {
 		el = document.createElement('div');
@@ -22,13 +25,13 @@ function getOrCreateContainer() {
 	return el;
 }
 
-function typeToClass(type) {
+function typeToClass(type: string): string {
 	if (type === 'success') return 'alert-success';
 	if (type === 'error') return 'alert-danger';
 	return 'alert-info';
 }
 
-function showToast(initialMessage, initialType) {
+function showToast(initialMessage: string, initialType: string): MsgHandle {
 	const container = getOrCreateContainer();
 	const el = document.createElement('div');
 	el.style.marginBottom = '5px';
@@ -48,9 +51,9 @@ function showToast(initialMessage, initialType) {
 	el.appendChild(textSpan);
 	container.appendChild(el);
 
-	let autoTimer = setTimeout(function() { el.remove(); }, AUTO_DISMISS_MS);
+	let autoTimer: ReturnType<typeof setTimeout> = setTimeout(function() { el.remove(); }, AUTO_DISMISS_MS);
 
-	const msgHandle = {
+	const msgHandle: MsgHandle = {
 		update: function({ type, message }) {
 			clearTimeout(autoTimer);
 			el.className = 'alert alert-dismissible ' + typeToClass(type);
@@ -62,7 +65,7 @@ function showToast(initialMessage, initialType) {
 	return msgHandle;
 }
 
-export function createMessenger() {
+export function createMessenger(): { info(message: string): MsgHandle; error(message: string): MsgHandle; update(): ReturnType<typeof createMessenger> } {
 	return {
 		info: function(message) { return showToast(message, 'info'); },
 		error: function(message) { return showToast(message, 'error'); },

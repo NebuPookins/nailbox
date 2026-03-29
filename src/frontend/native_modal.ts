@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Show/hide Bootstrap 3 modals without the jQuery plugin.
  * Dispatches a native `hidden.bs.modal` CustomEvent after the CSS transition.
@@ -7,10 +6,10 @@
 
 const TRANSITION_MS = 300;
 
-/** @type {Map<Element, Element>} modal element → backdrop element */
-const activeModals = new Map();
+/** modal element → backdrop element */
+const activeModals = new Map<HTMLElement, HTMLElement>();
 
-export function showModal(el) {
+export function showModal(el: HTMLElement): void {
 	if (activeModals.has(el)) return;
 	const backdrop = document.createElement('div');
 	backdrop.className = 'modal-backdrop fade';
@@ -31,7 +30,7 @@ export function showModal(el) {
 	activeModals.set(el, backdrop);
 }
 
-export function hideModal(el) {
+export function hideModal(el: HTMLElement): void {
 	const backdrop = activeModals.get(el);
 	if (backdrop === undefined) return;
 	activeModals.delete(el);

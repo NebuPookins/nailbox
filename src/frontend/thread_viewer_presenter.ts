@@ -1,5 +1,13 @@
-// @ts-nocheck
-function escapeHtml(value) {
+type MomentLib = (ts?: unknown) => { isSame(other: unknown, unit: string): boolean; format(fmt: string): string };
+type FilesizeLib = (size: number) => string;
+
+interface Person { name?: string; email?: string; }
+interface Attachment { attachmentId?: string; filename?: string; size?: number; }
+interface MessageBody { sanitized?: string; }
+interface ThreadMessage { messageId?: string; from?: Array<Person | null>; to?: Array<Person | null>; date?: unknown; body?: MessageBody; wordcount?: number; duration?: string; attachments?: Attachment[]; }
+interface RenderOptions { momentLib?: MomentLib; filesizeLib?: FilesizeLib; }
+
+function escapeHtml(value: unknown): string {
 	return String(value ?? '')
 		.replace(/&/g, '&amp;')
 		.replace(/</g, '&lt;')
@@ -8,11 +16,11 @@ function escapeHtml(value) {
 		.replace(/'/g, '&#39;');
 }
 
-function pluralize(number, singular, plural) {
+function pluralize(number: number, singular: string, plural: string): string {
 	return number === 1 ? singular : plural;
 }
 
-function formatPrettyTimestamp(timestamp, momentLib = globalThis.moment) {
+function formatPrettyTimestamp(timestamp: unknown, momentLib: MomentLib | undefined = (globalThis as Record<string, unknown>).moment as MomentLib | undefined): string {
 	if (!momentLib || typeof momentLib !== 'function') {
 		return escapeHtml(timestamp);
 	}
@@ -30,20 +38,20 @@ function formatPrettyTimestamp(timestamp, momentLib = globalThis.moment) {
 	return momentToFormat.format('YYYY-MMM-DD');
 }
 
-function formatFilesize(size, filesizeLib = globalThis.filesize) {
+function formatFilesize(size: number | undefined, filesizeLib: FilesizeLib | undefined = (globalThis as Record<string, unknown>).filesize as FilesizeLib | undefined): string {
 	if (typeof filesizeLib === 'function') {
-		return filesizeLib(size);
+		return filesizeLib(size ?? 0);
 	}
 	return String(size) + ' bytes';
 }
 
-function renderPeople(people) {
+function renderPeople(people: Array<Person | null> | undefined): string {
 	return (people || []).map(function(person) {
 		return person && person.name ? escapeHtml(person.name) : '';
 	}).filter(Boolean).join(' ');
 }
 
-export function renderDeletedMessagesNotice(payload) {
+export function renderDeletedMessagesNotice(payload: { num?: unknown; threadId?: string }): string {
 	var num = Number(payload.num) || 0;
 	var messageLabel = pluralize(num, 'message', 'messages');
 	var pronoun = pluralize(num, 'it', 'them');
@@ -63,7 +71,7 @@ export function renderDeletedMessagesNotice(payload) {
 	);
 }
 
-export function renderThreadMessage(message, options = {}) {
+export function renderThreadMessage(message: ThreadMessage, options: RenderOptions = {}): string {
 	var attachmentButtons = (message.attachments || []).map(function(attachment) {
 		return (
 			'<button class="btn btn-default dl-attachment" data-attachment-id="' + escapeHtml(attachment.attachmentId || '') + '" data-attachment-name="' + escapeHtml(attachment.filename || '') + '">' +
@@ -82,7 +90,7 @@ export function renderThreadMessage(message, options = {}) {
 						'<div class="col-xs-6">' +
 							'<strong>From</strong>' +
 							renderPeople(message.from) +
-							(message.to && message.to[0] && message.to[0].name ? '<strong>To</strong>' + renderPeople(message.to) : '') +
+							(message.to && message.to[0] && message.to[0]!.name ? '<strong>To</strong>' + renderPeople(message.to) : '') +
 						'</div>' +
 						'<div class="col-xs-2">' + escapeHtml(formatPrettyTimestamp(message.date, options.momentLib)) + '</div>' +
 						'<div class="col-xs-4">' + escapeHtml(message.wordcount) + ' words: ' + escapeHtml(message.duration || '') + '</div>' +

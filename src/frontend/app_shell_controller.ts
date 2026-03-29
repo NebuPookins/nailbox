@@ -1,4 +1,27 @@
-// @ts-nocheck
+declare const moment: {
+	duration(amount: number, unit: string): { humanize(): string; as(unit: string): number };
+};
+
+interface MsgHandle {
+	update(opts: { type: string; message: string }): void;
+}
+
+interface Messenger {
+	info(message: string): MsgHandle;
+	error(message: string): MsgHandle;
+}
+
+interface AuthStatus {
+	configured?: boolean;
+	connected?: boolean;
+	emailAddress?: string | null;
+}
+
+interface AppApi {
+	loadAuthStatus(): Promise<unknown>;
+	disconnectGmail(): Promise<unknown>;
+}
+
 export function createAppShellController({
 	appApi,
 	getAuthStatus,
@@ -12,6 +35,19 @@ export function createAppShellController({
 	setAuthStatus,
 	syncThreadsFromGoogle,
 	updateUiWithThreadsFromServer,
+}: {
+	appApi: AppApi;
+	getAuthStatus(): AuthStatus;
+	loadLabels(): Promise<unknown>;
+	messengerGetter(): Messenger;
+	renderConnectedState(): void;
+	renderDisconnectedState(message?: string): void;
+	renderSetupNeededState(message?: string): void;
+	reportError(error: unknown): void;
+	scheduleInterval?: typeof setInterval;
+	setAuthStatus(status: AuthStatus): void;
+	syncThreadsFromGoogle(messenger: MsgHandle): Promise<unknown>;
+	updateUiWithThreadsFromServer(messenger: MsgHandle): Promise<unknown>;
 }) {
 	async function bootstrapConnectedApp() {
 		renderConnectedState();
@@ -47,7 +83,7 @@ export function createAppShellController({
 
 	return {
 		async initialize() {
-			const status = await appApi.loadAuthStatus();
+			const status = await appApi.loadAuthStatus() as AuthStatus;
 			setAuthStatus(status);
 			if (!status.configured) {
 				renderSetupNeededState();
@@ -92,4 +128,3 @@ export function createAppShellController({
 		},
 	};
 }
-

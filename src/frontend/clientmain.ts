@@ -1,4 +1,3 @@
-// @ts-nocheck
 import frontendApi from './index.js';
 import { showModal, hideModal } from './native_modal.js';
 import { createMessenger } from './messenger_shim.js';
@@ -11,11 +10,35 @@ import { createThreadViewerController } from './thread_viewer_controller.js';
 import { createIslandManager } from './island_manager.js';
 import { wireModals } from './modal_wiring.js';
 
+declare const saveAs: (blob: Blob, name: string) => void;
+
+// String.prototype.hashCode is declared in string_extensions.d.ts
+
+interface AuthStatus {
+	configured: boolean;
+	connected: boolean;
+	emailAddress: string | null;
+	scopes: string[];
+}
+
+interface LabelItem {
+	id: string;
+	name?: string;
+	type?: string;
+	labelListVisibility?: string;
+	hue?: number;
+}
+
+interface AppError {
+	code?: string;
+	message?: string;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
 	'use strict';
 
 	if (!console) {
-		console = {};
+		(window as unknown as Record<string, unknown>).console = {};
 	}
 	if (!console.log) {
 		console.log = function() {};
@@ -27,27 +50,27 @@ document.addEventListener('DOMContentLoaded', function() {
 	})();
 
 	var threadListRoot = document.getElementById('thread-list-root');
-	var authShellStatusRoot = document.getElementById('auth-shell-status-root');
-	var authShellControlsRoot = document.getElementById('auth-shell-controls-root');
-	var threadViewer = document.getElementById('thread-viewer');
-	var threadViewerRoot = document.getElementById('thread-viewer-root');
-	var labelPicker = document.getElementById('label-picker');
+	var authShellStatusRoot = document.getElementById('auth-shell-status-root')!;
+	var authShellControlsRoot = document.getElementById('auth-shell-controls-root')!;
+	var threadViewer = document.getElementById('thread-viewer')!;
+	var threadViewerRoot = document.getElementById('thread-viewer-root')!;
+	var labelPicker = document.getElementById('label-picker')!;
 	var labelPickerRoot = document.getElementById('label-picker-root');
-	var laterPicker = document.getElementById('later-picker');
+	var laterPicker = document.getElementById('later-picker')!;
 	var laterPickerRoot = document.getElementById('later-picker-root');
-	var settingsBtn = document.getElementById('settings-btn');
-	var settingsModal = document.getElementById('settings-modal');
+	var settingsBtn = document.getElementById('settings-btn')!;
+	var settingsModal = document.getElementById('settings-modal')!;
 	var groupingRulesRoot = document.getElementById('grouping-rules-root');
 
-	var authStatus = {
+	var authStatus: AuthStatus = {
 		configured: false,
 		connected: false,
 		emailAddress: null,
 		scopes: []
 	};
-	var labelsCache = [];
+	var labelsCache: LabelItem[] = [];
 
-	String.prototype.hashCode = function() {
+	String.prototype.hashCode = function(this: string): number {
 		var hash = 0;
 		var i;
 		var chr;
@@ -62,23 +85,23 @@ document.addEventListener('DOMContentLoaded', function() {
 		return hash;
 	};
 
-	function reportAsyncError(error) {
+	function reportAsyncError(error: unknown): void {
 		if (error) {
 			console.log(error);
 		}
 	}
 
-	function getThreadViewerThreadId() {
+	function getThreadViewerThreadId(): string | null {
 		return threadViewerIsland ? threadViewerIsland.getThreadId() : null;
 	}
 
-	function clearThreadViewerState() {
+	function clearThreadViewerState(): void {
 		if (threadViewerIsland) {
 			threadViewerIsland.clear();
 		}
 	}
 
-	function handleApiError(error, fallbackMessage) {
+	function handleApiError(error: AppError | null | undefined, fallbackMessage?: string | null): void {
 		if (error && error.code === 'GOOGLE_REAUTH_REQUIRED') {
 			authStatus.connected = false;
 			authStatus.emailAddress = null;
@@ -94,22 +117,22 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	}
 
-	function renderSetupNeededState(message) {
+	function renderSetupNeededState(message?: string): void {
 		authShellIsland.setSetupNeeded(message);
 		islands.clearThreadList();
 	}
 
-	function renderDisconnectedState(message) {
+	function renderDisconnectedState(message?: string): void {
 		authShellIsland.setDisconnected(message);
 		islands.clearThreadList();
 	}
 
-	function renderConnectedState() {
+	function renderConnectedState(): void {
 		authShellIsland.setConnectedLoading({ emailAddress: authStatus.emailAddress });
 	}
 
-	async function loadLabels() {
-		var labels = await appApi.loadLabels();
+	async function loadLabels(): Promise<LabelItem[]> {
+		var labels = await appApi.loadLabels() as LabelItem[];
 		labelsCache = labels;
 		var labelPickerIslandState = islands.ensureLabelPickerIsland();
 		if (labelPickerIslandState) {
@@ -122,13 +145,13 @@ document.addEventListener('DOMContentLoaded', function() {
 		return labels;
 	}
 
-	async function syncThreadsFromGoogle(updateMessenger) {
+	async function syncThreadsFromGoogle(updateMessenger: { update(opts: { type: string; message: string }): void }): Promise<unknown> {
 		updateMessenger = updateMessenger || messengerGetter().info('Syncing Gmail...');
 		updateMessenger.update({
 			type: 'info',
 			message: 'Syncing Gmail to local cache...'
 		});
-		var resp = await appApi.syncThreadsFromGoogle();
+		var resp = await appApi.syncThreadsFromGoogle() as { syncedThreadCount?: number; results?: Array<{ status: number; threadId: string }> };
 		var failedResults = Array.isArray(resp.results) ? resp.results.filter(function(result) {
 			return result.status >= 400;
 		}) : [];
@@ -155,7 +178,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		return resp;
 	}
 
-	async function refreshThreadFromGoogle(threadId) {
+	async function refreshThreadFromGoogle(threadId: string): Promise<void> {
 		try {
 			await appApi.refreshThread(threadId);
 		} catch (error) {
@@ -163,19 +186,19 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	}
 
-	async function updateUiWithThreadsFromServer(updateMessenger) {
+	async function updateUiWithThreadsFromServer(updateMessenger: { update(opts: { type: string; message: string }): void }): Promise<void> {
 		updateMessenger = updateMessenger || messengerGetter().info('Refreshing threads from cache...');
 		updateMessenger.update({
 			type: 'info',
 			message: 'Downloading threads from local cache...'
 		});
 		try {
-			var groupsOfThreads = await appApi.loadGroupedThreads();
+			var groupsOfThreads = await appApi.loadGroupedThreads() as Array<{ threads: Array<{ threadId?: string; needsRefreshing?: boolean }> }>;
 			authShellIsland.setIdle();
 			groupsOfThreads.forEach(function(group) {
 				group.threads.forEach(function(thread) {
 					if (thread.needsRefreshing) {
-						refreshThreadFromGoogle(thread.threadId);
+						refreshThreadFromGoogle(thread.threadId ?? '');
 					}
 				});
 			});
@@ -196,16 +219,16 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	}
 
-	function deleteThreadFromUI(threadId) {
+	function deleteThreadFromUI(threadId: string): void {
 		var islandState = islands.ensureThreadListIsland();
 		if (islandState) {
 			islandState.instance.removeThread(threadId);
 		}
 	}
 
-	async function getThreadData(threadId, attemptNumber, updateMessenger) {
+	async function getThreadData(threadId: string, attemptNumber: number, updateMessenger: { update(opts: { type: string; message: string }): void }): Promise<{ messages: Array<{ messageId: string; deleted?: boolean; timeToReadSeconds?: number; wordcount?: number; [key: string]: unknown }> }> {
 		try {
-			return await appApi.getThreadData(threadId);
+			return await appApi.getThreadData(threadId) as { messages: Array<{ messageId: string; deleted?: boolean; timeToReadSeconds?: number; wordcount?: number; [key: string]: unknown }> };
 		} catch (error) {
 			if (attemptNumber < 60) {
 				updateMessenger.update({
@@ -222,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	}
 
-	function showLaterPicker(threadId, subject) {
+	function showLaterPicker(threadId: string, subject: string): boolean {
 		var islandState = islands.ensureLaterPickerIsland();
 		if (!threadId) {
 			messengerGetter().error('Missing thread id.');
@@ -232,12 +255,12 @@ document.addEventListener('DOMContentLoaded', function() {
 			messengerGetter().error('Failed to load later picker');
 			return false;
 		}
-		laterPicker.querySelector('.modal-title').textContent = subject || '';
+		laterPicker.querySelector('.modal-title')!.textContent = subject || '';
 		islandState.instance.open({
-			onHideThread: async function(selectedThreadId, hideUntil) {
-				var updateMessenger = messengerGetter().info('Hiding thread ' + selectedThreadId + '.');
+			onHideThread: async function(selectedThreadId: string, hideUntil: { type: string; value?: number }) {
+				var updateMsg = messengerGetter().info('Hiding thread ' + selectedThreadId + '.');
 				await appApi.hideThread(selectedThreadId, hideUntil);
-				updateMessenger.update({
+				updateMsg.update({
 					type: 'success',
 					message: 'Successfully hid thread ' + selectedThreadId + '.'
 				});
@@ -250,7 +273,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	var appApi = frontendApi.createAppApi({
 		onApiError: function(error) {
-			handleApiError(error, error && error.message);
+			handleApiError(error as AppError, error && error.message);
 		}
 	});
 	var threadActionController = createThreadActionController({
@@ -275,9 +298,9 @@ document.addEventListener('DOMContentLoaded', function() {
 		reportAsyncError: reportAsyncError,
 		onArchiveThread: function(threadId) { threadListController.archiveThread(threadId); },
 		onDeleteThread: function(threadId) { threadListController.deleteThread(threadId); },
-		onOpenLaterPickerForThread: function(threadSummary) { threadListController.openLaterPicker(threadSummary); },
-		onOpenLabelPickerForThread: function(threadSummary) { threadListController.openLabelPicker(threadSummary); },
-		onOpenThread: function(threadSummary) { threadListController.openThread(threadSummary); },
+		onOpenLaterPickerForThread: function(threadSummary) { threadListController.openLaterPicker(threadSummary as { threadId?: string; subject?: string }); },
+		onOpenLabelPickerForThread: function(threadSummary) { threadListController.openLabelPicker(threadSummary as { threadId?: string; subject?: string }); },
+		onOpenThread: function(threadSummary) { threadListController.openThread(threadSummary as { threadId?: string; subject?: string }); },
 	});
 	var authShellIsland = frontendApi.mountAuthShellIsland({
 		statusContainer: authShellStatusRoot,
@@ -303,7 +326,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		messengerGetter: messengerGetter,
 		onError: reportAsyncError,
 		onUpdateMessageWordcount: function(threadId, messageId, wordcount) {
-			return appApi.updateMessageWordcount(threadId, messageId, wordcount);
+			return appApi.updateMessageWordcount(threadId, messageId, wordcount ?? 0);
 		},
 		threadActionController: threadActionController
 	});
@@ -319,7 +342,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		renderSetupNeededState: renderSetupNeededState,
 		reportError: reportAsyncError,
 		setAuthStatus: function(nextAuthStatus) {
-			authStatus = nextAuthStatus;
+			authStatus = nextAuthStatus as AuthStatus;
 		},
 		syncThreadsFromGoogle: syncThreadsFromGoogle,
 		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer
@@ -372,7 +395,7 @@ document.addEventListener('DOMContentLoaded', function() {
 					}
 				},
 				setTitle: function(s) {
-					labelPicker.querySelector('.modal-title').textContent = s;
+					labelPicker.querySelector('.modal-title')!.textContent = s;
 				},
 				show: function() {
 					showModal(labelPicker);
@@ -386,8 +409,8 @@ document.addEventListener('DOMContentLoaded', function() {
 			});
 		},
 	});
-	function openThreadViewer(threadSummary) {
-		return threadViewerIsland.open(threadSummary);
+	function openThreadViewer(threadSummary: { threadId?: string; subject?: string; [key: string]: unknown }) {
+		return threadViewerIsland.open(threadSummary as Parameters<typeof threadViewerIsland.open>[0]);
 	}
 	var threadListController = createThreadListController({
 		openLabelPicker: function(threadSummary) {
@@ -404,7 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
 					}
 				},
 				setTitle: function(subject) {
-					labelPicker.querySelector('.modal-title').textContent = subject;
+					labelPicker.querySelector('.modal-title')!.textContent = subject;
 				},
 				show: function() {
 					showModal(labelPicker);

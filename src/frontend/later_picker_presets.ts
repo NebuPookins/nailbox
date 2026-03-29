@@ -1,5 +1,12 @@
-// @ts-nocheck
-export const LATER_PRESET_OPTIONS = [
+export interface LaterPresetOption {
+	glyph: string;
+	label: string;
+	value: string;
+}
+
+type HideUntilPresetResult = { type: 'timestamp'; value: number } | { type: 'when-i-have-time' } | null;
+
+export const LATER_PRESET_OPTIONS: LaterPresetOption[] = [
 	{
 		glyph: 'time',
 		label: 'Couple of Hours',
@@ -47,25 +54,25 @@ export const LATER_PRESET_OPTIONS = [
 	},
 ];
 
-function withTime(date, hours) {
+function withTime(date: Date, hours: number): Date {
 	const nextDate = new Date(date.getTime());
 	nextDate.setHours(hours, 0, 0, 0);
 	return nextDate;
 }
 
-function addDays(date, days) {
+function addDays(date: Date, days: number): Date {
 	const nextDate = new Date(date.getTime());
 	nextDate.setDate(nextDate.getDate() + days);
 	return nextDate;
 }
 
-function addMonths(date, months) {
+function addMonths(date: Date, months: number): Date {
 	const nextDate = new Date(date.getTime());
 	nextDate.setMonth(nextDate.getMonth() + months);
 	return nextDate;
 }
 
-function nextWeekdayAtHour(now, weekday, hour) {
+function nextWeekdayAtHour(now: Date, weekday: number, hour: number): Date {
 	const candidate = withTime(now, hour);
 	const currentWeekday = candidate.getDay();
 	let dayOffset = (weekday - currentWeekday + 7) % 7;
@@ -75,7 +82,7 @@ function nextWeekdayAtHour(now, weekday, hour) {
 	return addDays(candidate, dayOffset);
 }
 
-export function resolveHideUntilPreset(preset, now = new Date()) {
+export function resolveHideUntilPreset(preset: string, now: Date = new Date()): HideUntilPresetResult {
 	switch (preset) {
 		case 'hours':
 			return {
