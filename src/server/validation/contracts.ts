@@ -35,7 +35,12 @@ function assertString(value: unknown, name: string): asserts value is string {
 	}
 }
 
-function assertOptionalString(value: unknown, name: string): void {
+function assertStringArray(value: unknown, name: string): asserts value is string[] {
+	assertArray(value, name);
+	value.forEach((item, index) => assertString(item, `${name}[${index}]`));
+}
+
+function assertOptionalString(value: unknown, name: string): asserts value is string | null | undefined {
 	if (value !== undefined && value !== null && typeof value !== 'string') {
 		throw makeValidationError(`${name} must be a string when provided`);
 	}
@@ -47,8 +52,8 @@ function assertNumber(value: unknown, name: string): asserts value is number {
 	}
 }
 
-function assertOneOf(value: unknown, allowedValues: unknown[], name: string): void {
-	if (!allowedValues.includes(value)) {
+function assertOneOf<const T>(value: unknown, allowedValues: readonly T[], name: string): asserts value is T {
+	if (!(allowedValues as unknown[]).includes(value)) {
 		throw makeValidationError(`${name} is invalid`);
 	}
 }
@@ -59,11 +64,9 @@ function normalizeGroupingCondition(condition: unknown, index: number): Grouping
 	const condValue = condition['value'];
 	assertString(condType, `rules[${index}] condition.type`);
 	assertString(condValue, `rules[${index}] condition.value`);
-	if (!['sender_name', 'sender_email', 'subject'].includes(condType)) {
-		throw makeValidationError(`rules[${index}] condition.type is invalid`);
-	}
+	assertOneOf(condType, ['sender_name', 'sender_email', 'subject'] as const, `rules[${index}] condition.type`);
 	return {
-		type: condType as GroupingCondition['type'],
+		type: condType,
 		value: condValue,
 	};
 }
@@ -104,16 +107,32 @@ function normalizeGoogleOAuthConfig(value: unknown): GoogleOAuthConfig {
 		return {};
 	}
 	assertObject(value, 'googleOAuth');
-	const normalized: Record<string, unknown> = {...value};
-	assertOptionalString(normalized['clientId'], 'googleOAuth.clientId');
-	assertOptionalString(normalized['clientSecret'], 'googleOAuth.clientSecret');
-	assertOptionalString(normalized['redirectUri'], 'googleOAuth.redirectUri');
-	assertOptionalString(normalized['accessToken'], 'googleOAuth.accessToken');
-	assertOptionalString(normalized['accessTokenExpiresAt'], 'googleOAuth.accessTokenExpiresAt');
-	assertOptionalString(normalized['refreshToken'], 'googleOAuth.refreshToken');
-	assertOptionalString(normalized['scope'], 'googleOAuth.scope');
-	assertOptionalString(normalized['connectedEmailAddress'], 'googleOAuth.connectedEmailAddress');
-	return normalized as GoogleOAuthConfig;
+	const clientId = value['clientId'];
+	const clientSecret = value['clientSecret'];
+	const redirectUri = value['redirectUri'];
+	const accessToken = value['accessToken'];
+	const accessTokenExpiresAt = value['accessTokenExpiresAt'];
+	const refreshToken = value['refreshToken'];
+	const scope = value['scope'];
+	const connectedEmailAddress = value['connectedEmailAddress'];
+	assertOptionalString(clientId, 'googleOAuth.clientId');
+	assertOptionalString(clientSecret, 'googleOAuth.clientSecret');
+	assertOptionalString(redirectUri, 'googleOAuth.redirectUri');
+	assertOptionalString(accessToken, 'googleOAuth.accessToken');
+	assertOptionalString(accessTokenExpiresAt, 'googleOAuth.accessTokenExpiresAt');
+	assertOptionalString(refreshToken, 'googleOAuth.refreshToken');
+	assertOptionalString(scope, 'googleOAuth.scope');
+	assertOptionalString(connectedEmailAddress, 'googleOAuth.connectedEmailAddress');
+	return {
+		clientId: clientId ?? undefined,
+		clientSecret: clientSecret ?? undefined,
+		redirectUri: redirectUri ?? undefined,
+		accessToken: accessToken ?? undefined,
+		accessTokenExpiresAt: accessTokenExpiresAt ?? undefined,
+		refreshToken: refreshToken ?? undefined,
+		scope: scope ?? undefined,
+		connectedEmailAddress: connectedEmailAddress ?? undefined,
+	};
 }
 
 export function normalizeAppConfig(value: unknown): AppConfig {
@@ -124,14 +143,18 @@ export function normalizeAppConfig(value: unknown): AppConfig {
 		};
 	}
 	assertObject(value, 'config');
-	const normalized: Record<string, unknown> = {...value};
-	if (normalized['port'] !== undefined) {
-		assertNumber(normalized['port'], 'config.port');
+	const rawPort = value['port'];
+	if (rawPort !== undefined) {
+		assertNumber(rawPort, 'config.port');
 	}
-	assertOptionalString(normalized['clientId'], 'config.clientId');
-	normalized['googleOAuth'] = normalizeGoogleOAuthConfig(normalized['googleOAuth']);
-	normalized['emailGroupingRules'] = normalizeGroupingRulesConfig(normalized['emailGroupingRules']);
-	return normalized as AppConfig;
+	const clientId = value['clientId'];
+	assertOptionalString(clientId, 'config.clientId');
+	return {
+		port: rawPort as number | undefined,
+		clientId: clientId ?? undefined,
+		googleOAuth: normalizeGoogleOAuthConfig(value['googleOAuth']),
+		emailGroupingRules: normalizeGroupingRulesConfig(value['emailGroupingRules']),
+	};
 }
 
 export function normalizeGoogleOAuthSetupDto(value: unknown, defaultRedirectUri: unknown): GoogleOAuthSetupDto {
@@ -216,18 +239,18 @@ export function normalizeThreadSummaryDto(value: unknown): ThreadSummaryDto {
 		assertString(snippet, 'threadSummary.snippet');
 	}
 	const messageIds = value['messageIds'];
-	assertArray(messageIds, 'threadSummary.messageIds');
-	messageIds.forEach((messageId, index) => assertString(messageId, `threadSummary.messageIds[${index}]`));
+	assertStringArray(messageIds, 'threadSummary.messageIds');
 	const labelIds = value['labelIds'];
-	assertArray(labelIds, 'threadSummary.labelIds');
-	labelIds.forEach((labelId, index) => assertString(labelId, `threadSummary.labelIds[${index}]`));
+	assertStringArray(labelIds, 'threadSummary.labelIds');
 	const visibility = value['visibility'];
 	assertString(visibility, 'threadSummary.visibility');
-	assertOneOf(visibility, ['updated', 'visible', 'when-i-have-time', 'hidden', 'stale'], 'threadSummary.visibility');
-	if (typeof value['isWhenIHaveTime'] !== 'boolean') {
+	assertOneOf(visibility, ['updated', 'visible', 'when-i-have-time', 'hidden', 'stale'] as const, 'threadSummary.visibility');
+	const isWhenIHaveTime = value['isWhenIHaveTime'];
+	if (typeof isWhenIHaveTime !== 'boolean') {
 		throw makeValidationError('threadSummary.isWhenIHaveTime must be a boolean');
 	}
-	if (typeof value['needsRefreshing'] !== 'boolean') {
+	const needsRefreshing = value['needsRefreshing'];
+	if (typeof needsRefreshing !== 'boolean') {
 		throw makeValidationError('threadSummary.needsRefreshing must be a boolean');
 	}
 	const totalTimeToReadSeconds = value['totalTimeToReadSeconds'];
@@ -240,12 +263,12 @@ export function normalizeThreadSummaryDto(value: unknown): ThreadSummaryDto {
 		receivers: receivers.map((receiver, index) => normalizePerson(receiver, `threadSummary.receivers[${index}]`)),
 		lastUpdated,
 		subject,
-		snippet: snippet as string | null,
-		messageIds: [...messageIds as string[]],
-		labelIds: [...labelIds as string[]],
-		visibility: visibility as ThreadSummaryDto['visibility'],
-		isWhenIHaveTime: value['isWhenIHaveTime'] as boolean,
-		needsRefreshing: value['needsRefreshing'] as boolean,
+		snippet,
+		messageIds: [...messageIds],
+		labelIds: [...labelIds],
+		visibility,
+		isWhenIHaveTime,
+		needsRefreshing,
 		totalTimeToReadSeconds,
 		recentMessageReadTimeSeconds,
 	};
@@ -253,7 +276,8 @@ export function normalizeThreadSummaryDto(value: unknown): ThreadSummaryDto {
 
 export function normalizeThreadMessageDto(value: unknown): ThreadMessageDto {
 	assertObject(value, 'threadMessage');
-	if (typeof value['deleted'] !== 'boolean') {
+	const deleted = value['deleted'];
+	if (typeof deleted !== 'boolean') {
 		throw makeValidationError('threadMessage.deleted must be a boolean');
 	}
 	const messageId = value['messageId'];
@@ -279,7 +303,7 @@ export function normalizeThreadMessageDto(value: unknown): ThreadMessageDto {
 	const attachments = value['attachments'];
 	assertArray(attachments, 'threadMessage.attachments');
 	return {
-		deleted: value['deleted'] as boolean,
+		deleted,
 		messageId,
 		from: from.map((person, index) => {
 			if (person === null) {

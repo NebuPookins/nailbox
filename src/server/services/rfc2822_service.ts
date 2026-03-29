@@ -187,7 +187,7 @@ export function createRfc2822Service(dependencies: {
 			replyMessage,
 		});
 		const mimeMessage = await buildMimeMessage(mail, logger);
-		return (base64url as any).encode(mimeMessage);
+		return (base64url as unknown as {encode: (input: string | Buffer) => string}).encode(mimeMessage);
 	}
 
 	return {
