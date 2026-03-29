@@ -41,7 +41,7 @@ const buildOptions = {
 	},
 	entryNames: '[name]-[hash]',
 	entryPoints: {
-		'main': path.join(projectRoot, 'src', 'frontend', 'main.js'),
+		'main': path.join(projectRoot, 'src', 'frontend', 'main.ts'),
 	},
 	format: 'iife',
 	logLevel: 'info',

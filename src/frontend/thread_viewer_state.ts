@@ -1,27 +1,26 @@
-// @ts-nocheck
 export function createThreadViewerState() {
-	var currentThreadId = null;
+	var currentThreadId: string | null = null;
 	var currentSubject = '';
 
 	return {
-		clear() {
+		clear(): void {
 			currentThreadId = null;
 			currentSubject = '';
 		},
 
-		getSubject() {
+		getSubject(): string {
 			return currentSubject;
 		},
 
-		getThreadId() {
+		getThreadId(): string | null {
 			return currentThreadId;
 		},
 
-		setSubject(subject) {
+		setSubject(subject?: string): void {
 			currentSubject = subject || '';
 		},
 
-		setThreadId(threadId) {
+		setThreadId(threadId?: string | null): void {
 			currentThreadId = threadId || null;
 		},
 	};

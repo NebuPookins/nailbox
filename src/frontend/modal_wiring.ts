@@ -1,35 +1,29 @@
-// @ts-nocheck
 import { showModal, hideModal } from './native_modal.js';
 
-/**
- * Wires all DOM event handlers to their respective controllers and islands.
- * This is the DOM-to-controller adapter layer; all logic lives in the
- * controllers and islands passed as dependencies.
- *
- * Thread list actions (archive, delete, label, later, open) are handled by
- * the thread list React island and are no longer wired here.
- *
- * Thread viewer actions (reply, delete, archive, label, later, view-on-gmail,
- * download attachment) are handled by the thread viewer React island and are
- * no longer wired here.
- *
- * Auth controls (disconnect, refresh) are handled by the auth shell React
- * island and are no longer wired here.
- *
- * @param {{
- *   threadViewer: Element,
- *   labelPicker: Element,
- *   laterPicker: Element,
- *   settingsBtn: Element,
- *   settingsModal: Element,
- *   threadViewerController: object,
- *   islands: object,
- *   getThreadViewerThreadId: () => string|null,
- *   clearThreadViewerState: () => void,
- *   messengerGetter: () => object,
- *   reportAsyncError: (error: Error) => void,
- * }} deps
- */
+interface MsgHandle {
+	update(opts: { type: string; message: string }): void;
+}
+
+interface Messenger {
+	info(message: string): MsgHandle;
+	error(message: string): MsgHandle;
+}
+
+interface ThreadViewerController {
+	handleKeydown(opts: {
+		event: KeyboardEvent;
+		hideModal(): void;
+		isReplyFocused(): boolean;
+		threadId: string | null;
+	}): Promise<unknown>;
+}
+
+interface Islands {
+	ensureLabelPickerIsland(): { instance: { clear(): void } } | null;
+	ensureLaterPickerIsland(): { instance: { clear(): void } } | null;
+	ensureGroupingRulesIsland(): { instance: { refresh(): void }; wasCreated: boolean } | null;
+}
+
 export function wireModals({
 	threadViewer,
 	labelPicker,
@@ -42,7 +36,19 @@ export function wireModals({
 	clearThreadViewerState,
 	messengerGetter,
 	reportAsyncError,
-}) {
+}: {
+	threadViewer: HTMLElement;
+	labelPicker: HTMLElement;
+	laterPicker: HTMLElement;
+	settingsBtn: HTMLElement;
+	settingsModal: HTMLElement;
+	threadViewerController: ThreadViewerController;
+	islands: Islands;
+	getThreadViewerThreadId(): string | null;
+	clearThreadViewerState(): void;
+	messengerGetter(): Messenger;
+	reportAsyncError(error: unknown): void;
+}): void {
 	threadViewer.addEventListener('keydown', async function(event) {
 		try {
 			await threadViewerController.handleKeydown({

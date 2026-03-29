@@ -1,5 +1,105 @@
-// @ts-nocheck
-function updateMessenger(actionMessenger, type, message) {
+declare const moment: {
+	duration(amount: number, unit: string): { humanize(): string; as(unit: string): number };
+};
+
+interface MsgHandle {
+	update(opts: { type: string; message: string }): void;
+}
+
+interface Messenger {
+	info(message: string): MsgHandle;
+	error(message: string): MsgHandle;
+}
+
+interface ThreadMessage {
+	messageId: string;
+	deleted?: boolean;
+	timeToReadSeconds?: number;
+	wordcount?: number;
+	[key: string]: unknown;
+}
+
+interface RenderedMessage extends ThreadMessage {
+	duration: string;
+}
+
+interface OpenThreadOptions {
+	threadId: string;
+	subject?: string;
+	snippet?: string;
+	sendersText?: string;
+	receiversText?: string;
+	setThreadId(id: string): void;
+	setTitle(title: string): void;
+	setSenders(s: string): void;
+	setReceivers(s: string): void;
+	setThreadsLoadingText(text: string): void;
+	showLoading(): void;
+	showModal(): void;
+	getCurrentThreadId(): string | null;
+	hideLoading(): void;
+	clearThreads(): void;
+	appendDeletedMessages(payload: { num: number; threadId: string }): void;
+	appendMessage(message: RenderedMessage): void;
+}
+
+interface ReplyAllOptions {
+	threadId: string | null;
+	emailAddress?: string | null;
+	body?: string;
+	inReplyTo?: string | null;
+	clearReply(): void;
+	hideModal(): void;
+}
+
+interface DownloadAttachmentOptions {
+	messageId: string;
+	attachmentId: string;
+	attachmentName: string;
+	saveAttachment(blob: Blob, name: string): void;
+}
+
+interface ThreadWithModal {
+	threadId: string | null;
+	hideModal(): void;
+}
+
+interface ShowLaterPickerOptions {
+	threadId?: string | null;
+	subject?: string;
+	hideModal(): void;
+	openLaterPicker(threadId: string, subject: string): unknown;
+}
+
+interface ShowLabelPickerOptions {
+	openLabelPicker(): unknown;
+}
+
+interface ViewOnGmailOptions {
+	threadId?: string | null;
+	openWindow(url: string, target: string): void;
+}
+
+interface HandleKeydownOptions {
+	event: KeyboardEvent;
+	hideModal(): void;
+	isReplyFocused(): boolean;
+	threadId: string | null;
+}
+
+interface ThreadActionController {
+	deleteThread(threadId: string): Promise<{ ok: boolean; reason?: string } | undefined>;
+	archiveThread(threadId: string): Promise<{ ok: boolean; reason?: string } | undefined>;
+}
+
+interface AppApi {
+	buildRfc2822(payload: Record<string, unknown>): Promise<unknown>;
+	sendMessage(payload: { threadId: string; raw: string }): Promise<unknown>;
+	getAttachment(messageId: string, attachmentId: string): Promise<unknown>;
+	updateMessageWordcount(threadId: string, messageId: string, wordcount: number): Promise<unknown>;
+}
+
+function updateMessenger(actionMessenger: MsgHandle | null | undefined, type: string, message: string): void {
 	if (!actionMessenger || typeof actionMessenger.update !== 'function') {
 		return;
 	}
@@ -9,13 +109,13 @@ function updateMessenger(actionMessenger, type, message) {
 	});
 }
 
-export function normalizeBase64AttachmentData(data) {
+export function normalizeBase64AttachmentData(data: string): string {
 	return data.replace(/[-_]/g, function(char) {
 		return char === '-' ? '+' : '/';
 	});
 }
 
-export function createBlobFromBase64Data(b64Data) {
+export function createBlobFromBase64Data(b64Data: string): Blob {
 	var sliceSize = 512;
 	var byteCharacters = atob(b64Data);
 	var byteArrays = [];
@@ -37,9 +137,16 @@ export function createThreadViewerController({
 	onError,
 	onUpdateMessageWordcount,
 	threadActionController,
+}: {
+	appApi: AppApi;
+	getThreadData(threadId: string, attempt: number, messenger: MsgHandle): Promise<{ messages: ThreadMessage[] }>;
+	messengerGetter(): Messenger;
+	onError(error: unknown): void;
+	onUpdateMessageWordcount(threadId: string, messageId: string, wordcount: number | undefined): Promise<unknown>;
+	threadActionController: ThreadActionController;
 }) {
 	return {
-		async openThread(options) {
+		async openThread(options: OpenThreadOptions) {
 			var threadId = options.threadId;
 			var actionMessenger = messengerGetter().info('Downloading thread data for ' + threadId + '...');
 			options.setThreadId(threadId);
@@ -66,9 +173,9 @@ export function createThreadViewerController({
 					});
 				}
 				nonDeletedMessages.forEach(function(message) {
-					var renderedMessage = {
+					var renderedMessage: RenderedMessage = {
 						...message,
-						duration: moment.duration(message.timeToReadSeconds, 'seconds').humanize(),
+						duration: moment.duration(message.timeToReadSeconds ?? 0, 'seconds').humanize(),
 					};
 					options.appendMessage(renderedMessage);
 					onUpdateMessageWordcount(threadId, message.messageId, message.wordcount).catch(onError);
@@ -79,7 +186,7 @@ export function createThreadViewerController({
 			}
 		},
 
-		async replyAll(options) {
+		async replyAll(options: ReplyAllOptions) {
 			var threadId = options.threadId;
 			var actionMessenger = messengerGetter().info('Sending reply to thread ' + threadId + '...');
 			if (!threadId || !options.emailAddress) {
@@ -98,8 +205,8 @@ export function createThreadViewerController({
 				});
 				var resp = await appApi.sendMessage({
 					threadId: threadId,
-					raw: base64EncodedEmail
-				});
+					raw: base64EncodedEmail as string
+				}) as { id?: string };
 				updateMessenger(actionMessenger, 'success', 'Successfully sent message with id ' + resp.id + '.');
 				options.clearReply();
 				options.hideModal();
@@ -116,9 +223,9 @@ export function createThreadViewerController({
 			}
 		},
 
-		async downloadAttachment(options) {
+		async downloadAttachment(options: DownloadAttachmentOptions) {
 			try {
-				var resp = await appApi.getAttachment(options.messageId, options.attachmentId);
+				var resp = await appApi.getAttachment(options.messageId, options.attachmentId) as { data: string };
 				options.saveAttachment(
 					createBlobFromBase64Data(normalizeBase64AttachmentData(resp.data)),
 					options.attachmentName
@@ -132,9 +239,9 @@ export function createThreadViewerController({
 			}
 		},
 
-		async deleteCurrentThread(options) {
+		async deleteCurrentThread(options: ThreadWithModal) {
 			try {
-				var result = await threadActionController.deleteThread(options.threadId);
+				var result = await threadActionController.deleteThread(options.threadId ?? '');
 				if (!result || !result.ok) {
 					return result;
 				}
@@ -149,9 +256,9 @@ export function createThreadViewerController({
 			}
 		},
 
-		async archiveCurrentThread(options) {
+		async archiveCurrentThread(options: ThreadWithModal) {
 			try {
-				var result = await threadActionController.archiveThread(options.threadId);
+				var result = await threadActionController.archiveThread(options.threadId ?? '');
 				if (!result || !result.ok) {
 					return result;
 				}
@@ -166,11 +273,11 @@ export function createThreadViewerController({
 			}
 		},
 
-		showLabelPicker(options) {
+		showLabelPicker(options: ShowLabelPickerOptions) {
 			return options.openLabelPicker();
 		},
 
-		showLaterPicker(options) {
+		showLaterPicker(options: ShowLaterPickerOptions) {
 			if (!options.threadId) {
 				messengerGetter().error('Missing thread id.');
 				return false;
@@ -179,14 +286,14 @@ export function createThreadViewerController({
 			return options.openLaterPicker(options.threadId, options.subject || '');
 		},
 
-		viewOnGmail(options) {
+		viewOnGmail(options: ViewOnGmailOptions) {
 			if (options.threadId) {
 				options.openWindow('https://mail.google.com/mail/u/0/#inbox/' + options.threadId, '_blank');
 			}
 			return false;
 		},
 
-		async handleKeydown(options) {
+		async handleKeydown(options: HandleKeydownOptions) {
 			if (options.isReplyFocused()) {
 				return;
 			}
@@ -194,7 +301,7 @@ export function createThreadViewerController({
 				return;
 			}
 			return this.deleteCurrentThread({
-				threadId: options.threadId,
+				threadId: options.threadId ?? '',
 				hideModal: options.hideModal,
 			});
 		},

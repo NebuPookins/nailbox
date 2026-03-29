@@ -1,5 +1,22 @@
-// @ts-nocheck
-async function readResponseBody(response) {
+export interface ApiError extends Error {
+	code?: string;
+	status: number;
+	responseBody: unknown;
+}
+
+interface RequestOptions {
+	method?: string;
+	accept?: string;
+	body?: string;
+	headers?: Record<string, string>;
+	parseAs?: 'void' | 'text';
+}
+
+interface ApiDeps {
+	onApiError?: (error: ApiError) => void;
+}
+
+async function readResponseBody(response: Response): Promise<unknown> {
 	const contentType = response.headers.get('content-type') || '';
 	if (contentType.includes('application/json')) {
 		try {
@@ -15,42 +32,44 @@ async function readResponseBody(response) {
 	}
 }
 
-function buildApiError(response, responseBody) {
+function buildApiError(response: Response, responseBody: unknown): ApiError {
+	const body = responseBody as Record<string, unknown>;
 	const humanErrorMessage = responseBody && typeof responseBody === 'object'
-		? responseBody.humanErrorMessage
+		? body.humanErrorMessage
 		: null;
 	const responseMessage = responseBody && typeof responseBody === 'object'
-		? responseBody.message
+		? body.message
 		: null;
 	const textBody = typeof responseBody === 'string' ? responseBody : null;
 	const error = new Error(
-		humanErrorMessage ||
-		responseMessage ||
+		(humanErrorMessage as string | null) ||
+		(responseMessage as string | null) ||
 		textBody ||
 		response.statusText ||
 		`Request failed with status ${response.status}`
-	);
-	if (responseBody && typeof responseBody === 'object' && typeof responseBody.code === 'string') {
-		error.code = responseBody.code;
+	) as ApiError;
+	if (responseBody && typeof responseBody === 'object' && typeof body.code === 'string') {
+		error.code = body.code;
 	}
 	error.status = response.status;
 	error.responseBody = responseBody;
 	return error;
 }
 
-async function request(url, options = {}, dependencies = {}) {
+async function request(url: string, options: RequestOptions = {}, dependencies: ApiDeps = {}): Promise<unknown> {
 	const { onApiError } = dependencies;
-	const headers = {
-		...options.headers,
+	const { accept, parseAs, ...fetchOptions } = options;
+	const headers: Record<string, string> = {
+		...fetchOptions.headers,
 	};
-	if (options.accept) {
-		headers.Accept = options.accept;
+	if (accept) {
+		headers.Accept = accept;
 	}
-	if (options.body && !headers['Content-Type']) {
+	if (fetchOptions.body && !headers['Content-Type']) {
 		headers['Content-Type'] = 'application/json';
 	}
 	const response = await fetch(url, {
-		...options,
+		...fetchOptions,
 		headers,
 	});
 	const responseBody = await readResponseBody(response);
@@ -59,27 +78,27 @@ async function request(url, options = {}, dependencies = {}) {
 		onApiError?.(error);
 		throw error;
 	}
-	if (options.parseAs === 'void' || response.status === 204) {
+	if (parseAs === 'void' || response.status === 204) {
 		return undefined;
 	}
-	if (options.parseAs === 'text') {
+	if (parseAs === 'text') {
 		return typeof responseBody === 'string' ? responseBody : '';
 	}
 	return responseBody;
 }
 
-export async function fetchJson(url, options = {}) {
+export async function fetchJson(url: string, options: RequestOptions = {}): Promise<unknown> {
 	return request(url, options);
 }
 
-export function createAppApi(dependencies = {}) {
+export function createAppApi(dependencies: ApiDeps = {}) {
 	return {
-		archiveThread(threadId) {
+		archiveThread(threadId: string) {
 			return request(`/api/threads/${threadId}/archive`, {
 				method: 'POST',
 			}, dependencies);
 		},
-		buildRfc2822(payload) {
+		buildRfc2822(payload: Record<string, unknown>) {
 			return request('/api/rfc2822', {
 				accept: 'text/plain',
 				body: JSON.stringify(payload),
@@ -87,7 +106,7 @@ export function createAppApi(dependencies = {}) {
 				parseAs: 'text',
 			}, dependencies);
 		},
-		deleteThread(threadId) {
+		deleteThread(threadId: string) {
 			return request(`/api/threads/${threadId}/trash`, {
 				method: 'POST',
 			}, dependencies);
@@ -98,17 +117,17 @@ export function createAppApi(dependencies = {}) {
 				parseAs: 'void',
 			}, dependencies);
 		},
-		getAttachment(messageId, attachmentId) {
+		getAttachment(messageId: string, attachmentId: string) {
 			return request(`/api/threads/messages/${messageId}/attachments/${attachmentId}`, {
 				method: 'GET',
 			}, dependencies);
 		},
-		getThreadData(threadId) {
+		getThreadData(threadId: string) {
 			return request(`/api/threads/${threadId}/messages`, {
 				method: 'GET',
 			}, dependencies);
 		},
-		hideThread(threadId, hideUntil) {
+		hideThread(threadId: string, hideUntil: unknown) {
 			return request(`/api/threads/${threadId}/hideUntil`, {
 				body: JSON.stringify(hideUntil),
 				method: 'PUT',
@@ -129,18 +148,18 @@ export function createAppApi(dependencies = {}) {
 				method: 'GET',
 			}, dependencies);
 		},
-		moveThreadToLabel(threadId, labelId) {
+		moveThreadToLabel(threadId: string, labelId: string) {
 			return request(`/api/threads/${threadId}/move`, {
 				body: JSON.stringify({labelId}),
 				method: 'POST',
 			}, dependencies);
 		},
-		refreshThread(threadId) {
+		refreshThread(threadId: string) {
 			return request(`/api/threads/${threadId}/refresh`, {
 				method: 'POST',
 			}, dependencies);
 		},
-		sendMessage(payload) {
+		sendMessage(payload: { threadId: string; raw: string }) {
 			return request('/api/threads/messages/send', {
 				body: JSON.stringify(payload),
 				method: 'POST',
@@ -151,7 +170,7 @@ export function createAppApi(dependencies = {}) {
 				method: 'POST',
 			}, dependencies);
 		},
-		updateMessageWordcount(threadId, messageId, wordcount) {
+		updateMessageWordcount(threadId: string, messageId: string, wordcount: number) {
 			return request(`/api/threads/${threadId}/messages/${messageId}/wordcount`, {
 				body: JSON.stringify({wordcount}),
 				method: 'POST',
@@ -161,14 +180,14 @@ export function createAppApi(dependencies = {}) {
 	};
 }
 
-export function createGroupingRulesApi(dependencies = {}) {
+export function createGroupingRulesApi(dependencies: ApiDeps = {}) {
 	return {
 		loadRules() {
 			return request('/api/email-grouping-rules', {
 				method: 'GET',
 			}, dependencies);
 		},
-		saveRules(payload) {
+		saveRules(payload: unknown) {
 			return request('/api/email-grouping-rules', {
 				body: JSON.stringify(payload),
 				method: 'POST',

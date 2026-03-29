@@ -1,31 +1,71 @@
-// @ts-nocheck
 import { filterSelectableLabels } from './thread_action_controller.js';
 
-/**
- * Manages lazy initialization and caching of React island instances.
- *
- * @param {{
- *   frontendApi: object,
- *   groupingRulesRoot: Element|null,
- *   labelPickerRoot: Element|null,
- *   laterPickerRoot: Element|null,
- *   threadListRoot: Element|null,
- *   hideSettingsModal: () => void,
- *   hideLabelPicker: () => void,
- *   hideLaterPicker: () => void,
- *   threadActionController: object,
- *   getLabels: () => Array,
- *   deleteThreadFromUI: (threadId: string) => void,
- *   updateUiWithThreadsFromServer: (messenger: object) => Promise,
- *   messengerGetter: () => object,
- *   reportAsyncError: (error: Error) => void,
- *   onArchiveThread: (threadId: string) => void,
- *   onDeleteThread: (threadId: string) => void,
- *   onOpenLaterPickerForThread: (threadSummary: object) => void,
- *   onOpenLabelPickerForThread: (threadSummary: object) => void,
- *   onOpenThread: (threadSummary: object) => void,
- * }} deps
- */
+interface LabelData {
+	id: string;
+	name?: string;
+	type?: string;
+	labelListVisibility?: string;
+	hue?: number;
+}
+
+interface MsgHandle {
+	update(opts: { type: string; message: string }): void;
+}
+
+interface Messenger {
+	info(message: string): MsgHandle;
+	error(message: string): void;
+}
+
+interface ThreadActionController {
+	moveThreadToLabel(threadId: string, labelId: string): Promise<{ ok: boolean } | undefined>;
+}
+
+interface GroupingRulesIsland {
+	refresh(): void;
+}
+
+interface LaterPickerIsland {
+	open(opts: { onHideThread: (threadId: string, hideUntil: { type: string; value?: number }) => Promise<unknown>; threadId: string }): void;
+	clear(): void;
+}
+
+interface LabelPickerIsland {
+	open(opts: { labels?: LabelData[]; threadId?: string | null }): void;
+	setLabels(labels: LabelData[]): void;
+	clear(): void;
+}
+
+interface ThreadListIsland {
+	setGroups(groups: unknown[]): void;
+	setLabels(labels: unknown[]): void;
+	removeThread(id: string): void;
+}
+
+interface IslandState<T> {
+	instance: T;
+	wasCreated: boolean;
+}
+
+interface GroupingRulesNotify {
+	error?: (msg: string) => void;
+	success?: (msg: string) => void;
+}
+
+interface FrontendApi {
+	mountGroupingRulesSettings?(opts: { container: Element; notify?: GroupingRulesNotify; onSaved?: () => void }): GroupingRulesIsland;
+	mountLaterPickerIsland?(opts: { container: Element; notify?: unknown; onDismiss?: () => void; onHidden?: (id: string) => void }): LaterPickerIsland;
+	mountLabelPickerIsland?(opts: { container: Element; notify?: unknown; onDismiss?: () => void; onMoveThread?: (threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined> }): LabelPickerIsland;
+	mountThreadListIsland?(opts: {
+		container: Element;
+		onArchive: (id: string) => void;
+		onDelete: (id: string) => void;
+		onOpenLaterPicker: (summary: unknown) => void;
+		onOpenLabelPicker: (summary: unknown) => void;
+		onOpenThread: (summary: unknown) => void;
+	}): ThreadListIsland;
+}
+
 export function createIslandManager({
 	frontendApi,
 	groupingRulesRoot,
@@ -46,13 +86,33 @@ export function createIslandManager({
 	onOpenLaterPickerForThread,
 	onOpenLabelPickerForThread,
 	onOpenThread,
+}: {
+	frontendApi: FrontendApi;
+	groupingRulesRoot: Element | null;
+	labelPickerRoot: Element | null;
+	laterPickerRoot: Element | null;
+	threadListRoot: Element | null;
+	hideSettingsModal(): void;
+	hideLabelPicker(): void;
+	hideLaterPicker(): void;
+	threadActionController: ThreadActionController;
+	getLabels(): LabelData[];
+	deleteThreadFromUI(threadId: string): void;
+	updateUiWithThreadsFromServer(messenger: unknown): Promise<unknown>;
+	messengerGetter(): Messenger;
+	reportAsyncError(error: unknown): void;
+	onArchiveThread(threadId: string): void;
+	onDeleteThread(threadId: string): void;
+	onOpenLaterPickerForThread(threadSummary: unknown): void;
+	onOpenLabelPickerForThread(threadSummary: unknown): void;
+	onOpenThread(threadSummary: unknown): void;
 }) {
-	var groupingRulesIsland = null;
-	var labelPickerIsland = null;
-	var laterPickerIsland = null;
-	var threadListIsland = null;
+	let groupingRulesIsland: GroupingRulesIsland | null = null;
+	let labelPickerIsland: LabelPickerIsland | null = null;
+	let laterPickerIsland: LaterPickerIsland | null = null;
+	let threadListIsland: ThreadListIsland | null = null;
 
-	function buildLabelPickerLabels() {
+	function buildLabelPickerLabels(): LabelData[] {
 		return filterSelectableLabels(getLabels()).map(function(label) {
 			return {
 				...label,
@@ -63,10 +123,10 @@ export function createIslandManager({
 
 	function createGroupingRulesNotify() {
 		return {
-			error: function(message) {
+			error: function(message: string) {
 				messengerGetter().error(message);
 			},
-			success: function(message) {
+			success: function(message: string) {
 				messengerGetter().info(message).update({
 					type: 'success',
 					message: message
@@ -77,7 +137,7 @@ export function createIslandManager({
 
 	function createLaterPickerNotify() {
 		return {
-			error: function(message) {
+			error: function(message: string) {
 				messengerGetter().error(message);
 			}
 		};
@@ -85,13 +145,13 @@ export function createIslandManager({
 
 	function createLabelPickerNotify() {
 		return {
-			error: function(message) {
+			error: function(message: string) {
 				messengerGetter().error(message);
 			}
 		};
 	}
 
-	function ensureGroupingRulesIsland() {
+	function ensureGroupingRulesIsland(): IslandState<GroupingRulesIsland> | null {
 		if (groupingRulesIsland) {
 			return {
 				instance: groupingRulesIsland,
@@ -120,7 +180,7 @@ export function createIslandManager({
 		};
 	}
 
-	function ensureLaterPickerIsland() {
+	function ensureLaterPickerIsland(): IslandState<LaterPickerIsland> | null {
 		if (laterPickerIsland) {
 			return {
 				instance: laterPickerIsland,
@@ -147,7 +207,7 @@ export function createIslandManager({
 		};
 	}
 
-	function ensureLabelPickerIsland() {
+	function ensureLabelPickerIsland(): IslandState<LabelPickerIsland> | null {
 		if (labelPickerIsland) {
 			return {
 				instance: labelPickerIsland,
@@ -174,7 +234,7 @@ export function createIslandManager({
 		};
 	}
 
-	function ensureThreadListIsland() {
+	function ensureThreadListIsland(): IslandState<ThreadListIsland> | null {
 		if (threadListIsland) {
 			return {
 				instance: threadListIsland,

@@ -1,5 +1,12 @@
-// @ts-nocheck
-function escapeHtml(value) {
+type MomentLib = (ts?: unknown) => { isSame(other: unknown, unit: string): boolean; format(fmt: string): string };
+
+interface Label { id: string; name?: string; type?: string; }
+interface Person { name?: string; email?: string; }
+interface ThreadData { threadId?: string; visibility?: string; senders?: Person[]; receivers?: Person[]; subject?: string; snippet?: string | null; labelIds?: string[]; messageIds?: unknown[]; lastUpdated?: unknown; totalTimeToReadSeconds?: number; recentMessageReadTimeSeconds?: number; }
+interface ThreadGroup { label?: string; }
+interface RenderThreadItemOptions { labels?: Label[]; momentLib?: MomentLib; }
+
+function escapeHtml(value: unknown): string {
 	return String(value ?? '')
 		.replace(/&/g, '&amp;')
 		.replace(/</g, '&lt;')
@@ -8,7 +15,7 @@ function escapeHtml(value) {
 		.replace(/'/g, '&#39;');
 }
 
-export function formatPrettyTimestamp(timestamp, momentLib = globalThis.moment) {
+export function formatPrettyTimestamp(timestamp: unknown, momentLib: MomentLib | undefined = (globalThis as Record<string, unknown>).moment as MomentLib | undefined): string {
 	if (!momentLib || typeof momentLib !== 'function') {
 		return escapeHtml(timestamp);
 	}
@@ -26,7 +33,7 @@ export function formatPrettyTimestamp(timestamp, momentLib = globalThis.moment) 
 	return momentToFormat.format('YYYY-MMM-DD');
 }
 
-export function formatReadTime(totalSeconds) {
+export function formatReadTime(totalSeconds: number): string {
 	if (typeof totalSeconds !== 'number' || totalSeconds < 0) {
 		return '';
 	}
@@ -43,7 +50,7 @@ export function formatReadTime(totalSeconds) {
 	return minutes + ' min read';
 }
 
-export function getThreadMainDisplayedLabelIds(thread) {
+export function getThreadMainDisplayedLabelIds(thread: ThreadData): string[] {
 	return (thread.labelIds || []).filter(function(labelId) {
 		return labelId !== 'INBOX' &&
 			labelId !== 'UNREAD' &&
@@ -52,7 +59,7 @@ export function getThreadMainDisplayedLabelIds(thread) {
 	});
 }
 
-export function getLabelName(labelId, labels) {
+export function getLabelName(labelId: string, labels: Label[]): string | undefined {
 	var labelObj = (labels || []).find(function(label) {
 		return label.id === labelId;
 	});
@@ -66,13 +73,13 @@ export function getLabelName(labelId, labels) {
 	return labelObj.name;
 }
 
-function renderParticipants(people) {
+function renderParticipants(people: Person[] | undefined): string {
 	return (people || []).map(function(person) {
 		return person && person.name ? person.name : '';
 	}).filter(Boolean).join(' ');
 }
 
-function renderPrimaryPerson(person) {
+function renderPrimaryPerson(person: Person | undefined): string {
 	if (!person) {
 		return '';
 	}
@@ -90,7 +97,7 @@ function renderPrimaryPerson(person) {
 	return name + ' (' + email + ')';
 }
 
-function renderCountSuffix(items, subtractAmount) {
+function renderCountSuffix(items: unknown[] | undefined, subtractAmount: number): string {
 	var count = Math.max((items || []).length - subtractAmount, 0);
 	if (count <= 0) {
 		return '';
@@ -98,7 +105,7 @@ function renderCountSuffix(items, subtractAmount) {
 	return ' (and ' + count + ' more)';
 }
 
-export function renderThreadItem(thread, options = {}) {
+export function renderThreadItem(thread: ThreadData, options: RenderThreadItemOptions = {}): string {
 	var labels = options.labels || [];
 	var mainDisplayedLabelIds = getThreadMainDisplayedLabelIds(thread);
 	var senders = Array.isArray(thread.senders) ? thread.senders : [];
@@ -145,10 +152,10 @@ export function renderThreadItem(thread, options = {}) {
 				'</div>' +
 				'<div class="col-xs-2">' +
 					'<small>Total:</small>' +
-					'<span class="glyphicon glyphicon-time"></span> ' + escapeHtml(formatReadTime(thread.totalTimeToReadSeconds)) +
+					'<span class="glyphicon glyphicon-time"></span> ' + escapeHtml(formatReadTime(thread.totalTimeToReadSeconds ?? 0)) +
 					'<br>' +
 					'<small>Recent:</small>' +
-					'<span class="glyphicon glyphicon-time"></span> ' + escapeHtml(formatReadTime(thread.recentMessageReadTimeSeconds)) +
+					'<span class="glyphicon glyphicon-time"></span> ' + escapeHtml(formatReadTime(thread.recentMessageReadTimeSeconds ?? 0)) +
 					'<br>' +
 					'<button class="btn btn-xs btn-success archive-thread" title="Done">' +
 						'<span class="glyphicon glyphicon-ok"></span>' +
@@ -171,6 +178,6 @@ export function renderThreadItem(thread, options = {}) {
 	);
 }
 
-export function renderThreadGroup(group) {
+export function renderThreadGroup(group: ThreadGroup): string {
 	return '<div class="group">' + escapeHtml(group.label || '') + '</div>';
 }
