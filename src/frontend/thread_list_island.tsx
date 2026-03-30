@@ -33,6 +33,8 @@ interface BundleSummary {
 	threadIds: string[];
 	senders: Person[];
 	lastUpdated: number;
+	subject?: string;
+	snippet?: string | null;
 	visibility: string;
 	threadCount: number;
 	memberThreads?: ThreadSummary[];
@@ -316,7 +318,8 @@ function BundleRow({ bundle, isExpanded, isRemoving, children, onArchive, onEdit
 			</div>
 			<div className="row">
 				<div className="col-xs-10">
-					<em style={{color: '#888'}}>Bundle &mdash; click to {isExpanded ? 'collapse' : 'expand'}</em>
+					{bundle.subject ? <strong className="subject">{bundle.subject}</strong> : null}
+					{bundle.snippet ? <p className="snippet">{bundle.snippet}</p> : null}
 				</div>
 				<div className="col-xs-2">
 					<button
