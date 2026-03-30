@@ -350,7 +350,7 @@ function BundleRow({ bundle, isExpanded, isRemoving, children, onArchive, onEdit
 				</div>
 			</div>
 			{isExpanded && children ? (
-				<div className="bundle-expanded-threads" style={{borderTop: '1px solid #ddd', marginTop: '4px'}}>
+				<div className="bundle-expanded-threads" style={{borderTop: '1px solid #ddd', borderLeft: '3px solid #aaa', marginTop: '4px', marginLeft: '16px', paddingLeft: '12px'}}>
 					{children}
 				</div>
 			) : null}
