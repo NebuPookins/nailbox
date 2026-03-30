@@ -34,7 +34,8 @@ export function buildBundleSummary(bundle: BundleDto, memberThreads: ThreadSumma
 		seenEmails.add(s.email);
 		return true;
 	});
-	const lastUpdated = memberThreads.reduce((max, t) => Math.max(max, t.lastUpdated), 0);
+	const latestThread = memberThreads.reduce((latest, t) => t.lastUpdated > latest.lastUpdated ? t : latest, memberThreads[0]);
+	const lastUpdated = latestThread.lastUpdated;
 	const visibility = computeBundleVisibility(memberThreads);
 	return {
 		type: 'bundle',
@@ -42,6 +43,8 @@ export function buildBundleSummary(bundle: BundleDto, memberThreads: ThreadSumma
 		threadIds: bundle.threadIds,
 		senders: dedupedSenders,
 		lastUpdated,
+		subject: latestThread.subject,
+		snippet: latestThread.snippet,
 		visibility,
 		isWhenIHaveTime: visibility === 'when-i-have-time',
 		threadCount: memberThreads.length,

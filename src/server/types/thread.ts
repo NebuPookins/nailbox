@@ -63,6 +63,8 @@ export interface BundleSummaryDto {
 	threadIds: string[];
 	senders: PersonDto[];
 	lastUpdated: number;
+	subject: string;
+	snippet: string | null;
 	visibility: ThreadSummaryDto['visibility'];
 	isWhenIHaveTime: boolean;
 	threadCount: number;
