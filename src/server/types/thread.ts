@@ -41,6 +41,7 @@ export interface WordcountUpdateDto {
 }
 
 export interface ThreadSummaryDto {
+	type: 'thread';
 	threadId: string;
 	senders: PersonDto[];
 	receivers: PersonDto[];
@@ -55,6 +56,20 @@ export interface ThreadSummaryDto {
 	totalTimeToReadSeconds: number;
 	recentMessageReadTimeSeconds: number;
 }
+
+export interface BundleSummaryDto {
+	type: 'bundle';
+	bundleId: string;
+	threadIds: string[];
+	senders: PersonDto[];
+	lastUpdated: number;
+	visibility: ThreadSummaryDto['visibility'];
+	isWhenIHaveTime: boolean;
+	threadCount: number;
+	memberThreads: ThreadSummaryDto[];
+}
+
+export type ThreadRowItem = ThreadSummaryDto | BundleSummaryDto;
 
 export interface ThreadMessageDto {
 	deleted: boolean;
@@ -79,6 +94,7 @@ export interface ThreadMessageDto {
 export interface ThreadGroupDto {
 	label: string;
 	threads: ThreadSummaryDto[];
+	items: ThreadRowItem[];
 	sortType: 'mostRecent' | 'shortest';
 }
 

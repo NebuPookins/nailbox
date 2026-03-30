@@ -18,8 +18,8 @@ interface Notify {
 }
 
 interface LaterPickerState {
-	onHideThread: ((threadId: string, hideUntil: HideUntilValue) => Promise<unknown>) | null;
-	threadId: string | null;
+	onHide: ((targetId: string, hideUntil: HideUntilValue) => Promise<unknown>) | null;
+	targetId: string | null;
 }
 
 function chunkPresetOptions(options: LaterPresetOption[], chunkSize: number): LaterPresetOption[][] {
@@ -39,11 +39,11 @@ interface LaterPickerAppProps {
 
 function LaterPickerApp({ notify, onDismiss, onHidden, state }: LaterPickerAppProps) {
 	const [pendingPreset, setPendingPreset] = useState('');
-	const hasThread = Boolean(state.threadId);
+	const hasTarget = Boolean(state.targetId);
 
 	async function handlePresetClick(presetValue: string) {
-		if (!hasThread) {
-			notify?.error?.('Tried to hide thread, but no threadId was found.');
+		if (!hasTarget) {
+			notify?.error?.('Tried to hide thread, but no target was found.');
 			return;
 		}
 		const hideUntil = resolveHideUntilPreset(presetValue) as HideUntilValue | null;
@@ -53,8 +53,8 @@ function LaterPickerApp({ notify, onDismiss, onHidden, state }: LaterPickerAppPr
 		}
 		setPendingPreset(presetValue);
 		try {
-			await Promise.resolve(state.onHideThread?.(state.threadId as string, hideUntil));
-			onHidden?.(state.threadId as string);
+			await Promise.resolve(state.onHide?.(state.targetId as string, hideUntil));
+			onHidden?.(state.targetId as string);
 			onDismiss?.();
 		} catch (error: unknown) {
 			const message = error instanceof Error && error.message
@@ -76,7 +76,7 @@ function LaterPickerApp({ notify, onDismiss, onHidden, state }: LaterPickerAppPr
 						<div className="col-xs-4" key={option.value}>
 							<button
 								className="button btn btn-default"
-								disabled={!hasThread || pendingPreset.length > 0}
+								disabled={!hasTarget || pendingPreset.length > 0}
 								onClick={() => handlePresetClick(option.value)}
 								type="button"
 							>
@@ -103,8 +103,8 @@ interface MountLaterPickerIslandDeps {
 export function mountLaterPickerIsland({ container, notify, onDismiss, onHidden }: MountLaterPickerIslandDeps) {
 	const root = createRoot(container);
 	const state: LaterPickerState = {
-		onHideThread: null,
-		threadId: null,
+		onHide: null,
+		targetId: null,
 	};
 
 	function renderApp() {
@@ -122,13 +122,18 @@ export function mountLaterPickerIsland({ container, notify, onDismiss, onHidden 
 
 	return {
 		clear() {
-			state.onHideThread = null;
-			state.threadId = null;
+			state.onHide = null;
+			state.targetId = null;
 			renderApp();
 		},
 		open({ onHideThread, threadId }: { onHideThread: (threadId: string, hideUntil: HideUntilValue) => Promise<unknown>; threadId: string }) {
-			state.onHideThread = onHideThread;
-			state.threadId = threadId;
+			state.onHide = onHideThread;
+			state.targetId = threadId;
+			renderApp();
+		},
+		openForBundle({ bundleId, onHideBundle }: { bundleId: string; onHideBundle: (bundleId: string, hideUntil: HideUntilValue) => Promise<unknown> }) {
+			state.onHide = onHideBundle;
+			state.targetId = bundleId;
 			renderApp();
 		},
 		unmount() {

@@ -93,9 +93,38 @@ export async function fetchJson(url: string, options: RequestOptions = {}): Prom
 
 export function createAppApi(dependencies: ApiDeps = {}) {
 	return {
+		archiveBundle(bundleId: string) {
+			return request(`/api/bundles/${bundleId}/archive`, {
+				method: 'POST',
+			}, dependencies);
+		},
 		archiveThread(threadId: string) {
 			return request(`/api/threads/${threadId}/archive`, {
 				method: 'POST',
+			}, dependencies);
+		},
+		createBundle(threadIds: string[]) {
+			return request('/api/bundles', {
+				body: JSON.stringify({threadIds}),
+				method: 'POST',
+			}, dependencies);
+		},
+		deleteBundle(bundleId: string) {
+			return request(`/api/bundles/${bundleId}`, {
+				method: 'DELETE',
+				parseAs: 'void',
+			}, dependencies);
+		},
+		updateBundle(bundleId: string, threadIds: string[]) {
+			return request(`/api/bundles/${bundleId}`, {
+				body: JSON.stringify({threadIds}),
+				method: 'PUT',
+			}, dependencies);
+		},
+		hideBundle(bundleId: string, hideUntil: unknown) {
+			return request(`/api/bundles/${bundleId}/hideUntil`, {
+				body: JSON.stringify(hideUntil),
+				method: 'PUT',
 			}, dependencies);
 		},
 		buildRfc2822(payload: Record<string, unknown>) {

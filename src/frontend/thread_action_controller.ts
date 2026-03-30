@@ -19,6 +19,8 @@ interface AppApi {
 	archiveThread(threadId: string): Promise<unknown>;
 	deleteThread(threadId: string): Promise<unknown>;
 	moveThreadToLabel(threadId: string, labelId: string): Promise<unknown>;
+	archiveBundle(bundleId: string): Promise<unknown>;
+	deleteBundle(bundleId: string): Promise<unknown>;
 }
 
 export interface ActionResult {
@@ -84,10 +86,12 @@ export function createThreadActionController({
 	appApi,
 	messengerGetter,
 	onThreadRemoved,
+	onBundleRemoved,
 }: {
 	appApi: AppApi;
 	messengerGetter: () => Messenger;
 	onThreadRemoved?: (threadId: string) => void;
+	onBundleRemoved?: (bundleId: string) => void;
 }) {
 	async function runThreadAction({
 		threadId,
@@ -112,6 +116,28 @@ export function createThreadActionController({
 		};
 	}
 
+	async function runBundleAction({
+		bundleId,
+		startMessage,
+		successMessage,
+		request,
+	}: {
+		bundleId: string;
+		startMessage: string;
+		successMessage: string;
+		request: () => Promise<unknown>;
+	}): Promise<ActionResult> {
+		const actionMessenger = createActionMessenger(messengerGetter, startMessage);
+		if (!bundleId) {
+			updateMessenger(actionMessenger, 'error', 'Missing bundle id.');
+			return {ok: false, reason: 'missing-bundle-id'};
+		}
+		await request();
+		onBundleRemoved?.(bundleId);
+		updateMessenger(actionMessenger, 'success', successMessage);
+		return {ok: true};
+	}
+
 	return {
 		archiveThread(threadId: string) {
 			return runThreadAction({
@@ -127,6 +153,22 @@ export function createThreadActionController({
 				startMessage: `Deleting thread ${threadId}...`,
 				successMessage: `Successfully deleted message ${threadId}`,
 				request: () => appApi.deleteThread(threadId),
+			});
+		},
+		archiveBundle(bundleId: string) {
+			return runBundleAction({
+				bundleId,
+				startMessage: `Archiving bundle ${bundleId}...`,
+				successMessage: `Successfully archived bundle.`,
+				request: () => appApi.archiveBundle(bundleId),
+			});
+		},
+		deleteBundle(bundleId: string) {
+			return runBundleAction({
+				bundleId,
+				startMessage: `Ungrouping bundle ${bundleId}...`,
+				successMessage: `Bundle ungrouped.`,
+				request: () => appApi.deleteBundle(bundleId),
 			});
 		},
 		moveThreadToLabel(threadId: string, labelId: string) {

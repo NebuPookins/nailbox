@@ -27,6 +27,7 @@ interface GroupingRulesIsland {
 
 interface LaterPickerIsland {
 	open(opts: { onHideThread: (threadId: string, hideUntil: { type: string; value?: number }) => Promise<unknown>; threadId: string }): void;
+	openForBundle(opts: { bundleId: string; onHideBundle: (bundleId: string, hideUntil: { type: string; value?: number }) => Promise<unknown> }): void;
 	clear(): void;
 }
 
@@ -40,6 +41,7 @@ interface ThreadListIsland {
 	setGroups(groups: unknown[]): void;
 	setLabels(labels: unknown[]): void;
 	removeThread(id: string): void;
+	removeBundleRow(bundleId: string): void;
 }
 
 interface IslandState<T> {
@@ -63,6 +65,11 @@ interface FrontendApi {
 		onOpenLaterPicker: (summary: unknown) => void;
 		onOpenLabelPicker: (summary: unknown) => void;
 		onOpenThread: (summary: unknown) => void;
+		onCreateBundle: (threadIds: string[]) => void;
+		onEditBundle: (bundleId: string, threadIds: string[]) => void;
+		onArchiveBundle: (bundleId: string) => void;
+		onOpenLaterPickerForBundle: (summary: unknown) => void;
+		onUngroup: (bundleId: string) => void;
 	}): ThreadListIsland;
 }
 
@@ -86,6 +93,11 @@ export function createIslandManager({
 	onOpenLaterPickerForThread,
 	onOpenLabelPickerForThread,
 	onOpenThread,
+	onCreateBundle,
+	onEditBundle,
+	onArchiveBundle,
+	onOpenLaterPickerForBundle,
+	onUngroup,
 }: {
 	frontendApi: FrontendApi;
 	groupingRulesRoot: Element | null;
@@ -106,6 +118,11 @@ export function createIslandManager({
 	onOpenLaterPickerForThread(threadSummary: unknown): void;
 	onOpenLabelPickerForThread(threadSummary: unknown): void;
 	onOpenThread(threadSummary: unknown): void;
+	onCreateBundle(threadIds: string[]): void;
+	onEditBundle(bundleId: string, threadIds: string[]): void;
+	onArchiveBundle(bundleId: string): void;
+	onOpenLaterPickerForBundle(bundleSummary: unknown): void;
+	onUngroup(bundleId: string): void;
 }) {
 	let groupingRulesIsland: GroupingRulesIsland | null = null;
 	let labelPickerIsland: LabelPickerIsland | null = null;
@@ -254,6 +271,11 @@ export function createIslandManager({
 			onOpenLaterPicker: onOpenLaterPickerForThread,
 			onOpenLabelPicker: onOpenLabelPickerForThread,
 			onOpenThread: onOpenThread,
+			onCreateBundle: onCreateBundle,
+			onEditBundle: onEditBundle,
+			onArchiveBundle: onArchiveBundle,
+			onOpenLaterPickerForBundle: onOpenLaterPickerForBundle,
+			onUngroup: onUngroup,
 		});
 		return {
 			instance: threadListIsland,

@@ -193,12 +193,15 @@ document.addEventListener('DOMContentLoaded', function() {
 			message: 'Downloading threads from local cache...'
 		});
 		try {
-			var groupsOfThreads = await appApi.loadGroupedThreads() as Array<{ threads: Array<{ threadId?: string; needsRefreshing?: boolean }> }>;
+			var groupsOfThreads = await appApi.loadGroupedThreads() as Array<{ threads: Array<{ threadId?: string; needsRefreshing?: boolean }>; items?: Array<{ type?: string; threadId?: string; needsRefreshing?: boolean }> }>;
 			authShellIsland.setIdle();
 			groupsOfThreads.forEach(function(group) {
-				group.threads.forEach(function(thread) {
-					if (thread.needsRefreshing) {
-						refreshThreadFromGoogle(thread.threadId ?? '');
+				const itemsToCheck: Array<{ type?: string; threadId?: string; needsRefreshing?: boolean }> = group.items
+					? group.items
+					: group.threads;
+				itemsToCheck.forEach(function(item) {
+					if (item.type !== 'bundle' && item.needsRefreshing) {
+						refreshThreadFromGoogle(item.threadId ?? '');
 					}
 				});
 			});
@@ -271,15 +274,53 @@ document.addEventListener('DOMContentLoaded', function() {
 		return false;
 	}
 
+	function showLaterPickerForBundle(bundleId: string): boolean {
+		var islandState = islands.ensureLaterPickerIsland();
+		if (!bundleId) {
+			messengerGetter().error('Missing bundle id.');
+			return false;
+		}
+		if (!islandState) {
+			messengerGetter().error('Failed to load later picker');
+			return false;
+		}
+		laterPicker.querySelector('.modal-title')!.textContent = 'Bundle';
+		islandState.instance.openForBundle({
+			bundleId: bundleId,
+			onHideBundle: async function(selectedBundleId: string, hideUntil: { type: string; value?: number }) {
+				var updateMsg = messengerGetter().info('Hiding bundle ' + selectedBundleId + '.');
+				await appApi.hideBundle(selectedBundleId, hideUntil);
+				var threadListIslandState = islands.ensureThreadListIsland();
+				if (threadListIslandState) {
+					threadListIslandState.instance.removeBundleRow(selectedBundleId);
+				}
+				updateMsg.update({
+					type: 'success',
+					message: 'Bundle hidden.'
+				});
+			},
+		});
+		showModal(laterPicker);
+		return false;
+	}
+
 	var appApi = frontendApi.createAppApi({
 		onApiError: function(error) {
 			handleApiError(error as AppError, error && error.message);
 		}
 	});
+	function deleteBundleFromUI(bundleId: string): void {
+		var islandState = islands.ensureThreadListIsland();
+		if (islandState) {
+			islandState.instance.removeBundleRow(bundleId);
+		}
+	}
+
 	var threadActionController = createThreadActionController({
 		appApi: appApi,
 		messengerGetter: messengerGetter,
-		onThreadRemoved: deleteThreadFromUI
+		onThreadRemoved: deleteThreadFromUI,
+		onBundleRemoved: deleteBundleFromUI,
 	});
 	var islands = createIslandManager({
 		frontendApi: frontendApi,
@@ -301,6 +342,32 @@ document.addEventListener('DOMContentLoaded', function() {
 		onOpenLaterPickerForThread: function(threadSummary) { threadListController.openLaterPicker(threadSummary as { threadId?: string; subject?: string }); },
 		onOpenLabelPickerForThread: function(threadSummary) { threadListController.openLabelPicker(threadSummary as { threadId?: string; subject?: string }); },
 		onOpenThread: function(threadSummary) { threadListController.openThread(threadSummary as { threadId?: string; subject?: string }); },
+		onCreateBundle: async function(threadIds: string[]) {
+			try {
+				await appApi.createBundle(threadIds);
+				await updateUiWithThreadsFromServer(messengerGetter().info('Refreshing...'));
+			} catch (error) {
+				reportAsyncError(error);
+			}
+		},
+		onEditBundle: async function(bundleId: string, threadIds: string[]) {
+			try {
+				await appApi.updateBundle(bundleId, threadIds);
+				await updateUiWithThreadsFromServer(messengerGetter().info('Refreshing...'));
+			} catch (error) {
+				reportAsyncError(error);
+			}
+		},
+		onArchiveBundle: function(bundleId: string) { threadListController.archiveBundle(bundleId); },
+		onOpenLaterPickerForBundle: function(bundleSummary) { showLaterPickerForBundle((bundleSummary as { bundleId: string }).bundleId); },
+		onUngroup: async function(bundleId: string) {
+			try {
+				await threadListController.ungroup(bundleId);
+				await updateUiWithThreadsFromServer(messengerGetter().info('Refreshing...'));
+			} catch (error) {
+				reportAsyncError(error);
+			}
+		},
 	});
 	var authShellIsland = frontendApi.mountAuthShellIsland({
 		statusContainer: authShellStatusRoot,
@@ -435,6 +502,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			});
 		},
 		openLaterPicker: showLaterPicker,
+		openLaterPickerForBundle: function(bundleSummary) { showLaterPickerForBundle((bundleSummary as { bundleId: string }).bundleId); },
 		openThreadViewer,
 		reportError: reportAsyncError,
 		threadActionController: threadActionController,
