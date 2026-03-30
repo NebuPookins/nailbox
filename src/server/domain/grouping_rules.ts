@@ -1,10 +1,52 @@
 import type {AppConfig} from '../types/config.js';
 import type {GroupingRule, GroupingRulesConfig} from '../types/grouping_rules.js';
-import type {ThreadSummaryDto, ThreadGroupDto} from '../types/thread.js';
+import type {ThreadSummaryDto, BundleSummaryDto, ThreadRowItem, ThreadGroupDto} from '../types/thread.js';
+import type {BundleDto} from '../types/bundle.js';
 import {normalizeGroupingRulesConfig} from '../validation/contracts.js';
 
 export function getEmailGroupingRules(config: AppConfig): GroupingRulesConfig {
 	return normalizeGroupingRulesConfig(config.emailGroupingRules);
+}
+
+const VISIBILITY_PRIORITY: Record<ThreadSummaryDto['visibility'], number> = {
+	'updated': 5,
+	'visible': 4,
+	'when-i-have-time': 3,
+	'stale': 2,
+	'hidden': 1,
+};
+
+export function computeBundleVisibility(memberThreads: ThreadSummaryDto[]): ThreadSummaryDto['visibility'] {
+	let best: ThreadSummaryDto['visibility'] = 'hidden';
+	for (const thread of memberThreads) {
+		if (VISIBILITY_PRIORITY[thread.visibility] > VISIBILITY_PRIORITY[best]) {
+			best = thread.visibility;
+		}
+	}
+	return best;
+}
+
+export function buildBundleSummary(bundle: BundleDto, memberThreads: ThreadSummaryDto[]): BundleSummaryDto {
+	const allSenders = memberThreads.flatMap((t) => t.senders);
+	const seenEmails = new Set<string>();
+	const dedupedSenders = allSenders.filter((s) => {
+		if (seenEmails.has(s.email)) return false;
+		seenEmails.add(s.email);
+		return true;
+	});
+	const lastUpdated = memberThreads.reduce((max, t) => Math.max(max, t.lastUpdated), 0);
+	const visibility = computeBundleVisibility(memberThreads);
+	return {
+		type: 'bundle',
+		bundleId: bundle.bundleId,
+		threadIds: bundle.threadIds,
+		senders: dedupedSenders,
+		lastUpdated,
+		visibility,
+		isWhenIHaveTime: visibility === 'when-i-have-time',
+		threadCount: memberThreads.length,
+		memberThreads,
+	};
 }
 
 export function threadMatchesRule(thread: ThreadSummaryDto, rule: GroupingRule): boolean {
@@ -26,37 +68,100 @@ export function threadMatchesRule(thread: ThreadSummaryDto, rule: GroupingRule):
 	});
 }
 
-export function groupThreads({threads, groupingRules, hideUntilComparator}: {
+function itemMatchesRule(item: ThreadRowItem, rule: GroupingRule): boolean {
+	if (item.type === 'thread') {
+		return threadMatchesRule(item, rule);
+	}
+	// For bundles, match against the bundle's deduplicated senders
+	return rule.conditions.some((condition) => {
+		switch (condition.type) {
+			case 'sender_name':
+				return item.senders.some((s) => s.name && s.name.includes(condition.value));
+			case 'sender_email':
+				return item.senders.some((s) => s.email && s.email.includes(condition.value));
+			case 'subject':
+				return false; // bundles don't have a single subject
+			default:
+				return false;
+		}
+	});
+}
+
+export function groupThreads({threads, bundles = [], groupingRules, hideUntilComparator}: {
 	threads: ThreadSummaryDto[];
+	bundles?: BundleDto[];
 	groupingRules: GroupingRulesConfig;
-	hideUntilComparator: (a: ThreadSummaryDto, b: ThreadSummaryDto) => number;
+	hideUntilComparator: (a: {threadId: string; lastUpdated: number}, b: {threadId: string; lastUpdated: number}) => number;
 }): ThreadGroupDto[] {
-	const groupedThreads: Record<string, ThreadSummaryDto[]> = {};
+	// Wrap the comparator to handle bundles (project bundleId as threadId for sorting)
+	function itemComparator(a: ThreadRowItem, b: ThreadRowItem): number {
+		const aProxy = {
+			threadId: a.type === 'bundle' ? a.bundleId : a.threadId,
+			lastUpdated: a.lastUpdated,
+		};
+		const bProxy = {
+			threadId: b.type === 'bundle' ? b.bundleId : b.threadId,
+			lastUpdated: b.lastUpdated,
+		};
+		return hideUntilComparator(aProxy, bProxy);
+	}
+	const groupedItems: Record<string, ThreadRowItem[]> = {};
 	const whenIHaveTimeSuffix = ' - When I Have Time';
 
-	function addToGroupedThreads(group: string, thread: ThreadSummaryDto): void {
-		const key = thread.visibility === 'when-i-have-time' ? `${group}${whenIHaveTimeSuffix}` : group;
-		if (!Array.isArray(groupedThreads[key])) {
-			groupedThreads[key] = [];
+	// Build a set of all bundled thread IDs so we can exclude them from solo display
+	const bundledThreadIds = new Set<string>();
+	for (const bundle of bundles) {
+		for (const tid of bundle.threadIds) {
+			bundledThreadIds.add(tid);
 		}
-		groupedThreads[key].push(thread);
 	}
 
-	threads.forEach((thread) => {
+	// Build a lookup map for threads by ID
+	const threadById = new Map<string, ThreadSummaryDto>();
+	for (const thread of threads) {
+		threadById.set(thread.threadId, thread);
+	}
+
+	// Build bundle summary items
+	const bundleItems: BundleSummaryDto[] = [];
+	for (const bundle of bundles) {
+		const memberThreads = bundle.threadIds
+			.map((id) => threadById.get(id))
+			.filter((t): t is ThreadSummaryDto => t !== undefined);
+		if (memberThreads.length > 0) {
+			bundleItems.push(buildBundleSummary(bundle, memberThreads));
+		}
+	}
+
+	// Filter out bundled threads from solo thread list
+	const soloThreads = threads.filter((t) => !bundledThreadIds.has(t.threadId));
+
+	// Combine solo threads and bundle items into a single list of row items
+	const allItems: ThreadRowItem[] = [...soloThreads, ...bundleItems];
+
+	function addToGroupedItems(group: string, item: ThreadRowItem): void {
+		const key = item.visibility === 'when-i-have-time' ? `${group}${whenIHaveTimeSuffix}` : group;
+		if (!Array.isArray(groupedItems[key])) {
+			groupedItems[key] = [];
+		}
+		groupedItems[key].push(item);
+	}
+
+	allItems.forEach((item) => {
 		let foundAGroup = false;
 		for (const rule of groupingRules.rules) {
-			if (threadMatchesRule(thread, rule)) {
-				addToGroupedThreads(rule.name, thread);
+			if (itemMatchesRule(item, rule)) {
+				addToGroupedItems(rule.name, item);
 				foundAGroup = true;
 				break;
 			}
 		}
 		if (!foundAGroup) {
-			addToGroupedThreads('Others', thread);
+			addToGroupedItems('Others', item);
 		}
 	});
 
-	const orderedGroupThreads: ThreadGroupDto[] = Object.keys(groupedThreads).map((group) => {
+	const orderedGroupThreads: ThreadGroupDto[] = Object.keys(groupedItems).map((group) => {
 		let sortType: 'mostRecent' | 'shortest' = 'mostRecent';
 		for (const rule of groupingRules.rules) {
 			if (rule.name === group || (group.endsWith(whenIHaveTimeSuffix) && rule.name === group.replace(whenIHaveTimeSuffix, ''))) {
@@ -65,21 +170,28 @@ export function groupThreads({threads, groupingRules, hideUntilComparator}: {
 			}
 		}
 
-		const sortedThreads = [...groupedThreads[group]];
+		const sortedItems = [...groupedItems[group]];
 		if (sortType === 'shortest') {
-			sortedThreads.sort((a, b) => a.totalTimeToReadSeconds - b.totalTimeToReadSeconds);
+			sortedItems.sort((a, b) => {
+				const aTime = a.type === 'thread' ? a.totalTimeToReadSeconds : 0;
+				const bTime = b.type === 'thread' ? b.totalTimeToReadSeconds : 0;
+				return aTime - bTime;
+			});
 		} else {
-			sortedThreads.sort(hideUntilComparator);
+			sortedItems.sort(itemComparator);
 		}
+
+		const threadItems = sortedItems.filter((item): item is ThreadSummaryDto => item.type === 'thread');
 
 		return {
 			label: group,
-			threads: sortedThreads,
+			threads: threadItems,
+			items: sortedItems,
 			sortType,
 		};
 	});
 
-	orderedGroupThreads.sort((groupA, groupB) => hideUntilComparator(groupA.threads[0], groupB.threads[0]));
+	orderedGroupThreads.sort((groupA, groupB) => itemComparator(groupA.items[0], groupB.items[0]));
 
 	const groupPriority: Record<string, number> = {};
 	groupingRules.rules.forEach((rule) => {

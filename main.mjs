@@ -9,6 +9,7 @@ import helpers_fileio from './helpers/fileio.js';
 
 import threadModel from './models/thread.js';
 import { Message } from './models/message.js';
+import bundleModel from './models/bundle.js';
 import { createThreadRepository } from './src/server/repositories/thread_repository.js';
 import { createThreadService } from './src/server/services/thread_service.js';
 import { createRfc2822Service } from './src/server/services/rfc2822_service.js';
@@ -25,6 +26,7 @@ import registerThreadActionRoutes from './src/server/routes/thread_action_routes
 import configRepository from './src/server/repositories/config_repository.js';
 import registerSetupRoutes from './src/server/routes/setup_routes.js';
 import registerThreadRoutes from './src/server/routes/thread_routes.js';
+import registerBundleRoutes from './src/server/routes/bundle_routes.js';
 import frontendAssetService from './src/server/services/frontend_asset_service.js';
 
 const DEFAULT_CONFIG = {
@@ -100,6 +102,7 @@ await helpers_fileio.ensureDirectoryExists('data/threads');
 logger.info("Directory structure looks fine.");
 const hideUntils = await hideUntilRepository.load();
 const lastRefresheds = await lastRefreshedRepository.load();
+const bundles = await bundleModel.load();
 const config = await configRepository.readConfig();
 const threadRepository = createThreadRepository({ threadModelModule: threadModel });
 const threadService = createThreadService({ threadRepository, MessageClass: Message });
@@ -119,6 +122,7 @@ app.use(function (req, res, next) {
 });
 
 const routeDependencies = {
+	bundles,
 	config,
 	helpersFileio: helpers_fileio,
 	hideUntils,
@@ -135,6 +139,7 @@ const routeDependencies = {
 registerSetupRoutes(app, routeDependencies);
 registerAuthRoutes(app, routeDependencies);
 registerThreadRoutes(app, routeDependencies);
+registerBundleRoutes(app, routeDependencies);
 registerThreadActionRoutes(app, routeDependencies);
 
 app.use(function(req, res) {

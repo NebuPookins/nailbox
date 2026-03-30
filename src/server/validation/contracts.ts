@@ -258,6 +258,7 @@ export function normalizeThreadSummaryDto(value: unknown): ThreadSummaryDto {
 	const recentMessageReadTimeSeconds = value['recentMessageReadTimeSeconds'];
 	assertNumber(recentMessageReadTimeSeconds, 'threadSummary.recentMessageReadTimeSeconds');
 	return {
+		type: 'thread' as const,
 		threadId,
 		senders: senders.map((sender, index) => normalizePerson(sender, `threadSummary.senders[${index}]`)),
 		receivers: receivers.map((receiver, index) => normalizePerson(receiver, `threadSummary.receivers[${index}]`)),

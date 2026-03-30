@@ -4,9 +4,16 @@ interface ThreadSummary {
 	[key: string]: unknown;
 }
 
+interface BundleSummary {
+	bundleId: string;
+	[key: string]: unknown;
+}
+
 interface ThreadActionController {
 	deleteThread(threadId: string): Promise<unknown>;
 	archiveThread(threadId: string): Promise<unknown>;
+	archiveBundle(bundleId: string): Promise<unknown>;
+	deleteBundle(bundleId: string): Promise<unknown>;
 }
 
 interface ThreadViewerController {
@@ -16,6 +23,7 @@ interface ThreadViewerController {
 export function createThreadListController({
 	openLabelPicker,
 	openLaterPicker,
+	openLaterPickerForBundle,
 	openThreadViewer,
 	reportError,
 	threadActionController,
@@ -23,6 +31,7 @@ export function createThreadListController({
 }: {
 	openLabelPicker(threadSummary: ThreadSummary): unknown;
 	openLaterPicker(threadId: string, subject: string): unknown;
+	openLaterPickerForBundle(bundleSummary: BundleSummary): unknown;
 	openThreadViewer(threadSummary: ThreadSummary): unknown;
 	reportError(error: unknown): void;
 	threadActionController: ThreadActionController;
@@ -47,12 +56,32 @@ export function createThreadListController({
 			return false;
 		},
 
+		async archiveBundle(bundleId: string) {
+			try {
+				await threadActionController.archiveBundle(bundleId);
+			} catch (error) {
+				reportError(error);
+			}
+		},
+
+		async ungroup(bundleId: string) {
+			try {
+				await threadActionController.deleteBundle(bundleId);
+			} catch (error) {
+				reportError(error);
+			}
+		},
+
 		openLabelPicker(threadSummary: ThreadSummary) {
 			return openLabelPicker(threadSummary);
 		},
 
 		openLaterPicker(threadSummary: ThreadSummary) {
 			return openLaterPicker(threadSummary.threadId ?? '', threadSummary.subject ?? '');
+		},
+
+		openLaterPickerForBundle(bundleSummary: BundleSummary) {
+			return openLaterPickerForBundle(bundleSummary);
 		},
 
 		async openThread(threadSummary: ThreadSummary) {
