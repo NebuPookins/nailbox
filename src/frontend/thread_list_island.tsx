@@ -475,25 +475,27 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 
 	return (
 		<React.Fragment>
-			<div className="thread-list-header" style={{display: 'flex', justifyContent: 'flex-end', padding: '4px 8px'}}>
-				{!selectionMode ? (
-					<button
-						className="btn btn-xs btn-default"
-						title="Select threads to bundle"
-						onClick={() => setSelectionMode(true)}
-					>
-						<span className="glyphicon glyphicon-check"></span> Select
-					</button>
+			<div style={{position: 'sticky', top: 0, zIndex: 10, background: '#fff'}}>
+				<div className="thread-list-header" style={{display: 'flex', justifyContent: 'flex-end', padding: '4px 8px'}}>
+					{!selectionMode ? (
+						<button
+							className="btn btn-xs btn-default"
+							title="Select threads to bundle"
+							onClick={() => setSelectionMode(true)}
+						>
+							<span className="glyphicon glyphicon-check"></span> Select
+						</button>
+					) : null}
+				</div>
+				{selectionMode ? (
+					<SelectionBar
+						selectedCount={selectedThreadIds.size}
+						editingBundleId={editingBundleId}
+						onBundle={handleBundle}
+						onCancel={handleCancelSelection}
+					/>
 				) : null}
 			</div>
-			{selectionMode ? (
-				<SelectionBar
-					selectedCount={selectedThreadIds.size}
-					editingBundleId={editingBundleId}
-					onBundle={handleBundle}
-					onCancel={handleCancelSelection}
-				/>
-			) : null}
 			{groups.map(function(group, groupIdx) {
 				const items: ThreadRowItem[] = group.items
 					? group.items
