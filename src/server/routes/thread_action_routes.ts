@@ -13,6 +13,7 @@ import {
 
 export default function registerThreadActionRoutes(app: Application, dependencies: any): void {
 	const {
+		bundles,
 		lastRefresheds,
 		logger,
 		rfc2822Service,
@@ -20,6 +21,18 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 		threadService,
 		withGmailApi,
 	} = dependencies;
+
+	async function cleanupBundleAfterThreadDeletion(threadId: string): Promise<void> {
+		const bundle = bundles?.getBundleForThread(threadId);
+		if (!bundle) return;
+		const remainingThreadIds = bundle.threadIds.filter((id: string) => id !== threadId);
+		if (remainingThreadIds.length < 2) {
+			bundles.deleteBundle(bundle.bundleId);
+		} else {
+			bundles.updateBundle(bundle.bundleId, remainingThreadIds);
+		}
+		await bundles.save();
+	}
 
 	app.get('/api/threads/profile', async function(req: Request, res: Response) {
 		try {
@@ -117,6 +130,7 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 			}
 			const isSuccessful = await threadRepository.deleteThread(threadId);
 			if (isSuccessful) {
+				await cleanupBundleAfterThreadDeletion(threadId);
 				res.status(200).send(gmailResponse);
 				return;
 			}
@@ -144,6 +158,7 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 			}
 			const isSuccessful = await threadRepository.deleteThread(threadId);
 			if (isSuccessful) {
+				await cleanupBundleAfterThreadDeletion(threadId);
 				res.status(200).send(gmailResponse);
 				return;
 			}
@@ -173,6 +188,7 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 			}
 			const isSuccessful = await threadRepository.deleteThread(threadId);
 			if (isSuccessful) {
+				await cleanupBundleAfterThreadDeletion(threadId);
 				res.status(200).send(gmailResponse);
 				return;
 			}
