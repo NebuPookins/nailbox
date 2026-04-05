@@ -9,6 +9,7 @@ import {
 import { createThreadViewerController } from './thread_viewer_controller.js';
 import { createIslandManager } from './island_manager.js';
 import { wireModals } from './modal_wiring.js';
+import { createThreadUpdatesSocket } from './thread_updates_socket.js';
 
 declare const saveAs: (blob: Blob, name: string) => void;
 
@@ -69,6 +70,9 @@ document.addEventListener('DOMContentLoaded', function() {
 		scopes: []
 	};
 	var labelsCache: LabelItem[] = [];
+	var groupingRulesCache: { rules: unknown[] } = { rules: [] };
+	var threadRefreshInFlight = false;
+	var pendingThreadRefresh = false;
 
 	String.prototype.hashCode = function(this: string): number {
 		var hash = 0;
@@ -105,10 +109,12 @@ document.addEventListener('DOMContentLoaded', function() {
 		if (error && error.code === 'GOOGLE_REAUTH_REQUIRED') {
 			authStatus.connected = false;
 			authStatus.emailAddress = null;
+			threadUpdatesConnection?.disconnect();
 			renderDisconnectedState('Google authorization expired. Reconnect Gmail to continue.');
 			return;
 		}
 		if (error && error.code === 'GOOGLE_AUTH_MISCONFIGURED') {
+			threadUpdatesConnection?.disconnect();
 			renderSetupNeededState('Google OAuth is not configured.');
 			return;
 		}
@@ -143,6 +149,19 @@ document.addEventListener('DOMContentLoaded', function() {
 			threadListIslandState.instance.setLabels(labelsCache);
 		}
 		return labels;
+	}
+
+	async function loadGroupingRules(): Promise<{ rules: unknown[] }> {
+		var rulesApi = frontendApi.createGroupingRulesApi();
+		var response = await rulesApi.loadRules() as { rules?: unknown[] };
+		groupingRulesCache = {
+			rules: Array.isArray(response?.rules) ? response.rules : [],
+		};
+		var threadListIslandState = islands.ensureThreadListIsland();
+		if (threadListIslandState) {
+			threadListIslandState.instance.setGroupingRules(groupingRulesCache);
+		}
+		return groupingRulesCache;
 	}
 
 	async function syncThreadsFromGoogle(updateMessenger: { update(opts: { type: string; message: string }): void }): Promise<unknown> {
@@ -219,6 +238,23 @@ document.addEventListener('DOMContentLoaded', function() {
 		} catch (error) {
 			authShellIsland.setError();
 			throw error;
+		}
+	}
+
+	async function refreshThreadsFromServerCoalesced(updateMessenger: { update(opts: { type: string; message: string }): void }): Promise<void> {
+		if (threadRefreshInFlight) {
+			pendingThreadRefresh = true;
+			return;
+		}
+		threadRefreshInFlight = true;
+		try {
+			await updateUiWithThreadsFromServer(updateMessenger);
+		} finally {
+			threadRefreshInFlight = false;
+			if (pendingThreadRefresh) {
+				pendingThreadRefresh = false;
+				await refreshThreadsFromServerCoalesced(messengerGetter().info('Refreshing threads from cache...'));
+			}
 		}
 	}
 
@@ -309,6 +345,17 @@ document.addEventListener('DOMContentLoaded', function() {
 			handleApiError(error as AppError, error && error.message);
 		}
 	});
+	var threadUpdatesConnection = createThreadUpdatesSocket({
+		onThreadsChanged: function() {
+			if (!authStatus.connected) {
+				return;
+			}
+			refreshThreadsFromServerCoalesced(
+				messengerGetter().info('Refreshing threads from cache...')
+			).catch(reportAsyncError);
+		},
+		reportError: reportAsyncError,
+	});
 	function deleteBundleFromUI(bundleId: string): void {
 		var islandState = islands.ensureThreadListIsland();
 		if (islandState) {
@@ -344,8 +391,11 @@ document.addEventListener('DOMContentLoaded', function() {
 		onOpenThread: function(threadSummary) { threadListController.openThread(threadSummary as { threadId?: string; subject?: string }); },
 		onCreateBundle: async function(threadIds: string[]) {
 			try {
-				await appApi.createBundle(threadIds);
-				await updateUiWithThreadsFromServer(messengerGetter().info('Refreshing...'));
+				var response = await appApi.createBundle(threadIds) as { bundleId?: string };
+				var threadListIslandState = islands.ensureThreadListIsland();
+				if (threadListIslandState && response.bundleId) {
+					threadListIslandState.instance.createBundleRow(response.bundleId, threadIds);
+				}
 			} catch (error) {
 				reportAsyncError(error);
 			}
@@ -353,17 +403,29 @@ document.addEventListener('DOMContentLoaded', function() {
 		onEditBundle: async function(bundleId: string, threadIds: string[]) {
 			try {
 				await appApi.updateBundle(bundleId, threadIds);
-				await updateUiWithThreadsFromServer(messengerGetter().info('Refreshing...'));
+				var threadListIslandState = islands.ensureThreadListIsland();
+				if (threadListIslandState) {
+					threadListIslandState.instance.updateBundleRow(bundleId, threadIds);
+				}
 			} catch (error) {
 				reportAsyncError(error);
 			}
 		},
 		onArchiveBundle: function(bundleId: string) { threadListController.archiveBundle(bundleId); },
+		onGroupingRulesSaved: loadGroupingRules,
 		onOpenLaterPickerForBundle: function(bundleSummary) { showLaterPickerForBundle((bundleSummary as { bundleId: string }).bundleId); },
 		onUngroup: async function(bundleId: string) {
 			try {
-				await threadListController.ungroup(bundleId);
-				await updateUiWithThreadsFromServer(messengerGetter().info('Refreshing...'));
+				var updateMsg = messengerGetter().info('Ungrouping bundle ' + bundleId + '...');
+				await appApi.deleteBundle(bundleId);
+				var threadListIslandState = islands.ensureThreadListIsland();
+				if (threadListIslandState) {
+					threadListIslandState.instance.ungroupBundleRow(bundleId);
+				}
+				updateMsg.update({
+					type: 'success',
+					message: 'Bundle ungrouped.'
+				});
 			} catch (error) {
 				reportAsyncError(error);
 			}
@@ -402,6 +464,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		getAuthStatus: function() {
 			return authStatus;
 		},
+		loadGroupingRules: loadGroupingRules,
 		loadLabels: loadLabels,
 		messengerGetter: messengerGetter,
 		renderConnectedState: renderConnectedState,
@@ -412,6 +475,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			authStatus = nextAuthStatus as AuthStatus;
 		},
 		syncThreadsFromGoogle: syncThreadsFromGoogle,
+		threadUpdatesConnection: threadUpdatesConnection,
 		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer
 	});
 	var threadViewerIsland = frontendApi.mountThreadViewerIsland({

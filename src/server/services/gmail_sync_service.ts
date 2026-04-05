@@ -23,7 +23,7 @@ export async function refreshSingleThreadFromGmail({
 	lastRefresheds: any;
 	threadRepository: any;
 	threadService: any;
-}): Promise<{status: number}> {
+}): Promise<{status: number; changed?: boolean}> {
 	try {
 		const gmailThread = await gmailRequest({
 			path: `/threads/${threadId}`,
@@ -38,8 +38,10 @@ export async function refreshSingleThreadFromGmail({
 	} catch (error) {
 		const err = error as {status?: number};
 		if (err.status === 404) {
+			const existingThread = await threadRepository.readThreadJson(threadId);
 			return {
 				status: await threadRepository.deleteThread(threadId) ? 200 : 500,
+				changed: Boolean(existingThread && Object.keys(existingThread).length > 0),
 			};
 		}
 		throw error;
@@ -74,6 +76,7 @@ export async function syncRecentThreadsFromGmail({
 			return {
 				threadId,
 				status: saveResult.status,
+				changed: Boolean(saveResult.changed),
 			};
 		} catch (error) {
 			const err = error as Error;
@@ -84,7 +87,11 @@ export async function syncRecentThreadsFromGmail({
 			};
 		}
 	}));
+	const changedThreadIds = threadSaveResults
+		.filter((result) => result.status < 400 && result.changed)
+		.map((result) => result.threadId);
 	return {
+		changedThreadIds,
 		threadIds: uniqueThreadIds,
 		results: threadSaveResults,
 	};

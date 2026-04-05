@@ -1,7 +1,3 @@
-declare const moment: {
-	duration(amount: number, unit: string): { humanize(): string; as(unit: string): number };
-};
-
 interface MsgHandle {
 	update(opts: { type: string; message: string }): void;
 }
@@ -22,31 +18,38 @@ interface AppApi {
 	disconnectGmail(): Promise<unknown>;
 }
 
+interface ThreadUpdatesConnection {
+	connect(): void;
+	disconnect(): void;
+}
+
 export function createAppShellController({
 	appApi,
 	getAuthStatus,
+	loadGroupingRules,
 	loadLabels,
 	messengerGetter,
 	renderConnectedState,
 	renderDisconnectedState,
 	renderSetupNeededState,
 	reportError,
-	scheduleInterval = setInterval,
 	setAuthStatus,
 	syncThreadsFromGoogle,
+	threadUpdatesConnection,
 	updateUiWithThreadsFromServer,
 }: {
 	appApi: AppApi;
 	getAuthStatus(): AuthStatus;
+	loadGroupingRules?(): Promise<unknown>;
 	loadLabels(): Promise<unknown>;
 	messengerGetter(): Messenger;
 	renderConnectedState(): void;
 	renderDisconnectedState(message?: string): void;
 	renderSetupNeededState(message?: string): void;
 	reportError(error: unknown): void;
-	scheduleInterval?: typeof setInterval;
 	setAuthStatus(status: AuthStatus): void;
 	syncThreadsFromGoogle(messenger: MsgHandle): Promise<unknown>;
+	threadUpdatesConnection?: ThreadUpdatesConnection;
 	updateUiWithThreadsFromServer(messenger: MsgHandle): Promise<unknown>;
 }) {
 	async function bootstrapConnectedApp() {
@@ -58,27 +61,15 @@ export function createAppShellController({
 			} catch (error) {
 				messengerGetter().error('Failed to load Gmail labels. Continuing with cached mail.');
 			}
-			await syncThreadsFromGoogle(messengerGetter().info('Downloading new threads from Gmail...'));
-			await updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...'));
+			try {
+				await loadGroupingRules?.();
+			} catch (error) {
+				messengerGetter().error('Failed to load grouping rules. Continuing with current grouping.');
+			}
 		} catch (error) {
-			messengerGetter().error('Failed to refresh Gmail. Cached mail is still available.');
+			messengerGetter().error('Failed to refresh cached threads.');
 		}
-
-		scheduleInterval(function() {
-			if (getAuthStatus().connected) {
-				updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...')).catch(reportError);
-			}
-		}, moment.duration(5, 'minutes').as('milliseconds'));
-
-		scheduleInterval(function() {
-			if (getAuthStatus().connected) {
-				syncThreadsFromGoogle(messengerGetter().info('Downloading new threads from Gmail...'))
-					.then(function() {
-						return updateUiWithThreadsFromServer(messengerGetter().info('Refreshing threads from cache...'));
-					})
-					.catch(reportError);
-			}
-		}, moment.duration(30, 'minutes').as('milliseconds'));
+		threadUpdatesConnection?.connect();
 	}
 
 	return {
@@ -113,6 +104,7 @@ export function createAppShellController({
 				connected: false,
 				emailAddress: null,
 			});
+			threadUpdatesConnection?.disconnect();
 			renderDisconnectedState('Gmail disconnected.');
 			return {
 				ok: true,

@@ -3,18 +3,6 @@ import assert from 'node:assert/strict';
 
 import { createAppShellController } from '../src/frontend/app_shell_controller.js';
 
-globalThis.moment = {
-	duration(value, unit) {
-		assert.equal(unit, 'minutes');
-		return {
-			as(targetUnit) {
-				assert.equal(targetUnit, 'milliseconds');
-				return value * 60000;
-			},
-		};
-	},
-};
-
 function createMessengerGetter() {
 	const events = [];
 	return {
@@ -55,6 +43,9 @@ test('initialize renders setup-needed state when OAuth is not configured', async
 		getAuthStatus() {
 			return authStatus;
 		},
+		loadGroupingRules() {
+			throw new Error('unused');
+		},
 		loadLabels() {
 			throw new Error('unused');
 		},
@@ -86,15 +77,22 @@ test('initialize renders setup-needed state when OAuth is not configured', async
 	assert.deepEqual(renders, ['setup']);
 });
 
-test('initialize bootstraps a connected session and schedules polling', async () => {
+test('initialize bootstraps a connected session and opens thread updates connection', async () => {
 	let authStatus = {
 		configured: true,
 		connected: true,
 		emailAddress: 'me@example.com',
 	};
 	const calls = [];
-	const intervals = [];
 	const { events, messengerGetter } = createMessengerGetter();
+	const threadUpdatesConnection = {
+		connect() {
+			calls.push('connectThreadUpdates');
+		},
+		disconnect() {
+			calls.push('disconnectThreadUpdates');
+		},
+	};
 	const controller = createAppShellController({
 		appApi: {
 			async loadAuthStatus() {
@@ -104,6 +102,9 @@ test('initialize bootstraps a connected session and schedules polling', async ()
 		},
 		getAuthStatus() {
 			return authStatus;
+		},
+		async loadGroupingRules() {
+			calls.push('loadGroupingRules');
 		},
 		async loadLabels() {
 			calls.push('loadLabels');
@@ -121,16 +122,13 @@ test('initialize bootstraps a connected session and schedules polling', async ()
 		reportError(error) {
 			calls.push(['reportError', error.message]);
 		},
-		scheduleInterval(callback, delay) {
-			intervals.push({ callback, delay });
-			return intervals.length;
-		},
 		setAuthStatus(value) {
 			authStatus = value;
 		},
 		async syncThreadsFromGoogle(messenger) {
 			calls.push(['syncThreadsFromGoogle', Boolean(messenger)]);
 		},
+		threadUpdatesConnection,
 		async updateUiWithThreadsFromServer(messenger) {
 			calls.push(['updateUiWithThreadsFromServer', Boolean(messenger)]);
 		},
@@ -144,14 +142,11 @@ test('initialize bootstraps a connected session and schedules polling', async ()
 		'renderConnectedState',
 		['updateUiWithThreadsFromServer', true],
 		'loadLabels',
-		['syncThreadsFromGoogle', true],
-		['updateUiWithThreadsFromServer', true],
+		'loadGroupingRules',
+		'connectThreadUpdates',
 	]);
-	assert.deepEqual(intervals.map((item) => item.delay), [300000, 1800000]);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Loading cached threads...' },
-		{ type: 'info', message: 'Downloading new threads from Gmail...' },
-		{ type: 'info', message: 'Refreshing threads from cache...' },
 	]);
 });
 
@@ -162,6 +157,14 @@ test('disconnectGmail clears the local auth session and renders the disconnected
 		emailAddress: 'me@example.com',
 	};
 	const renders = [];
+	const threadUpdatesConnection = {
+		connect() {
+			renders.push('connectThreadUpdates');
+		},
+		disconnect() {
+			renders.push('disconnectThreadUpdates');
+		},
+	};
 	const controller = createAppShellController({
 		appApi: {
 			async disconnectGmail() {
@@ -170,6 +173,9 @@ test('disconnectGmail clears the local auth session and renders the disconnected
 		},
 		getAuthStatus() {
 			return authStatus;
+		},
+		loadGroupingRules() {
+			throw new Error('unused');
 		},
 		loadLabels() {
 			throw new Error('unused');
@@ -187,6 +193,7 @@ test('disconnectGmail clears the local auth session and renders the disconnected
 		syncThreadsFromGoogle() {
 			throw new Error('unused');
 		},
+		threadUpdatesConnection,
 		updateUiWithThreadsFromServer() {
 			throw new Error('unused');
 		},
@@ -197,6 +204,5 @@ test('disconnectGmail clears the local auth session and renders the disconnected
 	assert.deepEqual(result, { ok: true });
 	assert.equal(authStatus.connected, false);
 	assert.equal(authStatus.emailAddress, null);
-	assert.deepEqual(renders, ['disconnectRequest', 'Gmail disconnected.']);
+	assert.deepEqual(renders, ['disconnectRequest', 'disconnectThreadUpdates', 'Gmail disconnected.']);
 });
-

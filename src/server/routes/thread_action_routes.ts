@@ -16,6 +16,7 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 		bundles,
 		lastRefresheds,
 		logger,
+		notifyThreadsChanged,
 		rfc2822Service,
 		threadRepository,
 		threadService,
@@ -84,7 +85,11 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 			if (syncResult == null) {
 				return;
 			}
+			if (Array.isArray(syncResult.changedThreadIds) && syncResult.changedThreadIds.length > 0) {
+				notifyThreadsChanged?.('manual-sync');
+			}
 			res.status(200).send({
+				changedThreadCount: syncResult.changedThreadIds.length,
 				syncedThreadCount: syncResult.threadIds.length,
 				results: syncResult.results,
 			});
@@ -108,6 +113,9 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 			});
 			if (refreshResult == null) {
 				return;
+			}
+			if (refreshResult.changed) {
+				notifyThreadsChanged?.('thread-refresh');
 			}
 			res.sendStatus(refreshResult.status);
 		} catch (error) {
