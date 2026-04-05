@@ -20,8 +20,9 @@ const logger = nebulog.make({filename: 'src/server/services/thread_service.js', 
 export function createThreadService(dependencies: {
 	threadRepository?: any;
 	MessageClass?: any;
+	bundles?: any;
 } = {}) {
-	const {threadRepository: repository, MessageClass} = dependencies;
+	const {threadRepository: repository, MessageClass, bundles} = dependencies;
 
 	async function saveThreadPayload({
 		threadPayload,
@@ -56,8 +57,21 @@ export function createThreadService(dependencies: {
 		);
 		if (allMessagesInTrash) {
 			logger.info(`Deleting thread ${threadId} because all messages in thread are in trash.`);
+			const deleted = await repository.deleteThread(threadId);
+			if (deleted && bundles) {
+				const bundle = bundles.getBundleForThread(threadId);
+				if (bundle) {
+					const remainingThreadIds = bundle.threadIds.filter((id: string) => id !== threadId);
+					if (remainingThreadIds.length < 2) {
+						bundles.deleteBundle(bundle.bundleId);
+					} else {
+						bundles.updateBundle(bundle.bundleId, remainingThreadIds);
+					}
+					await bundles.save();
+				}
+			}
 			return {
-				status: await repository.deleteThread(threadId) ? 200 : 500,
+				status: deleted ? 200 : 500,
 			};
 		}
 

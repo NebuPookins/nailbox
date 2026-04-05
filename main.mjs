@@ -105,7 +105,7 @@ const lastRefresheds = await lastRefreshedRepository.load();
 const bundles = await bundleModel.load();
 const config = await configRepository.readConfig();
 const threadRepository = createThreadRepository({ threadModelModule: threadModel });
-const threadService = createThreadService({ threadRepository, MessageClass: Message });
+const threadService = createThreadService({ threadRepository, MessageClass: Message, bundles });
 const rfc2822Service = createRfc2822Service({ threadRepository });
 
 const app = express();
