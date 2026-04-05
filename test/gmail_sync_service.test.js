@@ -9,11 +9,12 @@ test('syncRecentThreadsFromGmail continues when one thread refresh fails', async
 			if (threadPayload.id === 'bad-thread') {
 				throw new Error('bad thread payload');
 			}
-			return { status: 200 };
+			return { status: 200, changed: threadPayload.id === 'good-thread' };
 		},
 	};
 	const fakeThreadRepository = {
 		deleteThread: async () => true,
+		readThreadJson: async () => ({}),
 	};
 
 	const seenThreadIds = [];
@@ -55,8 +56,9 @@ test('syncRecentThreadsFromGmail continues when one thread refresh fails', async
 
 	assert.deepEqual(seenThreadIds.sort(), ['bad-thread', 'good-thread']);
 	assert.equal(result.threadIds.length, 2);
+	assert.deepEqual(result.changedThreadIds, ['good-thread']);
 	assert.deepEqual(result.results, [
-		{ threadId: 'good-thread', status: 200 },
+		{ threadId: 'good-thread', status: 200, changed: true },
 		{ threadId: 'bad-thread', status: 500, error: 'bad thread payload' },
 	]);
 });

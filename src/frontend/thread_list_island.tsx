@@ -6,6 +6,12 @@ import {
 	getThreadMainDisplayedLabelIds,
 	getLabelName,
 } from './thread_list_presenter.js';
+import {
+	groupThreads as regroupThreads,
+	normalizeGroupingRulesConfig,
+	type GroupingRulesConfig,
+	type BundleData,
+} from './thread_grouping.js';
 
 interface Person {
 	name: string;
@@ -68,6 +74,22 @@ interface LaterPickerPayload {
 
 interface BundleLaterPickerPayload {
 	bundleId: string;
+}
+
+function toThreadItems(group: ThreadGroup): ThreadSummary[] {
+	return (group.items || group.threads).filter(function(item): item is ThreadSummary {
+		return (item as ThreadRowItem).type !== 'bundle';
+	}) as ThreadSummary[];
+}
+
+function cloneItem(item: ThreadRowItem): ThreadRowItem {
+	if (item.type === 'bundle') {
+		return {
+			...item,
+			memberThreads: (item.memberThreads || []).map(function(thread) { return ({...thread}); }),
+		};
+	}
+	return {...item};
 }
 
 function renderParticipants(people: Person[]): string {
@@ -591,6 +613,7 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 	let labels: LabelInfo[] = [];
 	let removingThreadIds = new Set<string>();
 	let removingBundleIds = new Set<string>();
+	let groupingRules: GroupingRulesConfig = {rules: []};
 
 	function render() {
 		root.render(
@@ -613,6 +636,41 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 		);
 	}
 
+	function getAllItems(): ThreadRowItem[] {
+		return groups.flatMap(function(group) {
+			return (group.items || group.threads.map(function(thread) {
+				return {...thread, type: 'thread' as const};
+			})).map(cloneItem);
+		});
+	}
+
+	function regroupItems(items: ThreadRowItem[]): void {
+		const orderedItemIds = items.map(function(item) {
+			return item.type === 'bundle' ? item.bundleId : item.threadId;
+		});
+		const threadMap = new Map<string, ThreadSummary>();
+		const bundles: BundleData[] = [];
+		items.forEach(function(item) {
+			if (item.type === 'bundle') {
+				(item.memberThreads || []).forEach(function(thread) {
+					threadMap.set(thread.threadId, {...thread});
+				});
+				bundles.push({
+					bundleId: item.bundleId,
+					threadIds: [...item.threadIds],
+				});
+				return;
+			}
+			threadMap.set(item.threadId, {...item});
+		});
+		groups = regroupThreads({
+			threads: Array.from(threadMap.values()),
+			bundles: bundles,
+			groupingRules: groupingRules,
+			orderedItemIds: orderedItemIds,
+		}) as unknown as ThreadGroup[];
+	}
+
 	render();
 
 	return {
@@ -623,6 +681,9 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 		setLabels: function(newLabels: LabelInfo[]) {
 			labels = newLabels;
 			render();
+		},
+		setGroupingRules: function(nextGroupingRules: unknown) {
+			groupingRules = normalizeGroupingRulesConfig(nextGroupingRules);
 		},
 		removeThread: function(threadId: string) {
 			removingThreadIds = new Set(removingThreadIds);
@@ -674,6 +735,103 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 					});
 				render();
 			}, REMOVE_ANIMATION_MS);
+		},
+		createBundleRow: function(bundleId: string, threadIds: string[]) {
+			const allItems = getAllItems();
+			const memberThreads = allItems
+				.filter(function(item): item is ThreadSummary {
+					return item.type !== 'bundle' && threadIds.includes(item.threadId);
+				})
+				.map(function(thread) { return {...thread}; });
+			if (memberThreads.length < 2) {
+				return;
+			}
+			const remainingItems = allItems.filter(function(item) {
+				return item.type === 'bundle' || !threadIds.includes(item.threadId);
+			});
+			const firstRemovedIndex = allItems.findIndex(function(item) {
+				return item.type !== 'bundle' && threadIds.includes(item.threadId);
+			});
+			const insertIndex = firstRemovedIndex === -1 ? remainingItems.length : Math.min(firstRemovedIndex, remainingItems.length);
+			const nextItems = remainingItems.slice(0, insertIndex)
+				.concat([{
+					type: 'bundle' as const,
+					bundleId: bundleId,
+					threadIds: [...threadIds],
+					senders: [],
+					lastUpdated: 0,
+					visibility: 'hidden' as const,
+					threadCount: memberThreads.length,
+					memberThreads: memberThreads,
+				}])
+				.concat(remainingItems.slice(insertIndex));
+			regroupItems(nextItems);
+			render();
+		},
+		updateBundleRow: function(bundleId: string, threadIds: string[]) {
+			const allItems = getAllItems();
+			const bundleIndex = allItems.findIndex(function(item) {
+				return item.type === 'bundle' && item.bundleId === bundleId;
+			});
+			const existingBundle = bundleIndex === -1 ? null : allItems[bundleIndex] as BundleSummary;
+			if (!existingBundle) {
+				return;
+			}
+			const availableThreadsById = new Map<string, ThreadSummary>();
+			allItems.forEach(function(item) {
+				if (item.type === 'bundle') {
+					(item.memberThreads || []).forEach(function(thread) {
+						availableThreadsById.set(thread.threadId, {...thread});
+					});
+					return;
+				}
+				availableThreadsById.set(item.threadId, {...item});
+			});
+			const nextMemberThreads = threadIds
+				.map(function(threadId) { return availableThreadsById.get(threadId); })
+				.filter(function(thread): thread is ThreadSummary { return Boolean(thread); });
+			if (nextMemberThreads.length < 2) {
+				return;
+			}
+			const removedMemberThreads = (existingBundle.memberThreads || []).filter(function(thread) {
+				return !threadIds.includes(thread.threadId);
+			});
+			const filteredItems = allItems.filter(function(item) {
+				if (item.type === 'bundle') {
+					return item.bundleId !== bundleId;
+				}
+				return !threadIds.includes(item.threadId);
+			});
+			const nextItems = filteredItems.slice(0, bundleIndex)
+				.concat([{
+					type: 'bundle' as const,
+					bundleId: bundleId,
+					threadIds: [...threadIds],
+					senders: [],
+					lastUpdated: 0,
+					visibility: 'hidden' as const,
+					threadCount: nextMemberThreads.length,
+					memberThreads: nextMemberThreads,
+				}])
+				.concat(removedMemberThreads)
+				.concat(filteredItems.slice(bundleIndex));
+			regroupItems(nextItems);
+			render();
+		},
+		ungroupBundleRow: function(bundleId: string) {
+			const allItems = getAllItems();
+			const bundleIndex = allItems.findIndex(function(item) {
+				return item.type === 'bundle' && item.bundleId === bundleId;
+			});
+			if (bundleIndex === -1) {
+				return;
+			}
+			const bundle = allItems[bundleIndex] as BundleSummary;
+			const nextItems = allItems.slice(0, bundleIndex)
+				.concat((bundle.memberThreads || []).map(function(thread) { return ({...thread}); }))
+				.concat(allItems.slice(bundleIndex + 1));
+			regroupItems(nextItems);
+			render();
 		},
 		unmount: function() {
 			root.unmount();

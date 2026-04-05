@@ -1,5 +1,6 @@
 // @ts-nocheck
 import util from 'util';
+import { createServer } from 'node:http';
 import express from 'express';
 import bodyParser from 'body-parser';
 import path from 'path';
@@ -28,6 +29,9 @@ import registerSetupRoutes from './src/server/routes/setup_routes.js';
 import registerThreadRoutes from './src/server/routes/thread_routes.js';
 import registerBundleRoutes from './src/server/routes/bundle_routes.js';
 import frontendAssetService from './src/server/services/frontend_asset_service.js';
+import { createThreadUpdatesNotifier } from './src/server/services/thread_updates_notifier.js';
+import { startGmailPoller } from './src/server/services/gmail_poller.js';
+import { syncRecentThreadsFromGmail } from './src/server/services/gmail_sync_service.js';
 
 const DEFAULT_CONFIG = {
 	port: 3000,
@@ -97,6 +101,34 @@ async function withGmailApi(res, fnCallback) {
 	}
 }
 
+async function withBackgroundGmailApi(fnCallback) {
+	if (!isGoogleOAuthConfigured(config)) {
+		return null;
+	}
+	const authStatus = getGoogleAuthStatus(config);
+	if (!authStatus.connected) {
+		return null;
+	}
+	try {
+		const result = await fnCallback(async (options) => {
+			const gmailResult = await gmailApiRequest(config, options);
+			if (gmailResult.didUpdateCredentials) {
+				await saveConfig();
+			}
+			return gmailResult.data;
+		});
+		return result;
+	} catch (error) {
+		if (error.code === 'GOOGLE_REAUTH_REQUIRED' || error.status === 401) {
+			clearGoogleTokens(config);
+			await saveConfig();
+			logger.warn('Google authorization expired for background Gmail polling.');
+			return null;
+		}
+		throw error;
+	}
+}
+
 logger.info("Checking directory structure...");
 await helpers_fileio.ensureDirectoryExists('data/threads');
 logger.info("Directory structure looks fine.");
@@ -107,6 +139,7 @@ const config = await configRepository.readConfig();
 const threadRepository = createThreadRepository({ threadModelModule: threadModel });
 const threadService = createThreadService({ threadRepository, MessageClass: Message, bundles });
 const rfc2822Service = createRfc2822Service({ threadRepository });
+const threadUpdatesNotifier = createThreadUpdatesNotifier({ logger });
 
 const app = express();
 app.set('views', path.join(process.cwd(), 'views'));
@@ -128,6 +161,7 @@ const routeDependencies = {
 	hideUntils,
 	lastRefresheds,
 	logger,
+	notifyThreadsChanged: (reason) => threadUpdatesNotifier.notifyThreadsChanged(reason),
 	configRepository,
 	saveConfig,
 	rfc2822Service,
@@ -152,5 +186,28 @@ app.use(function(err, req, res, next) {
 	res.sendStatus(500);
 });
 
-app.listen(readConfigWithDefault(config, 'port'));
+const server = createServer(app);
+server.on('upgrade', function(request, socket) {
+	if (threadUpdatesNotifier.handleUpgrade(request, socket)) {
+		return;
+	}
+	socket.destroy();
+});
+server.listen(readConfigWithDefault(config, 'port'));
 logger.info(util.format("Nailbox is running on port %d.", readConfigWithDefault(config, 'port')));
+
+startGmailPoller({
+	intervalMs: 5 * 60 * 1000,
+	logger,
+	notifyThreadsChanged: (reason) => threadUpdatesNotifier.notifyThreadsChanged(reason),
+	async pollGmail() {
+		return withBackgroundGmailApi(async (gmailRequest) => {
+			return syncRecentThreadsFromGmail({
+				gmailRequest,
+				lastRefresheds,
+				threadRepository,
+				threadService,
+			});
+		});
+	},
+});

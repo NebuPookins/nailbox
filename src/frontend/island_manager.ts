@@ -40,8 +40,12 @@ interface LabelPickerIsland {
 interface ThreadListIsland {
 	setGroups(groups: unknown[]): void;
 	setLabels(labels: unknown[]): void;
+	setGroupingRules(groupingRules: unknown): void;
 	removeThread(id: string): void;
 	removeBundleRow(bundleId: string): void;
+	createBundleRow(bundleId: string, threadIds: string[]): void;
+	updateBundleRow(bundleId: string, threadIds: string[]): void;
+	ungroupBundleRow(bundleId: string): void;
 }
 
 interface IslandState<T> {
@@ -96,6 +100,7 @@ export function createIslandManager({
 	onCreateBundle,
 	onEditBundle,
 	onArchiveBundle,
+	onGroupingRulesSaved,
 	onOpenLaterPickerForBundle,
 	onUngroup,
 }: {
@@ -121,6 +126,7 @@ export function createIslandManager({
 	onCreateBundle(threadIds: string[]): void;
 	onEditBundle(bundleId: string, threadIds: string[]): void;
 	onArchiveBundle(bundleId: string): void;
+	onGroupingRulesSaved?(): Promise<unknown> | unknown;
 	onOpenLaterPickerForBundle(bundleSummary: unknown): void;
 	onUngroup(bundleId: string): void;
 }) {
@@ -185,6 +191,7 @@ export function createIslandManager({
 			container: groupingRulesRoot,
 			notify: createGroupingRulesNotify(),
 			onSaved: function() {
+				Promise.resolve(onGroupingRulesSaved?.()).catch(reportAsyncError);
 				hideSettingsModal();
 				updateUiWithThreadsFromServer(
 					messengerGetter().info('Refreshing threads from cache...')

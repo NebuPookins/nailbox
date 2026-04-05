@@ -30,7 +30,7 @@ export function createThreadService(dependencies: {
 	}: {
 		threadPayload: any;
 		lastRefresheds: any;
-	}): Promise<{status: number; body?: {humanErrorMessage: string}}> {
+	}): Promise<{status: number; changed?: boolean; body?: {humanErrorMessage: string}}> {
 		try {
 			validateThreadPayload(threadPayload);
 		} catch (error) {
@@ -52,6 +52,8 @@ export function createThreadService(dependencies: {
 			};
 		}
 
+		const existingData = await repository.readThreadJson(threadId);
+
 		const allMessagesInTrash = threadPayload.messages.every(
 			(message: any) => message.labelIds.indexOf('TRASH') !== -1
 		);
@@ -72,6 +74,7 @@ export function createThreadService(dependencies: {
 			}
 			return {
 				status: deleted ? 200 : 500,
+				changed: deleted && Boolean(existingData && Object.keys(existingData).length > 0),
 			};
 		}
 
@@ -85,7 +88,6 @@ export function createThreadService(dependencies: {
 			messageData.calculatedTimeToReadSeconds = timeToReadSeconds;
 		});
 
-		const existingData = await repository.readThreadJson(threadId);
 		const newData = threadPayload;
 		if (existingData && existingData.messages) {
 			newData.messages.forEach((newMessage: any) => {
@@ -96,11 +98,17 @@ export function createThreadService(dependencies: {
 			});
 		}
 
-		await repository.saveThreadJson(threadId, newData);
+		const didChange = !util.isDeepStrictEqual(existingData, newData);
+		if (didChange) {
+			await repository.saveThreadJson(threadId, newData);
+		}
 		lastRefresheds.markRefreshed(threadId).catch((saveError: any) => {
 			logger.error(util.format('Failed to save last refreshed for %s: %s', threadId, util.inspect(saveError)));
 		});
-		return {status: 200};
+		return {
+			status: 200,
+			changed: didChange,
+		};
 	}
 
 	async function getMostRelevantThreads({
