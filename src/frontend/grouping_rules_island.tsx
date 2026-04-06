@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-
-type ConditionType = 'sender_name' | 'sender_email' | 'subject';
-type SortType = 'mostRecent' | 'shortest';
+import { type ConditionType, type SortType } from './thread_grouping.js';
 
 interface Condition {
 	type: ConditionType;

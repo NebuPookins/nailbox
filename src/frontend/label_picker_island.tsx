@@ -16,35 +16,41 @@ interface Notify {
 interface LabelPickerState {
 	labels: Label[];
 	threadId: string | null;
+	bundleId: string | null;
 }
 
 interface LabelPickerAppProps {
 	notify: Notify | undefined;
 	onDismiss: (() => void) | undefined;
 	onMoveThread: ((threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined>) | undefined;
+	onMoveBundle: ((bundleId: string, labelId: string) => Promise<unknown>) | undefined;
 	state: LabelPickerState;
 }
 
-function LabelPickerApp({ notify, onDismiss, onMoveThread, state }: LabelPickerAppProps) {
+function LabelPickerApp({ notify, onDismiss, onMoveThread, onMoveBundle, state }: LabelPickerAppProps) {
 	const [pendingLabelId, setPendingLabelId] = useState('');
-	const hasThread = Boolean(state.threadId);
+	const hasTarget = Boolean(state.threadId) || Boolean(state.bundleId);
 
 	async function handleLabelClick(labelId: string) {
-		if (!hasThread) {
-			notify?.error?.('Missing thread id.');
+		if (!hasTarget) {
+			notify?.error?.('Missing thread or bundle id.');
 			return;
 		}
 		setPendingLabelId(labelId);
 		try {
-			const result = await Promise.resolve(onMoveThread?.(state.threadId as string, labelId));
-			if (result && result.ok === false) {
-				return;
+			if (state.bundleId) {
+				await Promise.resolve(onMoveBundle?.(state.bundleId, labelId));
+			} else {
+				const result = await Promise.resolve(onMoveThread?.(state.threadId as string, labelId));
+				if (result && result.ok === false) {
+					return;
+				}
 			}
 			onDismiss?.();
 		} catch (error: unknown) {
 			const message = error instanceof Error && error.message
 				? error.message
-				: 'Failed to move thread to label.';
+				: 'Failed to apply label.';
 			notify?.error?.(message);
 		} finally {
 			setPendingLabelId('');
@@ -62,7 +68,7 @@ function LabelPickerApp({ notify, onDismiss, onMoveThread, state }: LabelPickerA
 					<button
 						className={`btn ${label.type === 'system' ? 'btn-warning' : ''}`}
 						data-label-id={label.id}
-						disabled={!hasThread || pendingLabelId.length > 0}
+						disabled={!hasTarget || pendingLabelId.length > 0}
 						key={label.id}
 						onClick={() => handleLabelClick(label.id)}
 						style={getLabelButtonStyle(label)}
@@ -81,13 +87,15 @@ interface MountLabelPickerIslandDeps {
 	notify?: Notify;
 	onDismiss?: () => void;
 	onMoveThread?: (threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined>;
+	onMoveBundle?: (bundleId: string, labelId: string) => Promise<unknown>;
 }
 
-export function mountLabelPickerIsland({ container, notify, onDismiss, onMoveThread }: MountLabelPickerIslandDeps) {
+export function mountLabelPickerIsland({ container, notify, onDismiss, onMoveThread, onMoveBundle }: MountLabelPickerIslandDeps) {
 	const root = createRoot(container);
 	const state: LabelPickerState = {
 		labels: [],
 		threadId: null,
+		bundleId: null,
 	};
 
 	function renderApp() {
@@ -96,6 +104,7 @@ export function mountLabelPickerIsland({ container, notify, onDismiss, onMoveThr
 				notify={notify}
 				onDismiss={onDismiss}
 				onMoveThread={onMoveThread}
+				onMoveBundle={onMoveBundle}
 				state={state}
 			/>
 		);
@@ -106,11 +115,19 @@ export function mountLabelPickerIsland({ container, notify, onDismiss, onMoveThr
 	return {
 		clear() {
 			state.threadId = null;
+			state.bundleId = null;
 			renderApp();
 		},
 		open({ labels, threadId }: { labels?: Label[]; threadId?: string | null }) {
 			state.labels = Array.isArray(labels) ? labels : [];
 			state.threadId = threadId || null;
+			state.bundleId = null;
+			renderApp();
+		},
+		openForBundle({ labels, bundleId }: { labels?: Label[]; bundleId: string }) {
+			state.labels = Array.isArray(labels) ? labels : [];
+			state.threadId = null;
+			state.bundleId = bundleId;
 			renderApp();
 		},
 		setLabels(labels: Label[]) {
