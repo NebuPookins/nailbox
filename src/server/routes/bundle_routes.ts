@@ -2,7 +2,7 @@ import util from 'util';
 
 import type {Application, Request, Response} from 'express';
 
-import {normalizeHideUntilDto} from '../validation/contracts.js';
+import {normalizeGmailMoveThreadDto, normalizeHideUntilDto} from '../validation/contracts.js';
 
 export default function registerBundleRoutes(app: Application, dependencies: any): void {
 	const {
@@ -128,6 +128,49 @@ export default function registerBundleRoutes(app: Application, dependencies: any
 						return Promise.resolve();
 				}
 			}));
+			res.sendStatus(200);
+		} catch (error) {
+			const err = error as Error & {code?: string};
+			if (err.code === 'INVALID_CONTRACT') {
+				res.status(400).send({humanErrorMessage: err.message});
+				return;
+			}
+			logger.error(util.inspect(error));
+			res.sendStatus(500);
+		}
+	});
+
+	app.post('/api/bundles/:bundleId/label', async function(req: Request, res: Response) {
+		const {bundleId} = req.params;
+		try {
+			const bundle = bundles.getBundle(bundleId);
+			if (!bundle) {
+				res.sendStatus(404);
+				return;
+			}
+			const {labelId} = normalizeGmailMoveThreadDto(req.body);
+			const gmailResult = await withGmailApi(res, async (gmailRequest: any) => {
+				await Promise.all(bundle.threadIds.map((threadId: string) => {
+					logger.info(`Labeling thread ${threadId} (bundle ${bundleId}) with label ${labelId}.`);
+					return gmailRequest({
+						method: 'POST',
+						path: `/threads/${threadId}/modify`,
+						json: {
+							removeLabelIds: ['INBOX', 'UNREAD'],
+							addLabelIds: [labelId],
+						},
+					});
+				}));
+				return true;
+			});
+			if (gmailResult == null) {
+				return;
+			}
+			await Promise.all(bundle.threadIds.map((threadId: string) =>
+				threadRepository.deleteThread(threadId)
+			));
+			bundles.deleteBundle(bundleId);
+			await bundles.save();
 			res.sendStatus(200);
 		} catch (error) {
 			const err = error as Error & {code?: string};

@@ -33,6 +33,7 @@ interface LaterPickerIsland {
 
 interface LabelPickerIsland {
 	open(opts: { labels?: LabelData[]; threadId?: string | null }): void;
+	openForBundle(opts: { labels?: LabelData[]; bundleId: string }): void;
 	setLabels(labels: LabelData[]): void;
 	clear(): void;
 }
@@ -61,7 +62,7 @@ interface GroupingRulesNotify {
 interface FrontendApi {
 	mountGroupingRulesSettings?(opts: { container: Element; notify?: GroupingRulesNotify; onSaved?: () => void }): GroupingRulesIsland;
 	mountLaterPickerIsland?(opts: { container: Element; notify?: unknown; onDismiss?: () => void; onHidden?: (id: string) => void }): LaterPickerIsland;
-	mountLabelPickerIsland?(opts: { container: Element; notify?: unknown; onDismiss?: () => void; onMoveThread?: (threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined> }): LabelPickerIsland;
+	mountLabelPickerIsland?(opts: { container: Element; notify?: unknown; onDismiss?: () => void; onMoveThread?: (threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined>; onMoveBundle?: (bundleId: string, labelId: string) => Promise<unknown> }): LabelPickerIsland;
 	mountThreadListIsland?(opts: {
 		container: Element;
 		onArchive: (id: string) => void;
@@ -73,6 +74,7 @@ interface FrontendApi {
 		onEditBundle: (bundleId: string, threadIds: string[]) => void;
 		onArchiveBundle: (bundleId: string) => void;
 		onOpenLaterPickerForBundle: (summary: unknown) => void;
+		onOpenLabelPickerForBundle: (summary: unknown) => void;
 		onUngroup: (bundleId: string) => void;
 	}): ThreadListIsland;
 }
@@ -102,6 +104,8 @@ export function createIslandManager({
 	onArchiveBundle,
 	onGroupingRulesSaved,
 	onOpenLaterPickerForBundle,
+	onOpenLabelPickerForBundle,
+	onMoveBundle,
 	onUngroup,
 }: {
 	frontendApi: FrontendApi;
@@ -128,6 +132,8 @@ export function createIslandManager({
 	onArchiveBundle(bundleId: string): void;
 	onGroupingRulesSaved?(): Promise<unknown> | unknown;
 	onOpenLaterPickerForBundle(bundleSummary: unknown): void;
+	onOpenLabelPickerForBundle(bundleSummary: unknown): void;
+	onMoveBundle(bundleId: string, labelId: string): Promise<unknown>;
 	onUngroup(bundleId: string): void;
 }) {
 	let groupingRulesIsland: GroupingRulesIsland | null = null;
@@ -250,7 +256,10 @@ export function createIslandManager({
 			onDismiss: hideLabelPicker,
 			onMoveThread: function(threadId, labelId) {
 				return threadActionController.moveThreadToLabel(threadId, labelId);
-			}
+			},
+			onMoveBundle: function(bundleId, labelId) {
+				return onMoveBundle(bundleId, labelId);
+			},
 		});
 		return {
 			instance: labelPickerIsland,
@@ -282,6 +291,7 @@ export function createIslandManager({
 			onEditBundle: onEditBundle,
 			onArchiveBundle: onArchiveBundle,
 			onOpenLaterPickerForBundle: onOpenLaterPickerForBundle,
+			onOpenLabelPickerForBundle: onOpenLabelPickerForBundle,
 			onUngroup: onUngroup,
 		});
 		return {

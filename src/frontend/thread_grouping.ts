@@ -1,6 +1,6 @@
 type Visibility = 'updated' | 'visible' | 'when-i-have-time' | 'stale' | 'hidden';
-type SortType = 'mostRecent' | 'shortest';
-type ConditionType = 'sender_name' | 'sender_email' | 'subject';
+export type SortType = 'mostRecent' | 'shortest';
+export type ConditionType = 'sender_name' | 'sender_email' | 'subject';
 
 interface Person {
 	name: string;
@@ -168,9 +168,10 @@ export function groupThreads({
 		return memberThreads.length > 0 ? buildBundleSummary(bundle, memberThreads) : null;
 	}).filter(function(bundle): bundle is BundleSummary { return Boolean(bundle); });
 
-	const allItems: ThreadRowItem[] = threads
-		.filter(function(thread) { return !bundledThreadIds.has(thread.threadId); })
-		.concat(bundleItems);
+	const allItems: ThreadRowItem[] = [
+		...threads.filter(function(thread) { return !bundledThreadIds.has(thread.threadId); }),
+		...bundleItems,
+	];
 
 	function getItemId(item: ThreadRowItem): string {
 		return item.type === 'bundle' ? item.bundleId : item.threadId;

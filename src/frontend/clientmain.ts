@@ -310,6 +310,25 @@ document.addEventListener('DOMContentLoaded', function() {
 		return false;
 	}
 
+	function showLabelPickerForBundle(bundleId: string): boolean {
+		var islandState = islands.ensureLabelPickerIsland();
+		if (!bundleId) {
+			messengerGetter().error('Missing bundle id.');
+			return false;
+		}
+		if (!islandState) {
+			messengerGetter().error('Failed to load label picker');
+			return false;
+		}
+		labelPicker.querySelector('.modal-title')!.textContent = 'Label Bundle';
+		islandState.instance.openForBundle({
+			labels: islands.buildLabelPickerLabels(),
+			bundleId: bundleId,
+		});
+		showModal(labelPicker);
+		return false;
+	}
+
 	function showLaterPickerForBundle(bundleId: string): boolean {
 		var islandState = islands.ensureLaterPickerIsland();
 		if (!bundleId) {
@@ -414,6 +433,19 @@ document.addEventListener('DOMContentLoaded', function() {
 		onArchiveBundle: function(bundleId: string) { threadListController.archiveBundle(bundleId); },
 		onGroupingRulesSaved: loadGroupingRules,
 		onOpenLaterPickerForBundle: function(bundleSummary) { showLaterPickerForBundle((bundleSummary as { bundleId: string }).bundleId); },
+		onOpenLabelPickerForBundle: function(bundleSummary) { showLabelPickerForBundle((bundleSummary as { bundleId: string }).bundleId); },
+		onMoveBundle: async function(bundleId: string, labelId: string) {
+			var updateMsg = messengerGetter().info('Labeling bundle ' + bundleId + '...');
+			await appApi.addLabelToBundle(bundleId, labelId);
+			var threadListIslandState = islands.ensureThreadListIsland();
+			if (threadListIslandState) {
+				threadListIslandState.instance.removeBundleRow(bundleId);
+			}
+			updateMsg.update({
+				type: 'success',
+				message: 'Bundle labeled and removed from inbox.'
+			});
+		},
 		onUngroup: async function(bundleId: string) {
 			try {
 				var updateMsg = messengerGetter().info('Ungrouping bundle ' + bundleId + '...');

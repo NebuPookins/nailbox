@@ -93,6 +93,12 @@ export async function fetchJson(url: string, options: RequestOptions = {}): Prom
 
 export function createAppApi(dependencies: ApiDeps = {}) {
 	return {
+		addLabelToBundle(bundleId: string, labelId: string) {
+			return request(`/api/bundles/${bundleId}/label`, {
+				body: JSON.stringify({labelId}),
+				method: 'POST',
+			}, dependencies);
+		},
 		archiveBundle(bundleId: string) {
 			return request(`/api/bundles/${bundleId}/archive`, {
 				method: 'POST',
