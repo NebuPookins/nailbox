@@ -30,6 +30,7 @@ export function buildBundleSummary(bundle: BundleDto, memberThreads: ThreadSumma
 	const allSenders = memberThreads.flatMap((t) => t.senders);
 	const seenEmails = new Set<string>();
 	const dedupedSenders = allSenders.filter((s) => {
+		if (!s.email) return true;
 		if (seenEmails.has(s.email)) return false;
 		seenEmails.add(s.email);
 		return true;

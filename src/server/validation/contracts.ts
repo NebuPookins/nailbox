@@ -31,7 +31,7 @@ function assertArray(value: unknown, name: string): asserts value is unknown[] {
 
 function assertString(value: unknown, name: string): asserts value is string {
 	if (typeof value !== 'string') {
-		throw makeValidationError(`${name} must be a string`);
+		throw makeValidationError(`${name} must be a string, but was ${typeof value} ${JSON.stringify(value)}`);
 	}
 }
 
@@ -215,10 +215,12 @@ function normalizePerson(value: unknown, name: string): PersonDto {
 	const personName = value['name'];
 	const personEmail = value['email'];
 	assertString(personName, `${name}.name`);
-	assertString(personEmail, `${name}.email`);
+	if (personEmail !== undefined) {
+		assertString(personEmail, `${name}.email`);
+	}
 	return {
 		name: personName,
-		email: personEmail,
+		email: personEmail as string | undefined,
 	};
 }
 
