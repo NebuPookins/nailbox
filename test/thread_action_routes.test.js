@@ -107,3 +107,96 @@ test('thread archive route fails if cached thread deletion fails', async () => {
 
 	assert.equal(res.sentStatus, 500);
 });
+
+test('thread trash route updates bundle membership when deleting one bundled thread', async () => {
+	const app = createFakeApp();
+	const bundleUpdates = [];
+	let saveCalls = 0;
+	registerThreadActionRoutes(app, {
+		bundles: {
+			getBundleForThread(threadId) {
+				assert.equal(threadId, 'abc123');
+				return {
+					bundleId: 'bundle-1',
+					threadIds: ['abc123', 'def456', 'ghi789'],
+				};
+			},
+			updateBundle(bundleId, threadIds) {
+				bundleUpdates.push({ bundleId, threadIds });
+			},
+			deleteBundle() {
+				throw new Error('should not delete bundle');
+			},
+			async save() {
+				saveCalls += 1;
+			},
+		},
+		lastRefresheds: {},
+		logger: { error() {}, info() {}, warn() {} },
+		threadRepository: {
+			async deleteThread() {
+				return true;
+			},
+		},
+		async withGmailApi(_res, callback) {
+			return callback(async () => ({ id: 'gmail-response' }));
+		},
+	});
+
+	const handler = findPostHandler(app, '/^\\/api\\/threads\\/([a-z0-9]+)\\/trash$/');
+	const res = createFakeResponse();
+
+	await handler({ params: ['abc123'] }, res);
+
+	assert.deepEqual(bundleUpdates, [{
+		bundleId: 'bundle-1',
+		threadIds: ['def456', 'ghi789'],
+	}]);
+	assert.equal(saveCalls, 1);
+	assert.equal(res.statusCode, 200);
+});
+
+test('thread trash route deletes the bundle when deleting leaves fewer than two threads', async () => {
+	const app = createFakeApp();
+	const deletedBundles = [];
+	let saveCalls = 0;
+	registerThreadActionRoutes(app, {
+		bundles: {
+			getBundleForThread(threadId) {
+				assert.equal(threadId, 'abc123');
+				return {
+					bundleId: 'bundle-1',
+					threadIds: ['abc123', 'def456'],
+				};
+			},
+			updateBundle() {
+				throw new Error('should not update bundle');
+			},
+			deleteBundle(bundleId) {
+				deletedBundles.push(bundleId);
+			},
+			async save() {
+				saveCalls += 1;
+			},
+		},
+		lastRefresheds: {},
+		logger: { error() {}, info() {}, warn() {} },
+		threadRepository: {
+			async deleteThread() {
+				return true;
+			},
+		},
+		async withGmailApi(_res, callback) {
+			return callback(async () => ({ id: 'gmail-response' }));
+		},
+	});
+
+	const handler = findPostHandler(app, '/^\\/api\\/threads\\/([a-z0-9]+)\\/trash$/');
+	const res = createFakeResponse();
+
+	await handler({ params: ['abc123'] }, res);
+
+	assert.deepEqual(deletedBundles, ['bundle-1']);
+	assert.equal(saveCalls, 1);
+	assert.equal(res.statusCode, 200);
+});
