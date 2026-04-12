@@ -60,6 +60,37 @@ function cloneItem(item: ThreadRowItem): ThreadRowItem {
 	return {...item};
 }
 
+export function removeThreadFromItems(items: ThreadRowItem[], threadId: string): ThreadRowItem[] {
+	return items.flatMap(function(item): ThreadRowItem[] {
+		if (item.type === 'bundle') {
+			const containsThread = item.threadIds.includes(threadId);
+			if (!containsThread) {
+				return [cloneItem(item)];
+			}
+			const remainingMemberThreads = (item.memberThreads || [])
+				.filter(function(thread) { return thread.threadId !== threadId; })
+				.map(function(thread) { return ({...thread}); });
+			const remainingThreadIds = item.threadIds.filter(function(id) { return id !== threadId; });
+			if (remainingThreadIds.length >= 2) {
+				return [{
+					...item,
+					threadIds: remainingThreadIds,
+					threadCount: remainingMemberThreads.length,
+					memberThreads: remainingMemberThreads,
+				}];
+			}
+			if (remainingMemberThreads.length === 1) {
+				return [remainingMemberThreads[0]];
+			}
+			return [];
+		}
+		if (item.threadId === threadId) {
+			return [];
+		}
+		return [{...item}];
+	});
+}
+
 function renderParticipants(people: Person[]): string {
 	return (people || []).map(function(p) {
 		return p && p.name ? p.name : '';
@@ -673,22 +704,7 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 			setTimeout(function() {
 				removingThreadIds = new Set(removingThreadIds);
 				removingThreadIds.delete(threadId);
-				groups = groups
-					.map(function(group) {
-						return {
-							...group,
-							threads: group.threads.filter(function(t) { return t.threadId !== threadId; }),
-							items: group.items
-								? group.items.filter(function(item) {
-									return item.type === 'bundle' || (item as ThreadSummary).threadId !== threadId;
-								})
-								: undefined,
-						};
-					})
-					.filter(function(group) {
-						const items = group.items || group.threads;
-						return items.length > 0;
-					});
+				regroupItems(removeThreadFromItems(getAllItems(), threadId));
 				render();
 			}, REMOVE_ANIMATION_MS);
 		},
