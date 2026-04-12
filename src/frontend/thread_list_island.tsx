@@ -119,6 +119,7 @@ function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onArc
 	const mainDisplayedLabelIds = getThreadMainDisplayedLabelIds(thread);
 
 	function handleRowClick(e: React.MouseEvent<HTMLDivElement>) {
+		e.stopPropagation();
 		if ((e.target as Element).closest('button, a, input, select, textarea, label')) {
 			return;
 		}
