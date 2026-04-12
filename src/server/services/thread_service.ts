@@ -161,7 +161,7 @@ export function createThreadService(dependencies: {
 					recentMessageReadTimeSeconds: recentMessageReadTime,
 				});
 			} catch (error) {
-				logger.warn(`Couldn't read certain threads in getMostRelevantThreads. Ignoring and continuing. ${util.inspect(error)}`);
+				logger.warn(`Couldn't read certain threads in getMostRelevantThreads. Ignoring and continuing. filename=${filename} ${util.inspect(error)}`);
 				return null;
 			}
 		}));

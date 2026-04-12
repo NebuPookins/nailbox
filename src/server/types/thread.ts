@@ -1,6 +1,6 @@
 export interface PersonDto {
 	name: string;
-	email: string;
+	email?: string;
 }
 
 export interface PersistedMessage {

@@ -23,8 +23,8 @@ const logger = nebulog.make({filename: 'models/message.js', level: 'debug'});
 	 */
 	function parseEmailToString(str) {
 		return mimelib.parseAddresses(str).map(entry => {
-			var name = entry.name ? entry.name : entry.address;
-			return {name: name, email: entry.address};
+			var name = entry.name ? entry.name : (entry.address || '(unknown)');
+			return {name: name, email: entry.address || undefined};
 		});
 	}
 	(function test_parseEmailToString() {
@@ -46,6 +46,10 @@ const logger = nebulog.make({filename: 'models/message.js', level: 'debug'});
 		assert.deepEqual(
 			parseEmailToString('aa@gmail.com'),
 			[{name: 'aa@gmail.com', email: 'aa@gmail.com'}]);
+		// If no e-mail address is present (e.g. "undisclosed-recipients:;"), email should be undefined
+		assert.deepEqual(
+			parseEmailToString('undisclosed-recipients:;'),
+			[{name: 'undisclosed-recipients', email: undefined}]);
 	})();
 
 function Message(data) {
