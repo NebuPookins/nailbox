@@ -33,6 +33,8 @@ export interface BundleSummary {
 	visibility: Visibility;
 	threadCount: number;
 	memberThreads?: ThreadSummary[];
+	totalTimeToReadSeconds: number;
+	recentMessageReadTimeSeconds: number;
 }
 
 export type ThreadRowItem = ThreadSummary | BundleSummary;
@@ -118,6 +120,7 @@ export function buildBundleSummary(bundle: BundleData, memberThreads: ThreadSumm
 			? thread.visibility
 			: best;
 	}, 'hidden' as Visibility);
+	const totalTimeToReadSeconds = memberThreads.reduce(function(sum, t) { return sum + t.totalTimeToReadSeconds; }, 0);
 	return {
 		type: 'bundle',
 		bundleId: bundle.bundleId,
@@ -129,6 +132,8 @@ export function buildBundleSummary(bundle: BundleData, memberThreads: ThreadSumm
 		visibility: visibility,
 		threadCount: memberThreads.length,
 		memberThreads: memberThreads,
+		totalTimeToReadSeconds,
+		recentMessageReadTimeSeconds: latestThread.recentMessageReadTimeSeconds,
 	};
 }
 

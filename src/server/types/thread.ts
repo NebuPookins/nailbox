@@ -69,6 +69,8 @@ export interface BundleSummaryDto {
 	isWhenIHaveTime: boolean;
 	threadCount: number;
 	memberThreads: ThreadSummaryDto[];
+	totalTimeToReadSeconds: number;
+	recentMessageReadTimeSeconds: number;
 }
 
 export type ThreadRowItem = ThreadSummaryDto | BundleSummaryDto;
