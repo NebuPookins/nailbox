@@ -38,6 +38,7 @@ export function buildBundleSummary(bundle: BundleDto, memberThreads: ThreadSumma
 	const latestThread = memberThreads.reduce((latest, t) => t.lastUpdated > latest.lastUpdated ? t : latest, memberThreads[0]);
 	const lastUpdated = latestThread.lastUpdated;
 	const visibility = computeBundleVisibility(memberThreads);
+	const totalTimeToReadSeconds = memberThreads.reduce((sum, t) => sum + t.totalTimeToReadSeconds, 0);
 	return {
 		type: 'bundle',
 		bundleId: bundle.bundleId,
@@ -50,6 +51,8 @@ export function buildBundleSummary(bundle: BundleDto, memberThreads: ThreadSumma
 		isWhenIHaveTime: visibility === 'when-i-have-time',
 		threadCount: memberThreads.length,
 		memberThreads,
+		totalTimeToReadSeconds,
+		recentMessageReadTimeSeconds: latestThread.recentMessageReadTimeSeconds,
 	};
 }
 

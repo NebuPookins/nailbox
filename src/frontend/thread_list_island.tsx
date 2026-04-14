@@ -345,6 +345,14 @@ function BundleRow({ bundle, isExpanded, isRemoving, children, onArchive, onEdit
 					{bundle.snippet ? <p className="snippet">{bundle.snippet}</p> : null}
 				</div>
 				<div className="col-xs-2">
+					<small>Total:</small>
+					<span className="glyphicon glyphicon-time"></span>{' '}
+					{formatReadTime(bundle.totalTimeToReadSeconds) as string}
+					<br />
+					<small>Recent:</small>
+					<span className="glyphicon glyphicon-time"></span>{' '}
+					{formatReadTime(bundle.recentMessageReadTimeSeconds) as string}
+					<br />
 					<button
 						className="btn btn-xs btn-success archive-thread"
 						title="Archive all"
@@ -760,6 +768,8 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 					visibility: 'hidden' as const,
 					threadCount: memberThreads.length,
 					memberThreads: memberThreads,
+					totalTimeToReadSeconds: memberThreads.reduce(function(sum, t) { return sum + t.totalTimeToReadSeconds; }, 0),
+					recentMessageReadTimeSeconds: memberThreads.reduce(function(latest, t) { return t.lastUpdated > latest.lastUpdated ? t : latest; }, memberThreads[0]).recentMessageReadTimeSeconds,
 				}])
 				.concat(remainingItems.slice(insertIndex));
 			regroupItems(nextItems);
@@ -809,6 +819,8 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 					visibility: 'hidden' as const,
 					threadCount: nextMemberThreads.length,
 					memberThreads: nextMemberThreads,
+					totalTimeToReadSeconds: nextMemberThreads.reduce(function(sum, t) { return sum + t.totalTimeToReadSeconds; }, 0),
+					recentMessageReadTimeSeconds: nextMemberThreads.reduce(function(latest, t) { return t.lastUpdated > latest.lastUpdated ? t : latest; }, nextMemberThreads[0]).recentMessageReadTimeSeconds,
 				}])
 				.concat(removedMemberThreads)
 				.concat(filteredItems.slice(bundleIndex));
