@@ -540,9 +540,23 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 					? group.items
 					: group.threads.map((t) => ({...t, type: 'thread' as const}));
 
+				const groupTotalTime = items.reduce(function(sum, item) {
+					return sum + item.totalTimeToReadSeconds;
+				}, 0);
+				const groupRecentTime = items.reduce(function(sum, item) {
+					return sum + item.recentMessageReadTimeSeconds;
+				}, 0);
+
 				return (
 					<React.Fragment key={groupIdx}>
-						<div className="group">{group.label || ''}</div>
+						<div className="group">
+							{group.label || ''}
+							<span style={{marginLeft: '8px', fontWeight: 'normal', fontSize: '0.85em', color: '#666'}}>
+								{items.length} item{items.length !== 1 ? 's' : ''}
+								{' · '}Total: {formatReadTime(groupTotalTime)}
+								{' · '}Recent: {formatReadTime(groupRecentTime)}
+							</span>
+						</div>
 						{items.map(function(item) {
 							if (item.type === 'bundle') {
 								const bundle = item as BundleSummary;
