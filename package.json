@@ -34,7 +34,7 @@
     "optional-js": "^1.2.1",
     "posthtml": "^0.13.3",
     "pug": "^3.0.0",
-    "sanitize-html": "^2.7.0"
+    "sanitize-html": "^2.17.3"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
