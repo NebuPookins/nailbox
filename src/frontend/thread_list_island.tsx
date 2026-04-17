@@ -282,15 +282,18 @@ interface BundleRowProps {
 	isExpanded: boolean;
 	isRemoving: boolean;
 	children?: React.ReactNode;
+	showCheckbox?: boolean;
+	isSelected?: boolean;
 	onArchive: (bundleId: string) => void;
 	onEdit: (bundle: BundleSummary) => void;
 	onOpenLaterPicker: (payload: BundleLaterPickerPayload) => void;
 	onOpenLabelPicker: (payload: BundleLaterPickerPayload) => void;
 	onUngroup: (bundleId: string) => void;
 	onToggleExpand: (bundleId: string) => void;
+	onToggleSelectBundle?: (bundle: BundleSummary) => void;
 }
 
-function BundleRow({ bundle, isExpanded, isRemoving, children, onArchive, onEdit, onOpenLaterPicker, onOpenLabelPicker, onUngroup, onToggleExpand }: BundleRowProps) {
+function BundleRow({ bundle, isExpanded, isRemoving, children, showCheckbox, isSelected, onArchive, onEdit, onOpenLaterPicker, onOpenLabelPicker, onUngroup, onToggleExpand, onToggleSelectBundle }: BundleRowProps) {
 	const rowRef = useRef<HTMLDivElement>(null);
 
 	useEffect(function() {
@@ -314,6 +317,10 @@ function BundleRow({ bundle, isExpanded, isRemoving, children, onArchive, onEdit
 		if ((e.target as Element).closest('button, a, input, select, textarea, label')) {
 			return;
 		}
+		if (showCheckbox && onToggleSelectBundle) {
+			onToggleSelectBundle(bundle);
+			return;
+		}
 		onToggleExpand(bundle.bundleId);
 	}
 
@@ -326,6 +333,15 @@ function BundleRow({ bundle, isExpanded, isRemoving, children, onArchive, onEdit
 		>
 			<div className="row">
 				<div className="col-xs-10">
+					{showCheckbox ? (
+						<input
+							type="checkbox"
+							checked={isSelected || false}
+							onChange={function() { onToggleSelectBundle?.(bundle); }}
+							onClick={function(e) { e.stopPropagation(); }}
+							style={{marginRight: '8px'}}
+						/>
+					) : null}
 					<span className="glyphicon glyphicon-duplicate" title="Bundle" style={{marginRight: '6px'}}></span>
 					<strong>From&nbsp;</strong>
 					<span className="senders" title={senders.map((p) => renderPrimaryPerson(p)).join(', ')}>
@@ -437,7 +453,7 @@ interface ThreadListAppProps {
 	onOpenLabelPicker: (payload: LaterPickerPayload) => void;
 	onOpenThread: (payload: ThreadOpenPayload) => void;
 	onCreateBundle: (threadIds: string[]) => void;
-	onEditBundle: (bundleId: string, threadIds: string[]) => void;
+	onEditBundle: (bundleId: string, threadIds: string[], mergeBundleIds: string[]) => void;
 	onArchiveBundle: (bundleId: string) => void;
 	onOpenLaterPickerForBundle: (payload: BundleLaterPickerPayload) => void;
 	onOpenLabelPickerForBundle: (payload: BundleLaterPickerPayload) => void;
@@ -447,6 +463,7 @@ interface ThreadListAppProps {
 function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup }: ThreadListAppProps) {
 	const [selectionMode, setSelectionMode] = useState(false);
 	const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
+	const [selectedMergeBundleIds, setSelectedMergeBundleIds] = useState<Set<string>>(new Set());
 	const [expandedBundleIds, setExpandedBundleIds] = useState<Set<string>>(new Set());
 	const [editingBundleId, setEditingBundleId] = useState<string | null>(null);
 
@@ -479,11 +496,13 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 
 	function handleBundle() {
 		const threadIds = Array.from(selectedThreadIds);
+		const mergeBundleIds = Array.from(selectedMergeBundleIds);
 		setSelectionMode(false);
 		setSelectedThreadIds(new Set());
+		setSelectedMergeBundleIds(new Set());
 		setEditingBundleId(null);
 		if (editingBundleId) {
-			onEditBundle(editingBundleId, threadIds);
+			onEditBundle(editingBundleId, threadIds, mergeBundleIds);
 		} else {
 			onCreateBundle(threadIds);
 		}
@@ -496,9 +515,28 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 		setSelectionMode(true);
 	}
 
+	function handleToggleSelectBundle(bundle: BundleSummary) {
+		const nextMerge = new Set(selectedMergeBundleIds);
+		const nextThreads = new Set(selectedThreadIds);
+		if (nextMerge.has(bundle.bundleId)) {
+			nextMerge.delete(bundle.bundleId);
+			for (const tid of bundle.threadIds) {
+				nextThreads.delete(tid);
+			}
+		} else {
+			nextMerge.add(bundle.bundleId);
+			for (const tid of bundle.threadIds) {
+				nextThreads.add(tid);
+			}
+		}
+		setSelectedMergeBundleIds(nextMerge);
+		setSelectedThreadIds(nextThreads);
+	}
+
 	function handleCancelSelection() {
 		setSelectionMode(false);
 		setSelectedThreadIds(new Set());
+		setSelectedMergeBundleIds(new Set());
 		setEditingBundleId(null);
 	}
 
@@ -567,12 +605,15 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 										bundle={bundle}
 										isExpanded={isExpanded}
 										isRemoving={removingBundleIds.has(bundle.bundleId)}
+										showCheckbox={selectionMode && editingBundleId !== null && editingBundleId !== bundle.bundleId}
+										isSelected={selectedMergeBundleIds.has(bundle.bundleId)}
 										onArchive={onArchiveBundle}
 										onEdit={handleEditBundle}
 										onOpenLaterPicker={onOpenLaterPickerForBundle}
 										onOpenLabelPicker={onOpenLabelPickerForBundle}
 										onUngroup={onUngroup}
 										onToggleExpand={handleToggleExpand}
+										onToggleSelectBundle={handleToggleSelectBundle}
 									>
 										{isExpanded ? (bundle.memberThreads || []).map(function(thread) {
 											const isEditingThisBundle = selectionMode && editingBundleId === bundle.bundleId;
@@ -633,7 +674,7 @@ interface MountThreadListIslandDeps {
 	onOpenLabelPicker: (payload: LaterPickerPayload) => void;
 	onOpenThread: (payload: ThreadOpenPayload) => void;
 	onCreateBundle: (threadIds: string[]) => void;
-	onEditBundle: (bundleId: string, threadIds: string[]) => void;
+	onEditBundle: (bundleId: string, threadIds: string[], mergeBundleIds: string[]) => void;
 	onArchiveBundle: (bundleId: string) => void;
 	onOpenLaterPickerForBundle: (payload: BundleLaterPickerPayload) => void;
 	onOpenLabelPickerForBundle: (payload: BundleLaterPickerPayload) => void;
@@ -789,7 +830,8 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 			regroupItems(nextItems);
 			render();
 		},
-		updateBundleRow: function(bundleId: string, threadIds: string[]) {
+		updateBundleRow: function(bundleId: string, threadIds: string[], mergeBundleIds?: string[]) {
+			const mergeSet = new Set(mergeBundleIds || []);
 			const allItems = getAllItems();
 			const bundleIndex = allItems.findIndex(function(item) {
 				return item.type === 'bundle' && item.bundleId === bundleId;
@@ -819,11 +861,20 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 			});
 			const filteredItems = allItems.filter(function(item) {
 				if (item.type === 'bundle') {
-					return item.bundleId !== bundleId;
+					// Remove the target bundle (will be re-inserted) and any merged bundles
+					return item.bundleId !== bundleId && !mergeSet.has(item.bundleId);
 				}
 				return !threadIds.includes(item.threadId);
 			});
-			const nextItems = filteredItems.slice(0, bundleIndex)
+			// Adjust bundleIndex for removed merged bundles that appeared before it
+			let adjustedIndex = bundleIndex;
+			for (let i = 0; i < bundleIndex; i++) {
+				const item = allItems[i];
+				if (item.type === 'bundle' && mergeSet.has(item.bundleId)) {
+					adjustedIndex--;
+				}
+			}
+			const nextItems = filteredItems.slice(0, adjustedIndex)
 				.concat([{
 					type: 'bundle' as const,
 					bundleId: bundleId,
@@ -837,7 +888,7 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 					recentMessageReadTimeSeconds: nextMemberThreads.reduce(function(latest, t) { return t.lastUpdated > latest.lastUpdated ? t : latest; }, nextMemberThreads[0]).recentMessageReadTimeSeconds,
 				}])
 				.concat(removedMemberThreads)
-				.concat(filteredItems.slice(bundleIndex));
+				.concat(filteredItems.slice(adjustedIndex));
 			regroupItems(nextItems);
 			render();
 		},

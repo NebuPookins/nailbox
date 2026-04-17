@@ -121,9 +121,13 @@ export function createAppApi(dependencies: ApiDeps = {}) {
 				parseAs: 'void',
 			}, dependencies);
 		},
-		updateBundle(bundleId: string, threadIds: string[]) {
+		updateBundle(bundleId: string, threadIds: string[], mergeBundleIds?: string[]) {
+			const payload: Record<string, unknown> = {threadIds};
+			if (mergeBundleIds && mergeBundleIds.length > 0) {
+				payload.mergeBundleIds = mergeBundleIds;
+			}
 			return request(`/api/bundles/${bundleId}`, {
-				body: JSON.stringify({threadIds}),
+				body: JSON.stringify(payload),
 				method: 'PUT',
 			}, dependencies);
 		},
