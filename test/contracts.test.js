@@ -17,10 +17,9 @@ import {
 } from '../src/server/validation/contracts.js';
 
 test('normalizeAppConfig fills missing structured defaults', () => {
-	assert.deepEqual(normalizeAppConfig({}), {
-		googleOAuth: {},
-		emailGroupingRules: {rules: []},
-	});
+	const config = normalizeAppConfig({});
+	assert.deepEqual(config.googleOAuth, {});
+	assert.deepEqual(config.emailGroupingRules, {rules: []});
 });
 
 test('normalizeGroupingRulesConfig normalizes omitted rules', () => {

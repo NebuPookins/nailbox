@@ -107,32 +107,26 @@ function normalizeGoogleOAuthConfig(value: unknown): GoogleOAuthConfig {
 		return {};
 	}
 	assertObject(value, 'googleOAuth');
-	const clientId = value['clientId'];
-	const clientSecret = value['clientSecret'];
-	const redirectUri = value['redirectUri'];
-	const accessToken = value['accessToken'];
-	const accessTokenExpiresAt = value['accessTokenExpiresAt'];
-	const refreshToken = value['refreshToken'];
-	const scope = value['scope'];
-	const connectedEmailAddress = value['connectedEmailAddress'];
-	assertOptionalString(clientId, 'googleOAuth.clientId');
-	assertOptionalString(clientSecret, 'googleOAuth.clientSecret');
-	assertOptionalString(redirectUri, 'googleOAuth.redirectUri');
-	assertOptionalString(accessToken, 'googleOAuth.accessToken');
-	assertOptionalString(accessTokenExpiresAt, 'googleOAuth.accessTokenExpiresAt');
-	assertOptionalString(refreshToken, 'googleOAuth.refreshToken');
-	assertOptionalString(scope, 'googleOAuth.scope');
-	assertOptionalString(connectedEmailAddress, 'googleOAuth.connectedEmailAddress');
-	return {
-		clientId: clientId ?? undefined,
-		clientSecret: clientSecret ?? undefined,
-		redirectUri: redirectUri ?? undefined,
-		accessToken: accessToken ?? undefined,
-		accessTokenExpiresAt: accessTokenExpiresAt ?? undefined,
-		refreshToken: refreshToken ?? undefined,
-		scope: scope ?? undefined,
-		connectedEmailAddress: connectedEmailAddress ?? undefined,
-	};
+	const fields = {
+		clientId: value['clientId'],
+		clientSecret: value['clientSecret'],
+		redirectUri: value['redirectUri'],
+		accessToken: value['accessToken'],
+		accessTokenExpiresAt: value['accessTokenExpiresAt'],
+		refreshToken: value['refreshToken'],
+		scope: value['scope'],
+		connectedEmailAddress: value['connectedEmailAddress'],
+	} as const;
+	for (const [key, val] of Object.entries(fields)) {
+		assertOptionalString(val, `googleOAuth.${key}`);
+	}
+	const result: GoogleOAuthConfig = {};
+	for (const [key, val] of Object.entries(fields) as [keyof GoogleOAuthConfig, unknown][]) {
+		if (val !== undefined && val !== null) {
+			(result as Record<string, unknown>)[key] = val;
+		}
+	}
+	return result;
 }
 
 export function normalizeAppConfig(value: unknown): AppConfig {
@@ -149,12 +143,17 @@ export function normalizeAppConfig(value: unknown): AppConfig {
 	}
 	const clientId = value['clientId'];
 	assertOptionalString(clientId, 'config.clientId');
-	return {
-		port: rawPort as number | undefined,
-		clientId: clientId ?? undefined,
+	const result: AppConfig = {
 		googleOAuth: normalizeGoogleOAuthConfig(value['googleOAuth']),
 		emailGroupingRules: normalizeGroupingRulesConfig(value['emailGroupingRules']),
 	};
+	if (rawPort !== undefined) {
+		result.port = rawPort as number;
+	}
+	if (clientId !== undefined && clientId !== null) {
+		result.clientId = clientId;
+	}
+	return result;
 }
 
 export function normalizeGoogleOAuthSetupDto(value: unknown, defaultRedirectUri: unknown): GoogleOAuthSetupDto {

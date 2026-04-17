@@ -180,15 +180,15 @@ export function groupThreads({threads, bundles = [], groupingRules, hideUntilCom
 		const sortedItems = [...groupedItems[group]];
 		if (sortType === 'shortest') {
 			sortedItems.sort((a, b) => {
-				const aTime = a.type === 'thread' ? a.totalTimeToReadSeconds : 0;
-				const bTime = b.type === 'thread' ? b.totalTimeToReadSeconds : 0;
+				const aTime = a.type !== 'bundle' ? a.totalTimeToReadSeconds : 0;
+				const bTime = b.type !== 'bundle' ? b.totalTimeToReadSeconds : 0;
 				return aTime - bTime;
 			});
 		} else {
 			sortedItems.sort(itemComparator);
 		}
 
-		const threadItems = sortedItems.filter((item): item is ThreadSummaryDto => item.type === 'thread');
+		const threadItems = sortedItems.filter((item): item is ThreadSummaryDto => item.type !== 'bundle');
 
 		return {
 			label: group,
