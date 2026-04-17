@@ -69,17 +69,28 @@ export default function registerBundleRoutes(app: Application, dependencies: any
 				res.status(400).send({humanErrorMessage: 'All threadIds must be strings.'});
 				return;
 			}
-			// Only check newly added threads for conflicts with OTHER bundles
+			// Optional: bundles to merge into this one (their threads are absorbed, then they are deleted)
+			const mergeBundleIds: string[] = Array.isArray(body.mergeBundleIds)
+				? body.mergeBundleIds.filter((id: unknown) => typeof id === 'string')
+				: [];
+			const mergeBundleIdSet = new Set(mergeBundleIds);
+			// Only check newly added threads for conflicts with OTHER bundles (excluding merge targets)
 			for (const threadId of threadIds) {
 				if (!bundle.threadIds.includes(threadId)) {
 					const existing = bundles.getBundleForThread(threadId);
-					if (existing && existing.bundleId !== bundleId) {
+					if (existing && existing.bundleId !== bundleId && !mergeBundleIdSet.has(existing.bundleId)) {
 						res.status(409).send({humanErrorMessage: `Thread ${threadId} is already in another bundle.`});
 						return;
 					}
 				}
 			}
 			bundles.updateBundle(bundleId, threadIds);
+			for (const mergeId of mergeBundleIds) {
+				if (bundles.getBundle(mergeId)) {
+					bundles.deleteBundle(mergeId);
+					logger.info(`Merged bundle ${mergeId} into ${bundleId}.`);
+				}
+			}
 			await bundles.save();
 			logger.info(`Updated bundle ${bundleId} threadIds.`);
 			res.sendStatus(200);

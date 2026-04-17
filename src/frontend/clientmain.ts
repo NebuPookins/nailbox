@@ -419,12 +419,12 @@ document.addEventListener('DOMContentLoaded', function() {
 				reportAsyncError(error);
 			}
 		},
-		onEditBundle: async function(bundleId: string, threadIds: string[]) {
+		onEditBundle: async function(bundleId: string, threadIds: string[], mergeBundleIds: string[]) {
 			try {
-				await appApi.updateBundle(bundleId, threadIds);
+				await appApi.updateBundle(bundleId, threadIds, mergeBundleIds);
 				var threadListIslandState = islands.ensureThreadListIsland();
 				if (threadListIslandState) {
-					threadListIslandState.instance.updateBundleRow(bundleId, threadIds);
+					threadListIslandState.instance.updateBundleRow(bundleId, threadIds, mergeBundleIds);
 				}
 			} catch (error) {
 				reportAsyncError(error);

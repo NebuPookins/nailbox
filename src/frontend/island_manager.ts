@@ -45,7 +45,7 @@ interface ThreadListIsland {
 	removeThread(id: string): void;
 	removeBundleRow(bundleId: string): void;
 	createBundleRow(bundleId: string, threadIds: string[]): void;
-	updateBundleRow(bundleId: string, threadIds: string[]): void;
+	updateBundleRow(bundleId: string, threadIds: string[], mergeBundleIds?: string[]): void;
 	ungroupBundleRow(bundleId: string): void;
 }
 
