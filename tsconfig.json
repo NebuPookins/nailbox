@@ -19,7 +19,7 @@
     "src/**/*.tsx",
     "src/**/*.js",
     "main.mjs",
-    "models/**/*.js",
+    "models/**/*.ts",
     "helpers/**/*.js",
     "services/**/*.mjs"
   ],

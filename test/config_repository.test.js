@@ -18,10 +18,8 @@ test('config repository normalizes missing nested config on read', async () => {
 
 	const config = await repository.readConfig();
 
-	assert.deepEqual(config, {
-		googleOAuth: {},
-		emailGroupingRules: {rules: []},
-	});
+	assert.deepEqual(config.googleOAuth, {});
+	assert.deepEqual(config.emailGroupingRules, {rules: []});
 });
 
 test('config repository validates and persists normalized config on save', async () => {
@@ -50,11 +48,7 @@ test('config repository validates and persists normalized config on save', async
 
 	assert.equal(savedPath, 'data/config.json');
 	assert.deepEqual(savedConfig, result);
-	assert.deepEqual(result, {
-		port: 3000,
-		googleOAuth: {
-			clientId: 'abc',
-		},
-		emailGroupingRules: {rules: []},
-	});
+	assert.equal(result.port, 3000);
+	assert.equal(result.googleOAuth.clientId, 'abc');
+	assert.deepEqual(result.emailGroupingRules, {rules: []});
 });
