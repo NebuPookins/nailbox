@@ -49,8 +49,9 @@ export function createThreadRepository(dependencies: {
 
 	async function readThreadJson(threadId: string): Promise<Partial<PersistedThread>> {
 		const threadJson = await fileioImpl.readJsonFromOptionalFile(`${threadsDirectory}/${threadId}`);
-		if (!threadJson.id && !threadJson.messages) {
-			return threadJson;
+		const partial = threadJson as Partial<PersistedThread>;
+		if (!partial.id && !partial.messages) {
+			return partial;
 		}
 		return validatePersistedThread(threadJson);
 	}

@@ -99,7 +99,14 @@ export default function registerAuthRoutes(app: Application, dependencies: any):
 			return;
 		}
 		try {
-			const tokenResponse = await exchangeCodeForTokens(config, req.query.code);
+			const code = req.query.code;
+			if (typeof code !== 'string') {
+				res.status(400).render('setup', getSetupViewModel(config, req, {
+					errorMessage: 'Missing or invalid authorization code.',
+				}));
+				return;
+			}
+			const tokenResponse = await exchangeCodeForTokens(config, code);
 			const googleOAuth = getGoogleOAuthConfig(config);
 			googleOAuth.accessToken = tokenResponse.access_token;
 			googleOAuth.accessTokenExpiresAt = new Date(Date.now() + ((tokenResponse.expires_in || 3600) * 1000)).toISOString();
@@ -117,7 +124,8 @@ export default function registerAuthRoutes(app: Application, dependencies: any):
 			const profile = await gmailApiRequest(config, {
 				path: '/profile',
 			});
-			googleOAuth.connectedEmailAddress = profile.data.emailAddress;
+			const profileData = profile.data as {emailAddress?: string};
+			googleOAuth.connectedEmailAddress = profileData.emailAddress;
 			await saveConfig();
 			res.redirect('/?googleAuth=success');
 		} catch (error) {

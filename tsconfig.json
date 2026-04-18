@@ -18,9 +18,11 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "src/**/*.js",
-    "main.mjs",
+    "main.mts",
     "models/**/*.ts",
+    "helpers/**/*.ts",
     "helpers/**/*.js",
+    "services/**/*.mts",
     "services/**/*.mjs"
   ],
   "exclude": [

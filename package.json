@@ -11,8 +11,8 @@
     "email": "nebupookins@gmail.com"
   },
   "scripts": {
-    "start": "tsx main.mjs",
-    "dev": "tsx watch main.mjs",
+    "start": "tsx main.mts",
+    "dev": "tsx watch main.mts",
     "test": "tsx --test",
     "build:frontend": "node scripts/build_frontend.mjs",
     "dev:frontend": "node scripts/build_frontend.mjs --watch"
