@@ -1,11 +1,14 @@
-// @ts-nocheck
 import util from 'util';
 import { createServer } from 'node:http';
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import bodyParser from 'body-parser';
 import path from 'path';
 import nebulog from 'nebulog';
-const logger = nebulog.make({filename: 'main.mjs', level: 'debug'});
+
+import type { AppConfig } from './src/server/types/config.js';
+import type { GmailApiRequestOptions } from './services/google_oauth.mjs';
+
+const logger = nebulog.make({filename: 'main.mts', level: 'debug'});
 import helpers_fileio from './helpers/fileio.js';
 
 import threadModel from './models/thread.js';
@@ -33,7 +36,7 @@ import { createThreadUpdatesNotifier } from './src/server/services/thread_update
 import { startGmailPoller } from './src/server/services/gmail_poller.js';
 import { syncRecentThreadsFromGmail } from './src/server/services/gmail_sync_service.js';
 
-const DEFAULT_CONFIG = {
+const DEFAULT_CONFIG: {port: number} = {
 	port: 3000,
 };
 
@@ -48,26 +51,24 @@ process.on('SIGINT', () => {
 	process.exit( );
 });
 
-function readConfigWithDefault(config, strFieldName) {
-	if (config[strFieldName]) {
-		return config[strFieldName];
-	} else {
-		return DEFAULT_CONFIG[strFieldName];
-	}
+function readConfigWithDefault(config: AppConfig, strFieldName: keyof typeof DEFAULT_CONFIG): number {
+	return config[strFieldName] ?? DEFAULT_CONFIG[strFieldName];
 }
 
-function saveConfig() {
+function saveConfig(): Promise<AppConfig> {
 	return configRepository.saveConfig(config);
 }
 
-function makeGoogleAuthErrorResponse(res, code, message, status = 401) {
-	return res.status(status).send({
-		code: code,
-		message: message,
-	});
+function makeGoogleAuthErrorResponse(res: Response, code: string, message: string, status = 401): void {
+	res.status(status).send({code, message});
 }
 
-async function withGmailApi(res, fnCallback) {
+type GmailRequest = (options: GmailApiRequestOptions) => Promise<unknown>;
+
+async function withGmailApi<T>(
+	res: Response,
+	fnCallback: (gmailRequest: GmailRequest) => Promise<T>,
+): Promise<T | null> {
 	if (!isGoogleOAuthConfigured(config)) {
 		makeGoogleAuthErrorResponse(res, 'GOOGLE_AUTH_MISCONFIGURED', 'Google OAuth is not configured.', 503);
 		return null;
@@ -87,13 +88,14 @@ async function withGmailApi(res, fnCallback) {
 		});
 		return result;
 	} catch (error) {
-		if (error.code === 'GOOGLE_REAUTH_REQUIRED') {
+		const err = error as Error & {code?: string; status?: number};
+		if (err.code === 'GOOGLE_REAUTH_REQUIRED') {
 			clearGoogleTokens(config);
 			await saveConfig();
 			makeGoogleAuthErrorResponse(res, 'GOOGLE_REAUTH_REQUIRED', 'Google authorization expired or was revoked.');
 			return null;
 		}
-		if (error.status === 401) {
+		if (err.status === 401) {
 			makeGoogleAuthErrorResponse(res, 'GOOGLE_REAUTH_REQUIRED', 'Google authorization failed.');
 			return null;
 		}
@@ -101,7 +103,9 @@ async function withGmailApi(res, fnCallback) {
 	}
 }
 
-async function withBackgroundGmailApi(fnCallback) {
+async function withBackgroundGmailApi<T>(
+	fnCallback: (gmailRequest: GmailRequest) => Promise<T>,
+): Promise<T | null> {
 	if (!isGoogleOAuthConfigured(config)) {
 		return null;
 	}
@@ -119,7 +123,8 @@ async function withBackgroundGmailApi(fnCallback) {
 		});
 		return result;
 	} catch (error) {
-		if (error.code === 'GOOGLE_REAUTH_REQUIRED' || error.status === 401) {
+		const err = error as Error & {code?: string; status?: number};
+		if (err.code === 'GOOGLE_REAUTH_REQUIRED' || err.status === 401) {
 			clearGoogleTokens(config);
 			await saveConfig();
 			logger.warn('Google authorization expired for background Gmail polling.');
@@ -136,7 +141,8 @@ const hideUntils = await hideUntilRepository.load();
 const lastRefresheds = await lastRefreshedRepository.load();
 const bundles = await bundleModel.load();
 const config = await configRepository.readConfig();
-const threadRepository = createThreadRepository({ threadModelModule: threadModel });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const threadRepository = createThreadRepository({ threadModelModule: threadModel as any });
 const threadService = createThreadService({ threadRepository, MessageClass: Message, bundles });
 const rfc2822Service = createRfc2822Service({ threadRepository });
 const threadUpdatesNotifier = createThreadUpdatesNotifier({ logger });
@@ -146,9 +152,9 @@ app.set('views', path.join(process.cwd(), 'views'));
 app.set('view engine', 'pug');
 app.locals.assetPath = frontendAssetService.assetPath;
 app.use('/public', express.static('public'));
-app.use(bodyParser.json({limit: '10mb', parameterLimit: 10000}));
+app.use(bodyParser.json({limit: '10mb'}));
 app.use(bodyParser.urlencoded({limit: '10mb', parameterLimit: 10000, extended: true }));
-app.use(function (req, res, next) {
+app.use(function (req: Request, res: Response, next: NextFunction) {
 	//Log each request.
 	logger.info(util.format("%s %s => %s %s %s", new Date().toISOString(), req.ip, req.protocol, req.method, req.url));
 	next();
@@ -161,7 +167,7 @@ const routeDependencies = {
 	hideUntils,
 	lastRefresheds,
 	logger,
-	notifyThreadsChanged: (reason) => threadUpdatesNotifier.notifyThreadsChanged(reason),
+	notifyThreadsChanged: (reason: string) => threadUpdatesNotifier.notifyThreadsChanged(reason),
 	configRepository,
 	saveConfig,
 	rfc2822Service,
@@ -176,13 +182,13 @@ registerThreadRoutes(app, routeDependencies);
 registerBundleRoutes(app, routeDependencies);
 registerThreadActionRoutes(app, routeDependencies);
 
-app.use(function(req, res) {
+app.use(function(req: Request, res: Response) {
 	logger.debug(util.format("Sent 404 in response to %s %s", req.method, req.url));
 	res.sendStatus(404);
 });
 
-app.use(function(err, req, res, next) {
-	logger.error(err.stack);
+app.use(function(err: Error, req: Request, res: Response, _next: NextFunction) {
+	logger.error(err.stack ?? String(err));
 	res.sendStatus(500);
 });
 
@@ -199,7 +205,7 @@ logger.info(util.format("Nailbox is running on port %d.", readConfigWithDefault(
 startGmailPoller({
 	intervalMs: 5 * 60 * 1000,
 	logger,
-	notifyThreadsChanged: (reason) => threadUpdatesNotifier.notifyThreadsChanged(reason),
+	notifyThreadsChanged: (reason: string) => threadUpdatesNotifier.notifyThreadsChanged(reason),
 	async pollGmail() {
 		return withBackgroundGmailApi(async (gmailRequest) => {
 			return syncRecentThreadsFromGmail({
