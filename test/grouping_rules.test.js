@@ -21,8 +21,8 @@ test('threadMatchesRule matches sender email and subject conditions', () => {
 });
 
 test('groupThreads groups matching threads and preserves shortest-first sorting', () => {
-	const groups = groupThreads({
-		threads: [
+	const groups = groupThreads(
+		[
 			{
 				threadId: '1',
 				senders: [{name: 'Alice', email: 'alice@example.com'}],
@@ -40,7 +40,8 @@ test('groupThreads groups matching threads and preserves shortest-first sorting'
 				lastUpdated: 1,
 			},
 		],
-		groupingRules: {
+		[],
+		{
 			rules: [{
 				name: 'Important',
 				priority: 10,
@@ -48,8 +49,8 @@ test('groupThreads groups matching threads and preserves shortest-first sorting'
 				conditions: [{type: 'sender_email', value: '@example.com'}],
 			}],
 		},
-		hideUntilComparator: (a, b) => b.lastUpdated - a.lastUpdated,
-	});
+		(a, b) => b.lastUpdated - a.lastUpdated,
+	);
 
 	assert.equal(groups.length, 1);
 	assert.equal(groups[0].label, 'Important');

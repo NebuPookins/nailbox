@@ -86,12 +86,12 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 				limit: 100,
 			});
 			const bundleList = dependencies.bundles ? dependencies.bundles.listBundles() : [];
-			const orderedGroupThreads = groupThreads({
-				threads: allThreads,
-				bundles: bundleList,
-				groupingRules: getEmailGroupingRules(config),
-				hideUntilComparator: hideUntils.comparator(),
-			});
+			const orderedGroupThreads = groupThreads(
+				allThreads,
+				bundleList,
+				getEmailGroupingRules(config),
+				hideUntils.comparator(),
+			);
 			res.status(200).type('application/json').send(orderedGroupThreads);
 		} catch (error) {
 			logger.error(util.inspect(error));
