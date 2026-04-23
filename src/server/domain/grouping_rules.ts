@@ -94,12 +94,12 @@ function itemMatchesRule(item: ThreadRowItem, rule: GroupingRule): boolean {
 	});
 }
 
-export function groupThreads({threads, bundles = [], groupingRules, hideUntilComparator}: {
-	threads: ThreadSummaryDto[];
-	bundles?: BundleDto[];
-	groupingRules: GroupingRulesConfig;
-	hideUntilComparator: (a: {threadId: string; lastUpdated: number}, b: {threadId: string; lastUpdated: number}) => number;
-}): ThreadGroupDto[] {
+export function groupThreads(
+	threads: ThreadSummaryDto[],
+	bundles: BundleDto[] = [],
+	groupingRules: GroupingRulesConfig,
+	hideUntilComparator: (a: {threadId: string; lastUpdated: number}, b: {threadId: string; lastUpdated: number}) => number,
+): ThreadGroupDto[] {
 	// Wrap the comparator to handle bundles (project bundleId as threadId for sorting)
 	function itemComparator(a: ThreadRowItem, b: ThreadRowItem): number {
 		const aProxy = {
