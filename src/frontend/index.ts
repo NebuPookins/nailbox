@@ -36,29 +36,4 @@ const frontendApi = {
 	mountThreadViewerIsland,
 };
 
-declare global {
-	interface Window {
-		NailboxFrontend: typeof frontendApi;
-		NailboxGroupingRules: { mount: typeof mountGroupingRulesIsland; mountGroupingRulesIsland: typeof mountGroupingRulesIsland };
-		NailboxLaterPicker: { mount: typeof mountLaterPickerIsland; mountLaterPickerIsland: typeof mountLaterPickerIsland };
-		NailboxLabelPicker: { mount: typeof mountLabelPickerIsland; mountLabelPickerIsland: typeof mountLabelPickerIsland };
-	}
-}
-
-if (typeof window !== 'undefined') {
-	window.NailboxFrontend = frontendApi;
-	window.NailboxGroupingRules = {
-		mount: mountGroupingRulesIsland,
-		mountGroupingRulesIsland,
-	};
-	window.NailboxLaterPicker = {
-		mount: mountLaterPickerIsland,
-		mountLaterPickerIsland,
-	};
-	window.NailboxLabelPicker = {
-		mount: mountLabelPickerIsland,
-		mountLabelPickerIsland,
-	};
-}
-
 export default frontendApi;
