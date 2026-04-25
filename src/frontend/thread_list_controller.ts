@@ -1,13 +1,4 @@
-interface ThreadSummary {
-	threadId?: string;
-	subject?: string;
-	[key: string]: unknown;
-}
-
-interface BundleSummary {
-	bundleId: string;
-	[key: string]: unknown;
-}
+import type { BundleSummary } from './thread_grouping.js';
 
 interface ThreadActionController {
 	deleteThread(threadId: string): Promise<unknown>;
@@ -17,7 +8,20 @@ interface ThreadActionController {
 }
 
 interface ThreadViewerController {
-	openThread(options: unknown): Promise<unknown>;
+	openThread(options: unknown): Promise<void>;
+}
+
+interface ThreadPayload {
+	threadId: string;
+	subject: string;
+}
+
+interface ThreadViewPayload {
+	threadId?: string;
+	subject?: string;
+	snippet?: string;
+	sendersText?: string;
+	receiversText?: string;
 }
 
 export function createThreadListController({
@@ -29,10 +33,10 @@ export function createThreadListController({
 	threadActionController,
 	threadViewerController,
 }: {
-	openLabelPicker(threadSummary: ThreadSummary): unknown;
-	openLaterPicker(threadId: string, subject: string): unknown;
-	openLaterPickerForBundle(bundleSummary: BundleSummary): unknown;
-	openThreadViewer(threadSummary: ThreadSummary): unknown;
+	openLabelPicker(threadSummary: ThreadPayload): void;
+	openLaterPicker(threadId: string, subject: string): void;
+	openLaterPickerForBundle(bundleSummary: BundleSummary): void;
+	openThreadViewer(threadSummary: ThreadViewPayload): unknown;
 	reportError(error: unknown): void;
 	threadActionController: ThreadActionController;
 	threadViewerController: ThreadViewerController;
@@ -44,7 +48,6 @@ export function createThreadListController({
 			} catch (error) {
 				reportError(error);
 			}
-			return false;
 		},
 
 		async archiveThread(threadId: string) {
@@ -53,7 +56,6 @@ export function createThreadListController({
 			} catch (error) {
 				reportError(error);
 			}
-			return false;
 		},
 
 		async archiveBundle(bundleId: string) {
@@ -72,19 +74,19 @@ export function createThreadListController({
 			}
 		},
 
-		openLabelPicker(threadSummary: ThreadSummary) {
-			return openLabelPicker(threadSummary);
+		openLabelPicker(threadSummary: ThreadPayload) {
+			openLabelPicker(threadSummary);
 		},
 
-		openLaterPicker(threadSummary: ThreadSummary) {
-			return openLaterPicker(threadSummary.threadId ?? '', threadSummary.subject ?? '');
+		openLaterPicker(threadSummary: ThreadPayload) {
+			openLaterPicker(threadSummary.threadId, threadSummary.subject);
 		},
 
 		openLaterPickerForBundle(bundleSummary: BundleSummary) {
-			return openLaterPickerForBundle(bundleSummary);
+			openLaterPickerForBundle(bundleSummary);
 		},
 
-		async openThread(threadSummary: ThreadSummary) {
+		async openThread(threadSummary: ThreadViewPayload) {
 			try {
 				await threadViewerController.openThread(openThreadViewer(threadSummary));
 			} catch (error) {

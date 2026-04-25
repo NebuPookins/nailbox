@@ -56,9 +56,9 @@ export function createThreadRepository(dependencies: {
 		return validatePersistedThread(threadJson);
 	}
 
-	async function saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<unknown> {
+	async function saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<void> {
 		validatePersistedThread(threadPayload);
-		return fileioImpl.saveJsonToFile(threadPayload, `${threadsDirectory}/${threadId}`);
+		await fileioImpl.saveJsonToFile(threadPayload, `${threadsDirectory}/${threadId}`);
 	}
 
 	return {

@@ -16,11 +16,11 @@ interface Messenger {
 }
 
 interface AppApi {
-	archiveThread(threadId: string): Promise<unknown>;
-	deleteThread(threadId: string): Promise<unknown>;
-	moveThreadToLabel(threadId: string, labelId: string): Promise<unknown>;
-	archiveBundle(bundleId: string): Promise<unknown>;
-	deleteBundle(bundleId: string): Promise<unknown>;
+	archiveThread(threadId: string): Promise<void>;
+	deleteThread(threadId: string): Promise<void>;
+	moveThreadToLabel(threadId: string, labelId: string): Promise<void>;
+	archiveBundle(bundleId: string): Promise<void>;
+	deleteBundle(bundleId: string): Promise<void>;
 }
 
 export interface ActionResult {
@@ -102,7 +102,7 @@ export function createThreadActionController({
 		threadId: string;
 		startMessage: string;
 		successMessage: string;
-		request: () => Promise<unknown>;
+		request: () => Promise<void>;
 	}): Promise<ActionResult> {
 		const actionMessenger = createActionMessenger(messengerGetter, startMessage);
 		if (!threadId) {
@@ -125,7 +125,7 @@ export function createThreadActionController({
 		bundleId: string;
 		startMessage: string;
 		successMessage: string;
-		request: () => Promise<unknown>;
+		request: () => Promise<void>;
 	}): Promise<ActionResult> {
 		const actionMessenger = createActionMessenger(messengerGetter, startMessage);
 		if (!bundleId) {

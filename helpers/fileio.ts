@@ -41,13 +41,12 @@ export async function ensureDirectoryExists(dir: string): Promise<string> {
  * Returns a promise. If the promise resolves successfully, then as a side
  * effect the data in json was serialized and saved to the provided path.
  */
-export async function saveJsonToFile(json: unknown, filePath: string): Promise<unknown> {
+export async function saveJsonToFile(json: unknown, filePath: string): Promise<void> {
 	const directory = path.dirname(filePath);
 	const tempPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
 	await ensureDirectoryExists(directory);
 	await writeFile(tempPath, JSON.stringify(json));
 	await rename(tempPath, filePath);
-	return json;
 }
 
 export default {

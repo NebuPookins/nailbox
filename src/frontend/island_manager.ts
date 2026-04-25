@@ -1,4 +1,6 @@
 import { filterSelectableLabels } from './thread_action_controller.js';
+import type { GroupingRulesConfig, ThreadGroup } from './thread_grouping.js';
+import type { HideUntilValue } from './api.js';
 
 interface LabelData {
 	id: string;
@@ -25,9 +27,31 @@ interface GroupingRulesIsland {
 	refresh(): void;
 }
 
+interface Notify {
+	error?: (msg: string) => void;
+	success?: (msg: string) => void;
+}
+
+interface LaterPickerPayload {
+	threadId: string;
+	subject: string;
+}
+
+interface BundleLaterPickerPayload {
+	bundleId: string;
+}
+
+interface ThreadOpenPayload {
+	threadId: string;
+	subject: string;
+	snippet: string;
+	sendersText: string;
+	receiversText: string;
+}
+
 interface LaterPickerIsland {
-	open(opts: { onHideThread: (threadId: string, hideUntil: { type: string; value?: number }) => Promise<unknown>; threadId: string }): void;
-	openForBundle(opts: { bundleId: string; onHideBundle: (bundleId: string, hideUntil: { type: string; value?: number }) => Promise<unknown> }): void;
+	open(opts: { onHideThread: (threadId: string, hideUntil: HideUntilValue) => Promise<void>; threadId: string }): void;
+	openForBundle(opts: { bundleId: string; onHideBundle: (bundleId: string, hideUntil: HideUntilValue) => Promise<void> }): void;
 	clear(): void;
 }
 
@@ -39,9 +63,9 @@ interface LabelPickerIsland {
 }
 
 interface ThreadListIsland {
-	setGroups(groups: unknown[]): void;
-	setLabels(labels: unknown[]): void;
-	setGroupingRules(groupingRules: unknown): void;
+	setGroups(groups: ThreadGroup[]): void;
+	setLabels(labels: LabelData[]): void;
+	setGroupingRules(groupingRules: GroupingRulesConfig): void;
 	removeThread(id: string): void;
 	removeBundleRow(bundleId: string): void;
 	createBundleRow(bundleId: string, threadIds: string[]): void;
@@ -54,27 +78,22 @@ interface IslandState<T> {
 	wasCreated: boolean;
 }
 
-interface GroupingRulesNotify {
-	error?: (msg: string) => void;
-	success?: (msg: string) => void;
-}
-
 interface FrontendApi {
-	mountGroupingRulesSettings?(opts: { container: Element; notify?: GroupingRulesNotify; onSaved?: () => void }): GroupingRulesIsland;
-	mountLaterPickerIsland?(opts: { container: Element; notify?: unknown; onDismiss?: () => void; onHidden?: (id: string) => void }): LaterPickerIsland;
-	mountLabelPickerIsland?(opts: { container: Element; notify?: unknown; onDismiss?: () => void; onMoveThread?: (threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined>; onMoveBundle?: (bundleId: string, labelId: string) => Promise<unknown> }): LabelPickerIsland;
+	mountGroupingRulesSettings?(opts: { container: Element; notify?: Notify; onSaved?: () => void }): GroupingRulesIsland;
+	mountLaterPickerIsland?(opts: { container: Element; notify?: Notify; onDismiss?: () => void; onHidden?: (id: string) => void }): LaterPickerIsland;
+	mountLabelPickerIsland?(opts: { container: Element; notify?: Notify; onDismiss?: () => void; onMoveThread?: (threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined>; onMoveBundle?: (bundleId: string, labelId: string) => Promise<void> }): LabelPickerIsland;
 	mountThreadListIsland?(opts: {
 		container: Element;
 		onArchive: (id: string) => void;
 		onDelete: (id: string) => void;
-		onOpenLaterPicker: (summary: unknown) => void;
-		onOpenLabelPicker: (summary: unknown) => void;
-		onOpenThread: (summary: unknown) => void;
+		onOpenLaterPicker: (payload: LaterPickerPayload) => void;
+		onOpenLabelPicker: (payload: LaterPickerPayload) => void;
+		onOpenThread: (payload: ThreadOpenPayload) => void;
 		onCreateBundle: (threadIds: string[]) => void;
-		onEditBundle: (bundleId: string, threadIds: string[]) => void;
+		onEditBundle: (bundleId: string, threadIds: string[], mergeBundleIds: string[]) => void;
 		onArchiveBundle: (bundleId: string) => void;
-		onOpenLaterPickerForBundle: (summary: unknown) => void;
-		onOpenLabelPickerForBundle: (summary: unknown) => void;
+		onOpenLaterPickerForBundle: (payload: BundleLaterPickerPayload) => void;
+		onOpenLabelPickerForBundle: (payload: BundleLaterPickerPayload) => void;
 		onUngroup: (bundleId: string) => void;
 	}): ThreadListIsland;
 }
@@ -119,21 +138,21 @@ export function createIslandManager({
 	threadActionController: ThreadActionController;
 	getLabels(): LabelData[];
 	deleteThreadFromUI(threadId: string): void;
-	updateUiWithThreadsFromServer(messenger: unknown): Promise<unknown>;
+	updateUiWithThreadsFromServer(messenger: MsgHandle): Promise<void>;
 	messengerGetter(): Messenger;
 	reportAsyncError(error: unknown): void;
 	onArchiveThread(threadId: string): void;
 	onDeleteThread(threadId: string): void;
-	onOpenLaterPickerForThread(threadSummary: unknown): void;
-	onOpenLabelPickerForThread(threadSummary: unknown): void;
-	onOpenThread(threadSummary: unknown): void;
+	onOpenLaterPickerForThread(payload: LaterPickerPayload): void;
+	onOpenLabelPickerForThread(payload: LaterPickerPayload): void;
+	onOpenThread(payload: ThreadOpenPayload): void;
 	onCreateBundle(threadIds: string[]): void;
-	onEditBundle(bundleId: string, threadIds: string[]): void;
+	onEditBundle(bundleId: string, threadIds: string[], mergeBundleIds: string[]): void;
 	onArchiveBundle(bundleId: string): void;
-	onGroupingRulesSaved?(): Promise<unknown> | unknown;
-	onOpenLaterPickerForBundle(bundleSummary: unknown): void;
-	onOpenLabelPickerForBundle(bundleSummary: unknown): void;
-	onMoveBundle(bundleId: string, labelId: string): Promise<unknown>;
+	onGroupingRulesSaved?(): Promise<void>;
+	onOpenLaterPickerForBundle(payload: BundleLaterPickerPayload): void;
+	onOpenLabelPickerForBundle(payload: BundleLaterPickerPayload): void;
+	onMoveBundle(bundleId: string, labelId: string): Promise<void>;
 	onUngroup(bundleId: string): void;
 }) {
 	let groupingRulesIsland: GroupingRulesIsland | null = null;

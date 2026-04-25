@@ -328,10 +328,10 @@ interface MountThreadViewerIslandDeps {
 	hideModal: () => void;
 	getEmailAddress: () => string | null;
 	reportError: (error: Error) => void;
-	onReplyAll: (opts: ReplyAllOpts) => Promise<unknown>;
-	onDownloadAttachment: (opts: DownloadAttachmentOpts) => Promise<unknown>;
-	onDeleteThread: (opts: DeleteThreadOpts) => Promise<unknown>;
-	onArchiveThread: (opts: ArchiveThreadOpts) => Promise<unknown>;
+	onReplyAll: (opts: ReplyAllOpts) => Promise<void>;
+	onDownloadAttachment: (opts: DownloadAttachmentOpts) => Promise<void>;
+	onDeleteThread: (opts: DeleteThreadOpts) => Promise<void>;
+	onArchiveThread: (opts: ArchiveThreadOpts) => Promise<void>;
 	onOpenLaterPicker: (opts: LaterPickerOpts) => void;
 	onOpenLabelPicker: (opts: LabelPickerOpts) => void;
 	onViewOnGmail: (opts: ViewOnGmailOpts) => void;

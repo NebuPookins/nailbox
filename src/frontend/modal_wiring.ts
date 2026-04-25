@@ -15,7 +15,7 @@ interface ThreadViewerController {
 		hideModal(): void;
 		isReplyFocused(): boolean;
 		threadId: string | null;
-	}): Promise<unknown>;
+	}): Promise<void>;
 }
 
 interface Islands {

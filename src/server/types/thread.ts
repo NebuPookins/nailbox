@@ -12,8 +12,8 @@ export interface PersistedMessage {
 	payload: {
 		headers: Array<{name: string; value: string}>;
 		mimeType?: string;
-		body?: Record<string, unknown>;
-		parts?: unknown[];
+		body?: {data?: string; size?: number};
+		parts?: Array<{mimeType?: string; filename?: string; body?: {data?: string; size?: number}; parts?: unknown[]}>;
 	};
 	calculatedWordCount?: number;
 	calculatedTimeToReadSeconds?: number;
@@ -126,5 +126,5 @@ export interface ThreadRepository {
 	listThreadIds(): Promise<string[]>;
 	readThread(threadId: string): Promise<ThreadModelLike>;
 	readThreadJson(threadId: string): Promise<Partial<PersistedThread>>;
-	saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<unknown>;
+	saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<void>;
 }

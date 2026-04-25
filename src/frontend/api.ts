@@ -16,7 +16,33 @@ interface ApiDeps {
 	onApiError?: (error: ApiError) => void;
 }
 
-async function readResponseBody(response: Response): Promise<unknown> {
+export interface HideUntilValue {
+	type: 'timestamp' | 'when-i-have-time';
+	/** Unix timestamp in milliseconds; only present when type is 'timestamp'. */
+	value?: number;
+}
+
+export interface Rfc2822Payload {
+	myEmail: string;
+	threadId: string;
+	body?: string;
+	inReplyTo?: string | null;
+}
+
+export interface LabelResponse {
+	/** Gmail label ID. System labels use ALL_CAPS (e.g. 'INBOX'); user labels use 'Label_XXXXXXX'. */
+	id: string;
+	/** Human-readable display name shown in the Gmail sidebar. */
+	name?: string;
+	/** 'system' for built-in Gmail labels (INBOX, SENT, etc.); 'user' for user-created labels. */
+	type?: 'system' | 'user';
+	/** Controls sidebar visibility: show always, show only when unread, or hide. */
+	labelListVisibility?: 'labelShow' | 'labelShowIfUnread' | 'labelHide';
+}
+
+type JsonValue = string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
+
+async function readResponseBody(response: Response): Promise<JsonValue> {
 	const contentType = response.headers.get('content-type') || '';
 	if (contentType.includes('application/json')) {
 		try {
@@ -56,7 +82,7 @@ function buildApiError(response: Response, responseBody: unknown): ApiError {
 	return error;
 }
 
-async function request(url: string, options: RequestOptions = {}, dependencies: ApiDeps = {}): Promise<unknown> {
+async function request<T>(url: string, options: RequestOptions = {}, dependencies: ApiDeps = {}): Promise<T> {
 	const { onApiError } = dependencies;
 	const { accept, parseAs, ...fetchOptions } = options;
 	const headers: Record<string, string> = {
@@ -79,138 +105,138 @@ async function request(url: string, options: RequestOptions = {}, dependencies: 
 		throw error;
 	}
 	if (parseAs === 'void' || response.status === 204) {
-		return undefined;
+		return undefined as T;
 	}
 	if (parseAs === 'text') {
-		return typeof responseBody === 'string' ? responseBody : '';
+		return (typeof responseBody === 'string' ? responseBody : '') as T;
 	}
-	return responseBody;
+	return responseBody as T;
 }
 
-export async function fetchJson(url: string, options: RequestOptions = {}): Promise<unknown> {
-	return request(url, options);
+export async function fetchJson<T = unknown>(url: string, options: RequestOptions = {}): Promise<T> {
+	return request<T>(url, options);
 }
 
 export function createAppApi(dependencies: ApiDeps = {}) {
 	return {
-		addLabelToBundle(bundleId: string, labelId: string) {
-			return request(`/api/bundles/${bundleId}/label`, {
+		addLabelToBundle(bundleId: string, labelId: string): Promise<void> {
+			return request<void>(`/api/bundles/${bundleId}/label`, {
 				body: JSON.stringify({labelId}),
 				method: 'POST',
 			}, dependencies);
 		},
-		archiveBundle(bundleId: string) {
-			return request(`/api/bundles/${bundleId}/archive`, {
+		archiveBundle(bundleId: string): Promise<void> {
+			return request<void>(`/api/bundles/${bundleId}/archive`, {
 				method: 'POST',
 			}, dependencies);
 		},
-		archiveThread(threadId: string) {
-			return request(`/api/threads/${threadId}/archive`, {
+		archiveThread(threadId: string): Promise<void> {
+			return request<void>(`/api/threads/${threadId}/archive`, {
 				method: 'POST',
 			}, dependencies);
 		},
-		createBundle(threadIds: string[]) {
-			return request('/api/bundles', {
+		createBundle(threadIds: string[]): Promise<{bundleId?: string}> {
+			return request<{bundleId?: string}>('/api/bundles', {
 				body: JSON.stringify({threadIds}),
 				method: 'POST',
 			}, dependencies);
 		},
-		deleteBundle(bundleId: string) {
-			return request(`/api/bundles/${bundleId}`, {
+		deleteBundle(bundleId: string): Promise<void> {
+			return request<void>(`/api/bundles/${bundleId}`, {
 				method: 'DELETE',
 				parseAs: 'void',
 			}, dependencies);
 		},
-		updateBundle(bundleId: string, threadIds: string[], mergeBundleIds?: string[]) {
-			const payload: Record<string, unknown> = {threadIds};
+		updateBundle(bundleId: string, threadIds: string[], mergeBundleIds?: string[]): Promise<void> {
+			const payload: {threadIds: string[]; mergeBundleIds?: string[]} = {threadIds};
 			if (mergeBundleIds && mergeBundleIds.length > 0) {
 				payload.mergeBundleIds = mergeBundleIds;
 			}
-			return request(`/api/bundles/${bundleId}`, {
+			return request<void>(`/api/bundles/${bundleId}`, {
 				body: JSON.stringify(payload),
 				method: 'PUT',
 			}, dependencies);
 		},
-		hideBundle(bundleId: string, hideUntil: unknown) {
-			return request(`/api/bundles/${bundleId}/hideUntil`, {
+		hideBundle(bundleId: string, hideUntil: HideUntilValue): Promise<void> {
+			return request<void>(`/api/bundles/${bundleId}/hideUntil`, {
 				body: JSON.stringify(hideUntil),
 				method: 'PUT',
 			}, dependencies);
 		},
-		buildRfc2822(payload: Record<string, unknown>) {
-			return request('/api/rfc2822', {
+		buildRfc2822(payload: Rfc2822Payload): Promise<string> {
+			return request<string>('/api/rfc2822', {
 				accept: 'text/plain',
 				body: JSON.stringify(payload),
 				method: 'POST',
 				parseAs: 'text',
 			}, dependencies);
 		},
-		deleteThread(threadId: string) {
-			return request(`/api/threads/${threadId}/trash`, {
+		deleteThread(threadId: string): Promise<void> {
+			return request<void>(`/api/threads/${threadId}/trash`, {
 				method: 'POST',
 			}, dependencies);
 		},
-		disconnectGmail() {
-			return request('/auth/google/disconnect', {
+		disconnectGmail(): Promise<void> {
+			return request<void>('/auth/google/disconnect', {
 				method: 'POST',
 				parseAs: 'void',
 			}, dependencies);
 		},
-		getAttachment(messageId: string, attachmentId: string) {
-			return request(`/api/threads/messages/${messageId}/attachments/${attachmentId}`, {
+		getAttachment(messageId: string, attachmentId: string): Promise<{data: string}> {
+			return request<{data: string}>(`/api/threads/messages/${messageId}/attachments/${attachmentId}`, {
 				method: 'GET',
 			}, dependencies);
 		},
-		getThreadData(threadId: string) {
-			return request(`/api/threads/${threadId}/messages`, {
+		getThreadData(threadId: string): Promise<unknown> {
+			return request<unknown>(`/api/threads/${threadId}/messages`, {
 				method: 'GET',
 			}, dependencies);
 		},
-		hideThread(threadId: string, hideUntil: unknown) {
-			return request(`/api/threads/${threadId}/hideUntil`, {
+		hideThread(threadId: string, hideUntil: HideUntilValue): Promise<void> {
+			return request<void>(`/api/threads/${threadId}/hideUntil`, {
 				body: JSON.stringify(hideUntil),
 				method: 'PUT',
 			}, dependencies);
 		},
-		loadAuthStatus() {
-			return request('/api/auth/status', {
+		loadAuthStatus(): Promise<{configured?: boolean; connected?: boolean; emailAddress?: string | null; scopes?: string[]}> {
+			return request<{configured?: boolean; connected?: boolean; emailAddress?: string | null; scopes?: string[]}>('/api/auth/status', {
 				method: 'GET',
 			}, dependencies);
 		},
-		loadGroupedThreads() {
-			return request('/api/threads/grouped', {
+		loadGroupedThreads(): Promise<unknown> {
+			return request<unknown>('/api/threads/grouped', {
 				method: 'GET',
 			}, dependencies);
 		},
-		loadLabels() {
-			return request('/api/threads/labels', {
+		loadLabels(): Promise<LabelResponse[]> {
+			return request<LabelResponse[]>('/api/threads/labels', {
 				method: 'GET',
 			}, dependencies);
 		},
-		moveThreadToLabel(threadId: string, labelId: string) {
-			return request(`/api/threads/${threadId}/move`, {
+		moveThreadToLabel(threadId: string, labelId: string): Promise<void> {
+			return request<void>(`/api/threads/${threadId}/move`, {
 				body: JSON.stringify({labelId}),
 				method: 'POST',
 			}, dependencies);
 		},
-		refreshThread(threadId: string) {
-			return request(`/api/threads/${threadId}/refresh`, {
+		refreshThread(threadId: string): Promise<void> {
+			return request<void>(`/api/threads/${threadId}/refresh`, {
 				method: 'POST',
 			}, dependencies);
 		},
-		sendMessage(payload: { threadId: string; raw: string }) {
-			return request('/api/threads/messages/send', {
+		sendMessage(payload: {threadId: string; raw: string}): Promise<{id?: string}> {
+			return request<{id?: string}>('/api/threads/messages/send', {
 				body: JSON.stringify(payload),
 				method: 'POST',
 			}, dependencies);
 		},
-		syncThreadsFromGoogle() {
-			return request('/api/threads/sync', {
+		syncThreadsFromGoogle(): Promise<{syncedThreadCount?: number; results?: Array<{status: number; threadId: string}>}> {
+			return request<{syncedThreadCount?: number; results?: Array<{status: number; threadId: string}>}>('/api/threads/sync', {
 				method: 'POST',
 			}, dependencies);
 		},
-		updateMessageWordcount(threadId: string, messageId: string, wordcount: number) {
-			return request(`/api/threads/${threadId}/messages/${messageId}/wordcount`, {
+		updateMessageWordcount(threadId: string, messageId: string, wordcount: number): Promise<void> {
+			return request<void>(`/api/threads/${threadId}/messages/${messageId}/wordcount`, {
 				body: JSON.stringify({wordcount}),
 				method: 'POST',
 				parseAs: 'void',
@@ -221,13 +247,13 @@ export function createAppApi(dependencies: ApiDeps = {}) {
 
 export function createGroupingRulesApi(dependencies: ApiDeps = {}) {
 	return {
-		loadRules() {
-			return request('/api/email-grouping-rules', {
+		loadRules(): Promise<{rules: unknown[]}> {
+			return request<{rules: unknown[]}>('/api/email-grouping-rules', {
 				method: 'GET',
 			}, dependencies);
 		},
-		saveRules(payload: unknown) {
-			return request('/api/email-grouping-rules', {
+		saveRules(payload: unknown): Promise<void> {
+			return request<void>('/api/email-grouping-rules', {
 				body: JSON.stringify(payload),
 				method: 'POST',
 			}, dependencies);

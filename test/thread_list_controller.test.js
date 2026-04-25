@@ -30,9 +30,8 @@ test('deleteThread delegates to the thread action controller', async () => {
 		},
 	});
 
-	const result = await controller.deleteThread('thread-1');
+	await controller.deleteThread('thread-1');
 
-	assert.equal(result, false);
 	assert.deepEqual(calls, [['delete', 'thread-1']]);
 });
 
@@ -44,7 +43,6 @@ test('openLaterPicker forwards thread id and subject', () => {
 		},
 		openLaterPicker(threadId, subject) {
 			calls.push([threadId, subject]);
-			return false;
 		},
 		openThreadViewer() {
 			throw new Error('unused');
@@ -54,12 +52,11 @@ test('openLaterPicker forwards thread id and subject', () => {
 		threadViewerController: {},
 	});
 
-	const result = controller.openLaterPicker({
+	controller.openLaterPicker({
 		threadId: 'thread-1',
 		subject: 'Subject line',
 	});
 
-	assert.equal(result, false);
 	assert.deepEqual(calls, [['thread-1', 'Subject line']]);
 });
 
