@@ -14,8 +14,8 @@ interface AuthStatus {
 }
 
 interface AppApi {
-	loadAuthStatus(): Promise<unknown>;
-	disconnectGmail(): Promise<unknown>;
+	loadAuthStatus(): Promise<AuthStatus>;
+	disconnectGmail(): Promise<void>;
 }
 
 interface ThreadUpdatesConnection {
@@ -40,17 +40,17 @@ export function createAppShellController({
 }: {
 	appApi: AppApi;
 	getAuthStatus(): AuthStatus;
-	loadGroupingRules?(): Promise<unknown>;
-	loadLabels(): Promise<unknown>;
+	loadGroupingRules?(): Promise<void>;
+	loadLabels(): Promise<void>;
 	messengerGetter(): Messenger;
 	renderConnectedState(): void;
 	renderDisconnectedState(message?: string): void;
 	renderSetupNeededState(message?: string): void;
 	reportError(error: unknown): void;
 	setAuthStatus(status: AuthStatus): void;
-	syncThreadsFromGoogle(messenger: MsgHandle): Promise<unknown>;
+	syncThreadsFromGoogle(messenger: MsgHandle): Promise<void>;
 	threadUpdatesConnection?: ThreadUpdatesConnection;
-	updateUiWithThreadsFromServer(messenger: MsgHandle): Promise<unknown>;
+	updateUiWithThreadsFromServer(messenger: MsgHandle): Promise<void>;
 }) {
 	async function bootstrapConnectedApp() {
 		renderConnectedState();
@@ -74,7 +74,7 @@ export function createAppShellController({
 
 	return {
 		async initialize() {
-			const status = await appApi.loadAuthStatus() as AuthStatus;
+			const status = await appApi.loadAuthStatus();
 			setAuthStatus(status);
 			if (!status.configured) {
 				renderSetupNeededState();

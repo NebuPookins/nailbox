@@ -10,6 +10,8 @@ import { createThreadViewerController } from './thread_viewer_controller.js';
 import { createIslandManager } from './island_manager.js';
 import { wireModals } from './modal_wiring.js';
 import { createThreadUpdatesSocket } from './thread_updates_socket.js';
+import { normalizeGroupingRulesConfig, type GroupingRulesConfig, type ThreadGroup } from './thread_grouping.js';
+import type { LabelResponse, HideUntilValue } from './api.js';
 
 declare const saveAs: (blob: Blob, name: string) => void;
 
@@ -22,13 +24,7 @@ interface AuthStatus {
 	scopes: string[];
 }
 
-interface LabelItem {
-	id: string;
-	name?: string;
-	type?: string;
-	labelListVisibility?: string;
-	hue?: number;
-}
+type LabelItem = LabelResponse & { hue?: number };
 
 interface AppError {
 	code?: string;
@@ -70,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		scopes: []
 	};
 	var labelsCache: LabelItem[] = [];
-	var groupingRulesCache: { rules: unknown[] } = { rules: [] };
+	var groupingRulesCache: GroupingRulesConfig = { rules: [] };
 	var threadRefreshInFlight = false;
 	var pendingThreadRefresh = false;
 
@@ -137,8 +133,8 @@ document.addEventListener('DOMContentLoaded', function() {
 		authShellIsland.setConnectedLoading({ emailAddress: authStatus.emailAddress });
 	}
 
-	async function loadLabels(): Promise<LabelItem[]> {
-		var labels = await appApi.loadLabels() as LabelItem[];
+	async function loadLabels(): Promise<void> {
+		var labels = await appApi.loadLabels();
 		labelsCache = labels;
 		var labelPickerIslandState = islands.ensureLabelPickerIsland();
 		if (labelPickerIslandState) {
@@ -148,29 +144,25 @@ document.addEventListener('DOMContentLoaded', function() {
 		if (threadListIslandState) {
 			threadListIslandState.instance.setLabels(labelsCache);
 		}
-		return labels;
 	}
 
-	async function loadGroupingRules(): Promise<{ rules: unknown[] }> {
+	async function loadGroupingRules(): Promise<void> {
 		var rulesApi = frontendApi.createGroupingRulesApi();
-		var response = await rulesApi.loadRules() as { rules?: unknown[] };
-		groupingRulesCache = {
-			rules: Array.isArray(response?.rules) ? response.rules : [],
-		};
+		var response = await rulesApi.loadRules();
+		groupingRulesCache = normalizeGroupingRulesConfig(response);
 		var threadListIslandState = islands.ensureThreadListIsland();
 		if (threadListIslandState) {
 			threadListIslandState.instance.setGroupingRules(groupingRulesCache);
 		}
-		return groupingRulesCache;
 	}
 
-	async function syncThreadsFromGoogle(updateMessenger: { update(opts: { type: string; message: string }): void }): Promise<unknown> {
+	async function syncThreadsFromGoogle(updateMessenger: { update(opts: { type: string; message: string }): void }): Promise<void> {
 		updateMessenger = updateMessenger || messengerGetter().info('Syncing Gmail...');
 		updateMessenger.update({
 			type: 'info',
 			message: 'Syncing Gmail to local cache...'
 		});
-		var resp = await appApi.syncThreadsFromGoogle() as { syncedThreadCount?: number; results?: Array<{ status: number; threadId: string }> };
+		var resp = await appApi.syncThreadsFromGoogle();
 		var failedResults = Array.isArray(resp.results) ? resp.results.filter(function(result) {
 			return result.status >= 400;
 		}) : [];
@@ -188,13 +180,12 @@ document.addEventListener('DOMContentLoaded', function() {
 				message: 'Synced ' + resp.syncedThreadCount + ' Gmail threads, but ' +
 					failedResults.length + ' failed: ' + details + '.'
 			});
-			return resp;
+			return;
 		}
 		updateMessenger.update({
 			type: 'success',
 			message: 'Synced ' + resp.syncedThreadCount + ' Gmail threads.'
 		});
-		return resp;
 	}
 
 	async function refreshThreadFromGoogle(threadId: string): Promise<void> {
@@ -212,12 +203,11 @@ document.addEventListener('DOMContentLoaded', function() {
 			message: 'Downloading threads from local cache...'
 		});
 		try {
-			var groupsOfThreads = await appApi.loadGroupedThreads() as Array<{ threads: Array<{ threadId?: string; needsRefreshing?: boolean }>; items?: Array<{ type?: string; threadId?: string; needsRefreshing?: boolean }> }>;
+			var groupsOfThreads = await appApi.loadGroupedThreads() as unknown as ThreadGroup[];
+
 			authShellIsland.setIdle();
 			groupsOfThreads.forEach(function(group) {
-				const itemsToCheck: Array<{ type?: string; threadId?: string; needsRefreshing?: boolean }> = group.items
-					? group.items
-					: group.threads;
+				const itemsToCheck = (group.items ? group.items : group.threads) as Array<{ type?: string; threadId?: string; needsRefreshing?: boolean }>;
 				itemsToCheck.forEach(function(item) {
 					if (item.type !== 'bundle' && item.needsRefreshing) {
 						refreshThreadFromGoogle(item.threadId ?? '');
@@ -268,6 +258,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	async function getThreadData(threadId: string, attemptNumber: number, updateMessenger: { update(opts: { type: string; message: string }): void }): Promise<{ messages: Array<{ messageId: string; deleted?: boolean; timeToReadSeconds?: number; wordcount?: number; [key: string]: unknown }> }> {
 		try {
 			return await appApi.getThreadData(threadId) as { messages: Array<{ messageId: string; deleted?: boolean; timeToReadSeconds?: number; wordcount?: number; [key: string]: unknown }> };
+
 		} catch (error) {
 			if (attemptNumber < 60) {
 				updateMessenger.update({
@@ -296,7 +287,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 		laterPicker.querySelector('.modal-title')!.textContent = subject || '';
 		islandState.instance.open({
-			onHideThread: async function(selectedThreadId: string, hideUntil: { type: string; value?: number }) {
+			onHideThread: async function(selectedThreadId: string, hideUntil: HideUntilValue) {
 				var updateMsg = messengerGetter().info('Hiding thread ' + selectedThreadId + '.');
 				await appApi.hideThread(selectedThreadId, hideUntil);
 				updateMsg.update({
@@ -342,7 +333,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		laterPicker.querySelector('.modal-title')!.textContent = 'Bundle';
 		islandState.instance.openForBundle({
 			bundleId: bundleId,
-			onHideBundle: async function(selectedBundleId: string, hideUntil: { type: string; value?: number }) {
+			onHideBundle: async function(selectedBundleId: string, hideUntil: HideUntilValue) {
 				var updateMsg = messengerGetter().info('Hiding bundle ' + selectedBundleId + '.');
 				await appApi.hideBundle(selectedBundleId, hideUntil);
 				var threadListIslandState = islands.ensureThreadListIsland();
@@ -405,12 +396,12 @@ document.addEventListener('DOMContentLoaded', function() {
 		reportAsyncError: reportAsyncError,
 		onArchiveThread: function(threadId) { threadListController.archiveThread(threadId); },
 		onDeleteThread: function(threadId) { threadListController.deleteThread(threadId); },
-		onOpenLaterPickerForThread: function(threadSummary) { threadListController.openLaterPicker(threadSummary as { threadId?: string; subject?: string }); },
-		onOpenLabelPickerForThread: function(threadSummary) { threadListController.openLabelPicker(threadSummary as { threadId?: string; subject?: string }); },
-		onOpenThread: function(threadSummary) { threadListController.openThread(threadSummary as { threadId?: string; subject?: string }); },
+		onOpenLaterPickerForThread: function(threadSummary) { threadListController.openLaterPicker(threadSummary); },
+		onOpenLabelPickerForThread: function(threadSummary) { threadListController.openLabelPicker(threadSummary); },
+		onOpenThread: function(threadSummary) { threadListController.openThread(threadSummary); },
 		onCreateBundle: async function(threadIds: string[]) {
 			try {
-				var response = await appApi.createBundle(threadIds) as { bundleId?: string };
+				var response = await appApi.createBundle(threadIds);
 				var threadListIslandState = islands.ensureThreadListIsland();
 				if (threadListIslandState && response.bundleId) {
 					threadListIslandState.instance.createBundleRow(response.bundleId, threadIds);
@@ -432,8 +423,8 @@ document.addEventListener('DOMContentLoaded', function() {
 		},
 		onArchiveBundle: function(bundleId: string) { threadListController.archiveBundle(bundleId); },
 		onGroupingRulesSaved: loadGroupingRules,
-		onOpenLaterPickerForBundle: function(bundleSummary) { showLaterPickerForBundle((bundleSummary as { bundleId: string }).bundleId); },
-		onOpenLabelPickerForBundle: function(bundleSummary) { showLabelPickerForBundle((bundleSummary as { bundleId: string }).bundleId); },
+		onOpenLaterPickerForBundle: function(bundleSummary) { showLaterPickerForBundle(bundleSummary.bundleId); },
+		onOpenLabelPickerForBundle: function(bundleSummary) { showLabelPickerForBundle(bundleSummary.bundleId); },
 		onMoveBundle: async function(bundleId: string, labelId: string) {
 			var updateMsg = messengerGetter().info('Labeling bundle ' + bundleId + '...');
 			await appApi.addLabelToBundle(bundleId, labelId);
@@ -516,11 +507,11 @@ document.addEventListener('DOMContentLoaded', function() {
 		hideModal: function() { hideModal(threadViewer); },
 		getEmailAddress: function() { return authStatus.emailAddress; },
 		reportError: reportAsyncError,
-		onReplyAll: function(opts) {
-			return threadViewerController.replyAll(opts);
+		onReplyAll: async function(opts) {
+			await threadViewerController.replyAll(opts);
 		},
-		onDownloadAttachment: function(opts) {
-			return threadViewerController.downloadAttachment({
+		onDownloadAttachment: async function(opts) {
+			await threadViewerController.downloadAttachment({
 				attachmentId: opts.attachmentId,
 				attachmentName: opts.attachmentName,
 				messageId: opts.messageId,
@@ -529,11 +520,11 @@ document.addEventListener('DOMContentLoaded', function() {
 				},
 			});
 		},
-		onDeleteThread: function(opts) {
-			return threadViewerController.deleteCurrentThread(opts);
+		onDeleteThread: async function(opts) {
+			await threadViewerController.deleteCurrentThread(opts);
 		},
-		onArchiveThread: function(opts) {
-			return threadViewerController.archiveCurrentThread(opts);
+		onArchiveThread: async function(opts) {
+			await threadViewerController.archiveCurrentThread(opts);
 		},
 		onOpenLaterPicker: function(opts) {
 			return threadViewerController.showLaterPicker({
@@ -572,8 +563,8 @@ document.addEventListener('DOMContentLoaded', function() {
 			});
 		},
 	});
-	function openThreadViewer(threadSummary: { threadId?: string; subject?: string; [key: string]: unknown }) {
-		return threadViewerIsland.open(threadSummary as Parameters<typeof threadViewerIsland.open>[0]);
+	function openThreadViewer(threadSummary: { threadId?: string; subject?: string; snippet?: string; sendersText?: string; receiversText?: string }) {
+		return threadViewerIsland.open(threadSummary);
 	}
 	var threadListController = createThreadListController({
 		openLabelPicker: function(threadSummary) {
@@ -598,7 +589,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			});
 		},
 		openLaterPicker: showLaterPicker,
-		openLaterPickerForBundle: function(bundleSummary) { showLaterPickerForBundle((bundleSummary as { bundleId: string }).bundleId); },
+		openLaterPickerForBundle: function(bundleSummary) { showLaterPickerForBundle(bundleSummary.bundleId); },
 		openThreadViewer,
 		reportError: reportAsyncError,
 		threadActionController: threadActionController,

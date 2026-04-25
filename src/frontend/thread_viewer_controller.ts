@@ -68,11 +68,11 @@ interface ShowLaterPickerOptions {
 	threadId?: string | null;
 	subject?: string;
 	hideModal(): void;
-	openLaterPicker(threadId: string, subject: string): unknown;
+	openLaterPicker(threadId: string, subject: string): void;
 }
 
 interface ShowLabelPickerOptions {
-	openLabelPicker(): unknown;
+	openLabelPicker(): void;
 }
 
 interface ViewOnGmailOptions {
@@ -92,11 +92,18 @@ interface ThreadActionController {
 	archiveThread(threadId: string): Promise<{ ok: boolean; reason?: string } | undefined>;
 }
 
+interface Rfc2822Payload {
+	myEmail: string;
+	threadId: string;
+	body?: string;
+	inReplyTo?: string | null;
+}
+
 interface AppApi {
-	buildRfc2822(payload: Record<string, unknown>): Promise<unknown>;
-	sendMessage(payload: { threadId: string; raw: string }): Promise<unknown>;
-	getAttachment(messageId: string, attachmentId: string): Promise<unknown>;
-	updateMessageWordcount(threadId: string, messageId: string, wordcount: number): Promise<unknown>;
+	buildRfc2822(payload: Rfc2822Payload): Promise<string>;
+	sendMessage(payload: { threadId: string; raw: string }): Promise<{id?: string}>;
+	getAttachment(messageId: string, attachmentId: string): Promise<{data: string}>;
+	updateMessageWordcount(threadId: string, messageId: string, wordcount: number): Promise<void>;
 }
 
 function updateMessenger(actionMessenger: MsgHandle | null | undefined, type: string, message: string): void {
@@ -142,7 +149,7 @@ export function createThreadViewerController({
 	getThreadData(threadId: string, attempt: number, messenger: MsgHandle): Promise<{ messages: ThreadMessage[] }>;
 	messengerGetter(): Messenger;
 	onError(error: unknown): void;
-	onUpdateMessageWordcount(threadId: string, messageId: string, wordcount: number | undefined): Promise<unknown>;
+	onUpdateMessageWordcount(threadId: string, messageId: string, wordcount: number | undefined): Promise<void>;
 	threadActionController: ThreadActionController;
 }) {
 	return {
@@ -205,8 +212,8 @@ export function createThreadViewerController({
 				});
 				var resp = await appApi.sendMessage({
 					threadId: threadId,
-					raw: base64EncodedEmail as string
-				}) as { id?: string };
+					raw: base64EncodedEmail,
+				});
 				updateMessenger(actionMessenger, 'success', 'Successfully sent message with id ' + resp.id + '.');
 				options.clearReply();
 				options.hideModal();
@@ -225,7 +232,7 @@ export function createThreadViewerController({
 
 		async downloadAttachment(options: DownloadAttachmentOptions) {
 			try {
-				var resp = await appApi.getAttachment(options.messageId, options.attachmentId) as { data: string };
+				var resp = await appApi.getAttachment(options.messageId, options.attachmentId);
 				options.saveAttachment(
 					createBlobFromBase64Data(normalizeBase64AttachmentData(resp.data)),
 					options.attachmentName
@@ -300,7 +307,7 @@ export function createThreadViewerController({
 			if (options.event.key !== 'Delete') {
 				return;
 			}
-			return this.deleteCurrentThread({
+			await this.deleteCurrentThread({
 				threadId: options.threadId ?? '',
 				hideModal: options.hideModal,
 			});

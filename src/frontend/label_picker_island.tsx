@@ -23,7 +23,7 @@ interface LabelPickerAppProps {
 	notify: Notify | undefined;
 	onDismiss: (() => void) | undefined;
 	onMoveThread: ((threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined>) | undefined;
-	onMoveBundle: ((bundleId: string, labelId: string) => Promise<unknown>) | undefined;
+	onMoveBundle: ((bundleId: string, labelId: string) => Promise<void>) | undefined;
 	state: LabelPickerState;
 }
 
@@ -87,7 +87,7 @@ interface MountLabelPickerIslandDeps {
 	notify?: Notify;
 	onDismiss?: () => void;
 	onMoveThread?: (threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined>;
-	onMoveBundle?: (bundleId: string, labelId: string) => Promise<unknown>;
+	onMoveBundle?: (bundleId: string, labelId: string) => Promise<void>;
 }
 
 export function mountLabelPickerIsland({ container, notify, onDismiss, onMoveThread, onMoveBundle }: MountLabelPickerIslandDeps) {

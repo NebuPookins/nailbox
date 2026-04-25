@@ -18,7 +18,7 @@ interface Notify {
 }
 
 interface LaterPickerState {
-	onHide: ((targetId: string, hideUntil: HideUntilValue) => Promise<unknown>) | null;
+	onHide: ((targetId: string, hideUntil: HideUntilValue) => Promise<void>) | null;
 	targetId: string | null;
 }
 
@@ -126,12 +126,12 @@ export function mountLaterPickerIsland({ container, notify, onDismiss, onHidden 
 			state.targetId = null;
 			renderApp();
 		},
-		open({ onHideThread, threadId }: { onHideThread: (threadId: string, hideUntil: HideUntilValue) => Promise<unknown>; threadId: string }) {
+		open({ onHideThread, threadId }: { onHideThread: (threadId: string, hideUntil: HideUntilValue) => Promise<void>; threadId: string }) {
 			state.onHide = onHideThread;
 			state.targetId = threadId;
 			renderApp();
 		},
-		openForBundle({ bundleId, onHideBundle }: { bundleId: string; onHideBundle: (bundleId: string, hideUntil: HideUntilValue) => Promise<unknown> }) {
+		openForBundle({ bundleId, onHideBundle }: { bundleId: string; onHideBundle: (bundleId: string, hideUntil: HideUntilValue) => Promise<void> }) {
 			state.onHide = onHideBundle;
 			state.targetId = bundleId;
 			renderApp();

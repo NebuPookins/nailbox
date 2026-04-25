@@ -743,7 +743,7 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 			bundles: bundles,
 			groupingRules: groupingRules,
 			orderedItemIds: orderedItemIds,
-		}) as unknown as ThreadGroup[];
+		});
 	}
 
 	render();
@@ -757,7 +757,7 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 			labels = newLabels;
 			render();
 		},
-		setGroupingRules: function(nextGroupingRules: unknown) {
+		setGroupingRules: function(nextGroupingRules: GroupingRulesConfig) {
 			groupingRules = normalizeGroupingRulesConfig(nextGroupingRules);
 		},
 		removeThread: function(threadId: string) {

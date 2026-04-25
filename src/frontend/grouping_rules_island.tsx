@@ -16,7 +16,7 @@ interface Rule {
 
 interface GroupingRulesApi {
 	loadRules(): Promise<{ rules: unknown[] }>;
-	saveRules(data: { rules: Rule[] }): Promise<unknown>;
+	saveRules(data: { rules: Rule[] }): Promise<void>;
 }
 
 interface Notify {
