@@ -8,7 +8,6 @@ import {
 } from './thread_list_presenter.js';
 import {
 	groupThreads as regroupThreads,
-	normalizeGroupingRulesConfig,
 	type BundleSummary,
 	type BundleData,
 	type GroupingRulesConfig,
@@ -766,7 +765,7 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 			render();
 		},
 		setGroupingRules: function(nextGroupingRules: GroupingRulesConfig) {
-			groupingRules = normalizeGroupingRulesConfig(nextGroupingRules);
+			groupingRules = nextGroupingRules;
 		},
 		removeThread: function(threadId: string) {
 			removingThreadIds = new Set(removingThreadIds);

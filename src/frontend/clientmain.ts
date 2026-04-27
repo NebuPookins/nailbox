@@ -10,7 +10,7 @@ import { createThreadViewerController } from './thread_viewer_controller.js';
 import { createIslandManager } from './island_manager.js';
 import { wireModals } from './modal_wiring.js';
 import { createThreadUpdatesSocket } from './thread_updates_socket.js';
-import { normalizeGroupingRulesConfig, type GroupingRulesConfig, type ThreadGroup } from './thread_grouping.js';
+import { type GroupingRulesConfig } from './thread_grouping.js';
 import type { Result, ThreadDataResponse } from './api.js';
 import type { LabelResponse, HideUntilValue } from './api.js';
 
@@ -113,13 +113,13 @@ function renderSetupNeededState(message?: string): void {
 		return { ok: true, value: undefined };
 	}
 
-	async function loadGroupingRules(): Promise<void> {
+	async function loadGroupingRules(): Promise<void> { //TODO: Use Result instead of throwing error.
 		var rulesApi = frontendApi.createGroupingRulesApi();
 		var response = await rulesApi.loadRules();
 		if (!response.ok) {
 			throw response.error instanceof Error ? response.error : new Error('Failed to load grouping rules.');
 		}
-		groupingRulesCache = normalizeGroupingRulesConfig(response.value);
+		groupingRulesCache = response.value;
 		var threadListIslandState = islands.ensureThreadListIsland();
 		if (threadListIslandState) {
 			threadListIslandState.instance.setGroupingRules(groupingRulesCache);
