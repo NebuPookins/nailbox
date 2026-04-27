@@ -250,10 +250,6 @@ export function normalizeThreadSummaryDto(value: unknown): ThreadSummaryDto {
 	if (typeof isWhenIHaveTime !== 'boolean') {
 		throw makeValidationError('threadSummary.isWhenIHaveTime must be a boolean');
 	}
-	const needsRefreshing = value['needsRefreshing'];
-	if (typeof needsRefreshing !== 'boolean') {
-		throw makeValidationError('threadSummary.needsRefreshing must be a boolean');
-	}
 	const totalTimeToReadSeconds = value['totalTimeToReadSeconds'];
 	assertNumber(totalTimeToReadSeconds, 'threadSummary.totalTimeToReadSeconds');
 	const recentMessageReadTimeSeconds = value['recentMessageReadTimeSeconds'];
@@ -270,7 +266,6 @@ export function normalizeThreadSummaryDto(value: unknown): ThreadSummaryDto {
 		labelIds: [...labelIds],
 		visibility,
 		isWhenIHaveTime,
-		needsRefreshing,
 		totalTimeToReadSeconds,
 		recentMessageReadTimeSeconds,
 	};

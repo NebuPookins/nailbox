@@ -104,7 +104,6 @@ test('normalizeThreadSummaryDto validates response shape', () => {
 		labelIds: ['INBOX'],
 		visibility: 'updated',
 		isWhenIHaveTime: false,
-		needsRefreshing: true,
 		totalTimeToReadSeconds: 30,
 		recentMessageReadTimeSeconds: 15,
 	});

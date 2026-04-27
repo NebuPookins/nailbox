@@ -41,7 +41,6 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 		try {
 			const formattedThreads = await threadService.getMostRelevantThreads({
 				hideUntils,
-				lastRefresheds,
 				limit: 100,
 			});
 			res.status(200).type('application/json').send(formattedThreads);
@@ -82,7 +81,6 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 		try {
 			const allThreads = await threadService.getMostRelevantThreads({
 				hideUntils,
-				lastRefresheds,
 				limit: 100,
 			});
 			const bundleList = dependencies.bundles ? dependencies.bundles.listBundles() : [];

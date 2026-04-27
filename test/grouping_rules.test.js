@@ -54,5 +54,5 @@ test('groupThreads groups matching threads and preserves shortest-first sorting'
 
 	assert.equal(groups.length, 1);
 	assert.equal(groups[0].label, 'Important');
-	assert.deepEqual(groups[0].threads.map((thread) => thread.threadId), ['2', '1']);
+	assert.deepEqual(groups[0].items.filter((item) => item.type !== 'bundle').map((item) => item.threadId), ['2', '1']);
 });

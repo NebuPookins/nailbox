@@ -41,8 +41,7 @@ export type ThreadRowItem = ThreadSummary | BundleSummary;
 
 export interface ThreadGroup {
 	label: string;
-	threads: ThreadSummary[];
-	items?: ThreadRowItem[];
+	items: ThreadRowItem[];
 	sortType?: SortType;
 }
 
@@ -244,7 +243,6 @@ export function groupThreads({
 		}
 		return {
 			label: groupName,
-			threads: sortedItems.filter(function(item): item is ThreadSummary { return item.type !== 'bundle'; }),
 			items: sortedItems,
 			sortType: sortType,
 		};
@@ -267,8 +265,8 @@ export function groupThreads({
 		}
 		if (groupPriority[labelA]) return 1;
 		if (groupPriority[labelB]) return -1;
-		const firstA = groupA.items?.[0];
-		const firstB = groupB.items?.[0];
+		const firstA = groupA.items[0];
+		const firstB = groupB.items[0];
 		return (itemOrder.get(firstA ? getItemId(firstA) : '') ?? Number.MAX_SAFE_INTEGER) -
 			(itemOrder.get(firstB ? getItemId(firstB) : '') ?? Number.MAX_SAFE_INTEGER);
 	});

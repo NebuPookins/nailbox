@@ -37,43 +37,25 @@ test('initialize renders setup-needed state when OAuth is not configured', async
 	const controller = createAppShellController({
 		appApi: {
 			async loadAuthStatus() {
-				return authStatus;
+				return { ok: true, value: authStatus };
 			},
 		},
-		getAuthStatus() {
-			return authStatus;
-		},
-		loadGroupingRules() {
-			throw new Error('unused');
-		},
-		loadLabels() {
-			throw new Error('unused');
-		},
+		getAuthStatus: () => ({ ok: true, value: authStatus }),
+		loadGroupingRules: () => { throw new Error('unused'); },
+		loadLabels: () => { throw new Error('unused'); },
 		messengerGetter: createMessengerGetter().messengerGetter,
-		renderConnectedState() {
-			renders.push('connected');
-		},
-		renderDisconnectedState() {
-			renders.push('disconnected');
-		},
-		renderSetupNeededState() {
-			renders.push('setup');
-		},
-		reportError() {},
-		setAuthStatus(value) {
-			authStatus = value;
-		},
-		syncThreadsFromGoogle() {
-			throw new Error('unused');
-		},
-		updateUiWithThreadsFromServer() {
-			throw new Error('unused');
-		},
+		renderConnectedState: () => { renders.push('connected'); },
+		renderDisconnectedState: () => { renders.push('disconnected'); },
+		renderSetupNeededState: () => { renders.push('setup'); },
+		setAuthStatus: (value) => { authStatus = value; },
+		syncThreadsFromGoogle: () => { throw new Error('unused'); },
+		threadUpdatesConnection: undefined,
+		updateUiWithThreadsFromServer: () => { throw new Error('unused'); },
 	});
 
 	const result = await controller.initialize();
 
-	assert.deepEqual(result, { ok: true, state: 'setup-needed' });
+	assert.deepEqual(result, { ok: true, value: 'setup-needed' });
 	assert.deepEqual(renders, ['setup']);
 });
 
@@ -97,46 +79,25 @@ test('initialize bootstraps a connected session and opens thread updates connect
 		appApi: {
 			async loadAuthStatus() {
 				calls.push('loadAuthStatus');
-				return authStatus;
+				return { ok: true, value: authStatus };
 			},
 		},
-		getAuthStatus() {
-			return authStatus;
-		},
-		async loadGroupingRules() {
-			calls.push('loadGroupingRules');
-		},
-		async loadLabels() {
-			calls.push('loadLabels');
-		},
+		getAuthStatus: () => ({ ok: true, value: authStatus }),
+		loadGroupingRules: async () => { calls.push('loadGroupingRules'); },
+		loadLabels: async () => { calls.push('loadLabels'); return { ok: true, value: undefined }; },
 		messengerGetter,
-		renderConnectedState() {
-			calls.push('renderConnectedState');
-		},
-		renderDisconnectedState() {
-			calls.push('renderDisconnectedState');
-		},
-		renderSetupNeededState() {
-			calls.push('renderSetupNeededState');
-		},
-		reportError(error) {
-			calls.push(['reportError', error.message]);
-		},
-		setAuthStatus(value) {
-			authStatus = value;
-		},
-		async syncThreadsFromGoogle(messenger) {
-			calls.push(['syncThreadsFromGoogle', Boolean(messenger)]);
-		},
+		renderConnectedState: () => { calls.push('renderConnectedState'); },
+		renderDisconnectedState: () => { calls.push('renderDisconnectedState'); },
+		renderSetupNeededState: () => { calls.push('renderSetupNeededState'); },
+		setAuthStatus: (value) => { authStatus = value; },
+		syncThreadsFromGoogle: async (messenger) => { calls.push(['syncThreadsFromGoogle', Boolean(messenger)]); },
 		threadUpdatesConnection,
-		async updateUiWithThreadsFromServer(messenger) {
-			calls.push(['updateUiWithThreadsFromServer', Boolean(messenger)]);
-		},
+		updateUiWithThreadsFromServer: async (messenger) => { calls.push(['updateUiWithThreadsFromServer', Boolean(messenger)]); },
 	});
 
 	const result = await controller.initialize();
 
-	assert.deepEqual(result, { ok: true, state: 'connected' });
+	assert.deepEqual(result, { ok: true, value: 'connected' });
 	assert.deepEqual(calls, [
 		'loadAuthStatus',
 		'renderConnectedState',
@@ -148,6 +109,33 @@ test('initialize bootstraps a connected session and opens thread updates connect
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Loading cached threads...' },
 	]);
+});
+
+test('initialize returns error result when loadAuthStatus fails', async () => {
+	const renders = [];
+	const controller = createAppShellController({
+		appApi: {
+			async loadAuthStatus() {
+				return { ok: false, error: new Error('Network error') };
+			},
+		},
+		getAuthStatus: () => ({ configured: false, connected: false }),
+		loadGroupingRules: () => { throw new Error('unused'); },
+		loadLabels: () => { throw new Error('unused'); },
+		messengerGetter: createMessengerGetter().messengerGetter,
+		renderConnectedState: () => { renders.push('connected'); },
+		renderDisconnectedState: () => { renders.push('disconnected'); },
+		renderSetupNeededState: (message) => { renders.push(message || 'setup'); },
+		setAuthStatus: () => {},
+		syncThreadsFromGoogle: () => { throw new Error('unused'); },
+		threadUpdatesConnection: undefined,
+		updateUiWithThreadsFromServer: () => { throw new Error('unused'); },
+	});
+
+	const result = await controller.initialize();
+
+	assert.deepEqual(result, { ok: false, error: new Error('Network error') });
+	assert.deepEqual(renders, ['Failed to load authentication status. Please check your connection and try again.']);
 });
 
 test('disconnectGmail clears the local auth session and renders the disconnected state', async () => {
@@ -171,32 +159,17 @@ test('disconnectGmail clears the local auth session and renders the disconnected
 				renders.push('disconnectRequest');
 			},
 		},
-		getAuthStatus() {
-			return authStatus;
-		},
-		loadGroupingRules() {
-			throw new Error('unused');
-		},
-		loadLabels() {
-			throw new Error('unused');
-		},
+		getAuthStatus: () => ({ ok: true, value: authStatus }),
+		loadGroupingRules: () => { throw new Error('unused'); },
+		loadLabels: () => { throw new Error('unused'); },
 		messengerGetter: createMessengerGetter().messengerGetter,
-		renderConnectedState() {},
-		renderDisconnectedState(message) {
-			renders.push(message);
-		},
-		renderSetupNeededState() {},
-		reportError() {},
-		setAuthStatus(value) {
-			authStatus = value;
-		},
-		syncThreadsFromGoogle() {
-			throw new Error('unused');
-		},
+		renderConnectedState: () => {},
+		renderDisconnectedState: (message) => { renders.push(message); },
+		renderSetupNeededState: () => {},
+		setAuthStatus: (value) => { authStatus = value; },
+		syncThreadsFromGoogle: () => { throw new Error('unused'); },
 		threadUpdatesConnection,
-		updateUiWithThreadsFromServer() {
-			throw new Error('unused');
-		},
+		updateUiWithThreadsFromServer: () => { throw new Error('unused'); },
 	});
 
 	const result = await controller.disconnectGmail();

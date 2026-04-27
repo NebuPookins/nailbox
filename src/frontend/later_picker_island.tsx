@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { LATER_PRESET_OPTIONS, resolveHideUntilPreset } from './later_picker_presets.js';
+import type { HideUntilValue } from './api.js';
 
 interface LaterPresetOption {
 	glyph: string;
 	label: string;
 	value: string;
-}
-
-interface HideUntilValue {
-	type: 'timestamp' | 'when-i-have-time';
-	value?: number;
 }
 
 interface Notify {
