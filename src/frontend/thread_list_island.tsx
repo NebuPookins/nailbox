@@ -44,12 +44,6 @@ interface BundleLaterPickerPayload {
 	bundleId: string;
 }
 
-function toThreadItems(group: ThreadGroup): ThreadSummary[] {
-	return (group.items || group.threads).filter(function(item): item is ThreadSummary {
-		return (item as ThreadRowItem).type !== 'bundle';
-	}) as ThreadSummary[];
-}
-
 function cloneItem(item: ThreadRowItem): ThreadRowItem {
 	if (item.type === 'bundle') {
 		return {
@@ -474,8 +468,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 	// Build a set of all bundled thread IDs across all groups (for selection mode filtering)
 	const bundledThreadIds = new Set<string>();
 	for (const group of groups) {
-		const items = group.items || group.threads.map((t) => ({...t, type: 'thread' as const}));
-		for (const item of items) {
+		for (const item of group.items) {
 			if (item.type === 'bundle') {
 				for (const tid of item.threadIds) {
 					bundledThreadIds.add(tid);
@@ -574,9 +567,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 				) : null}
 			</div>
 			{groups.map(function(group, groupIdx) {
-				const items: ThreadRowItem[] = group.items
-					? group.items
-					: group.threads.map((t) => ({...t, type: 'thread' as const}));
+				const items: ThreadRowItem[] = group.items;
 
 				const groupTotalTime = items.reduce(function(sum, item) {
 					return sum + item.totalTimeToReadSeconds;
@@ -713,9 +704,7 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 
 	function getAllItems(): ThreadRowItem[] {
 		return groups.flatMap(function(group) {
-			return (group.items || group.threads.map(function(thread) {
-				return {...thread, type: 'thread' as const};
-			})).map(cloneItem);
+			return group.items.map(cloneItem);
 		});
 	}
 
@@ -782,16 +771,13 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 					.map(function(group) {
 						return {
 							...group,
-							items: group.items
-								? group.items.filter(function(item) {
-									return item.type !== 'bundle' || (item as BundleSummary).bundleId !== bundleId;
-								})
-								: undefined,
+							items: group.items.filter(function(item) {
+								return item.type !== 'bundle' || (item as BundleSummary).bundleId !== bundleId;
+							}),
 						};
 					})
 					.filter(function(group) {
-						const items = group.items || group.threads;
-						return items.length > 0;
+						return group.items.length > 0;
 					});
 				render();
 			}, REMOVE_ANIMATION_MS);

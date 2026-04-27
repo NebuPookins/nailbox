@@ -27,7 +27,7 @@ interface GroupingRulesIsland {
 	refresh(): void;
 }
 
-interface Notify {
+export interface Notify {
 	error?: (msg: string) => void;
 	success?: (msg: string) => void;
 }
@@ -79,9 +79,9 @@ interface IslandState<T> {
 }
 
 interface FrontendApi {
-	mountGroupingRulesSettings?(opts: { container: Element; notify?: Notify; onSaved?: () => void }): GroupingRulesIsland;
-	mountLaterPickerIsland?(opts: { container: Element; notify?: Notify; onDismiss?: () => void; onHidden?: (id: string) => void }): LaterPickerIsland;
-	mountLabelPickerIsland?(opts: { container: Element; notify?: Notify; onDismiss?: () => void; onMoveThread?: (threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined>; onMoveBundle?: (bundleId: string, labelId: string) => Promise<void> }): LabelPickerIsland;
+	mountGroupingRulesSettings?(opts: { container: Element; onSaved?: () => void }): GroupingRulesIsland;
+	mountLaterPickerIsland?(opts: { container: Element; notify: Notify; onDismiss?: () => void; onHidden?: (id: string) => void }): LaterPickerIsland;
+	mountLabelPickerIsland?(opts: { container: Element; notify: Notify; onDismiss?: () => void; onMoveThread?: (threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined>; onMoveBundle?: (bundleId: string, labelId: string) => Promise<void> }): LabelPickerIsland;
 	mountThreadListIsland?(opts: {
 		container: Element;
 		onArchive: (id: string) => void;
@@ -169,21 +169,7 @@ export function createIslandManager({
 		});
 	}
 
-	function createGroupingRulesNotify() {
-		return {
-			error: function(message: string) {
-				messengerGetter().error(message);
-			},
-			success: function(message: string) {
-				messengerGetter().info(message).update({
-					type: 'success',
-					message: message
-				});
-			}
-		};
-	}
-
-	function createLaterPickerNotify() {
+	function createLaterPickerNotify(): { error: (message: string) => void } {
 		return {
 			error: function(message: string) {
 				messengerGetter().error(message);
@@ -191,7 +177,7 @@ export function createIslandManager({
 		};
 	}
 
-	function createLabelPickerNotify() {
+	function createLabelPickerNotify(): { error: (message: string) => void } {
 		return {
 			error: function(message: string) {
 				messengerGetter().error(message);
@@ -214,7 +200,6 @@ export function createIslandManager({
 		}
 		groupingRulesIsland = frontendApi.mountGroupingRulesSettings({
 			container: groupingRulesRoot,
-			notify: createGroupingRulesNotify(),
 			onSaved: function() {
 				Promise.resolve(onGroupingRulesSaved?.()).catch(reportAsyncError);
 				hideSettingsModal();

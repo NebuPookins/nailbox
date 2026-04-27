@@ -1,27 +1,8 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import type { ThreadMessageDto } from '../server/types/thread.js';
 
-interface Attachment {
-	filename: string;
-	size: number;
-	attachmentId: string;
-}
-
-interface Person {
-	name: string;
-	email: string;
-}
-
-interface ThreadMessage {
-	messageId: string;
-	from: Array<Person | null>;
-	to: Person[];
-	date: number;
-	body: { sanitized: string };
-	wordcount: number;
-	duration?: string;
-	attachments: Attachment[];
-}
+type ThreadMessage = ThreadMessageDto & { duration?: string };
 
 interface DeletedMessagesPayload {
 	num: number;

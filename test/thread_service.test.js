@@ -70,9 +70,6 @@ test('getMostRelevantThreads tolerates repository threads and returns formatted 
 			}),
 			comparator: () => () => 0,
 		},
-		lastRefresheds: {
-			needsRefreshing: () => false,
-		},
 		limit: 100,
 	});
 

@@ -113,11 +113,9 @@ export function createThreadService(dependencies: {
 
 	async function getMostRelevantThreads({
 		hideUntils,
-		lastRefresheds,
 		limit = 100,
 	}: {
 		hideUntils: any;
-		lastRefresheds: any;
 		limit?: number;
 	}): Promise<ThreadSummaryDto[]> {
 		const filenames: string[] = await repository.listThreadIds();
@@ -156,7 +154,6 @@ export function createThreadService(dependencies: {
 					labelIds: thread.labelIds(),
 					visibility: hideUntils.get({threadId: thread.id(), lastUpdated: thread.lastUpdated()}).getVisibility(thread.lastUpdated(), now),
 					isWhenIHaveTime: hideUntils.get({threadId: thread.id(), lastUpdated: thread.lastUpdated()}).isWhenIHaveTime(),
-					needsRefreshing: lastRefresheds.needsRefreshing(thread.id(), thread.lastUpdated(), now),
 					totalTimeToReadSeconds: totalTimeToReadSecondsForThread,
 					recentMessageReadTimeSeconds: recentMessageReadTime,
 				});

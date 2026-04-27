@@ -11,17 +11,10 @@ interface Messenger {
 	error(message: string): MsgHandle;
 }
 
-interface ThreadMessage {
-	messageId: string;
-	deleted?: boolean;
-	timeToReadSeconds?: number;
-	wordcount?: number;
-	[key: string]: unknown;
-}
+import type { ThreadMessageDto } from '../server/types/thread.js';
+import type { Result, ThreadDataResponse } from './api.js';
 
-interface RenderedMessage extends ThreadMessage {
-	duration: string;
-}
+type RenderedMessage = ThreadMessageDto & { duration: string };
 
 interface OpenThreadOptions {
 	threadId: string;
@@ -92,18 +85,13 @@ interface ThreadActionController {
 	archiveThread(threadId: string): Promise<{ ok: boolean; reason?: string } | undefined>;
 }
 
-interface Rfc2822Payload {
-	myEmail: string;
-	threadId: string;
-	body?: string;
-	inReplyTo?: string | null;
-}
+import { type Rfc2822Payload } from './api.js';
 
 interface AppApi {
-	buildRfc2822(payload: Rfc2822Payload): Promise<string>;
-	sendMessage(payload: { threadId: string; raw: string }): Promise<{id?: string}>;
-	getAttachment(messageId: string, attachmentId: string): Promise<{data: string}>;
-	updateMessageWordcount(threadId: string, messageId: string, wordcount: number): Promise<void>;
+	buildRfc2822(payload: Rfc2822Payload): Promise<Result<string>>;
+	sendMessage(payload: { threadId: string; raw: string }): Promise<Result<{id?: string}>>;
+	getAttachment(messageId: string, attachmentId: string): Promise<Result<{data: string}>>;
+	updateMessageWordcount(threadId: string, messageId: string, wordcount: number): Promise<unknown>;
 }
 
 function updateMessenger(actionMessenger: MsgHandle | null | undefined, type: string, message: string): void {
@@ -141,17 +129,18 @@ export function createThreadViewerController({
 	appApi,
 	getThreadData,
 	messengerGetter,
-	onError,
 	onUpdateMessageWordcount,
 	threadActionController,
 }: {
 	appApi: AppApi;
-	getThreadData(threadId: string, attempt: number, messenger: MsgHandle): Promise<{ messages: ThreadMessage[] }>;
+	getThreadData(threadId: string, attempt: number, messenger: MsgHandle): Promise<Result<ThreadDataResponse>>;
 	messengerGetter(): Messenger;
-	onError(error: unknown): void;
-	onUpdateMessageWordcount(threadId: string, messageId: string, wordcount: number | undefined): Promise<void>;
+	onUpdateMessageWordcount(threadId: string, messageId: string, wordcount: number | undefined): Promise<unknown>; //TODO: Check API design here.
 	threadActionController: ThreadActionController;
 }) {
+	function showError(error: unknown): void {
+		messengerGetter().error(error instanceof Error ? error.message : String(error));
+	}
 	return {
 		async openThread(options: OpenThreadOptions) {
 			var threadId = options.threadId;
@@ -164,7 +153,12 @@ export function createThreadViewerController({
 			options.showLoading();
 			options.showModal();
 			try {
-				var threadData = await getThreadData(threadId, 0, actionMessenger);
+				const threadDataResult = await getThreadData(threadId, 0, actionMessenger);
+				if (!threadDataResult.ok) {
+					showError(threadDataResult.error);
+					return;
+				}
+				var threadData = threadDataResult.value;
 				if (options.getCurrentThreadId() !== threadId) {
 					return;
 				}
@@ -185,65 +179,71 @@ export function createThreadViewerController({
 						duration: moment.duration(message.timeToReadSeconds ?? 0, 'seconds').humanize(),
 					};
 					options.appendMessage(renderedMessage);
-					onUpdateMessageWordcount(threadId, message.messageId, message.wordcount).catch(onError);
+					onUpdateMessageWordcount(threadId, message.messageId, message.wordcount).catch(showError);
 				});
 				updateMessenger(actionMessenger, 'success', 'Successfully downloaded thread data for ' + threadId + '.');
 			} catch (error) {
-				onError(error);
+				showError(error);
 			}
 		},
 
-		async replyAll(options: ReplyAllOptions) {
+		async replyAll(options: ReplyAllOptions): Promise<Result<{ messageId: string }>> {
 			var threadId = options.threadId;
-			var actionMessenger = messengerGetter().info('Sending reply to thread ' + threadId + '...');
 			if (!threadId || !options.emailAddress) {
-				updateMessenger(actionMessenger, 'error', 'Missing thread id or authenticated email address.');
 				return {
 					ok: false,
-					reason: 'missing-thread-context',
+					error: 'Missing thread id or authenticated email address.',
 				};
 			}
-			try {
-				var base64EncodedEmail = await appApi.buildRfc2822({
-					myEmail: options.emailAddress,
-					threadId: threadId,
-					body: options.body,
-					inReplyTo: options.inReplyTo,
-				});
-				var resp = await appApi.sendMessage({
-					threadId: threadId,
-					raw: base64EncodedEmail,
-				});
-				updateMessenger(actionMessenger, 'success', 'Successfully sent message with id ' + resp.id + '.');
-				options.clearReply();
-				options.hideModal();
+			//TODO: We currently buildRfc2822 and sendMessage separately, which results in two round-trips to the server. We should consider combining these into a single API method.
+			const rfcResult = await appApi.buildRfc2822({
+				myEmail: options.emailAddress,
+				threadId: threadId,
+				body: options.body,
+				inReplyTo: options.inReplyTo,
+			});
+			if (!rfcResult.ok) {
 				return {
-					ok: true,
+					ok: false,
+					error: rfcResult.error,
+				};
+			}
+			const base64EncodedEmail = rfcResult.value;
+			const sendResult = await appApi.sendMessage({
+				threadId: threadId,
+				raw: base64EncodedEmail,
+			});
+			if (!sendResult.ok) {
+				return {
+					ok: false,
+					error: sendResult.error,
+				};
+			}
+			const resp = sendResult.value;
+			options.clearReply();
+			options.hideModal();
+			return {
+				ok: true,
+				value: {
 					messageId: resp.id,
-				};
-			} catch (error) {
-				onError(error);
-				return {
-					ok: false,
-					reason: 'send-failed',
-				};
-			}
+				},
+			};
 		},
 
 		async downloadAttachment(options: DownloadAttachmentOptions) {
-			try {
-				var resp = await appApi.getAttachment(options.messageId, options.attachmentId);
-				options.saveAttachment(
-					createBlobFromBase64Data(normalizeBase64AttachmentData(resp.data)),
-					options.attachmentName
-				);
-			} catch (error) {
-				onError(error);
+			const result = await appApi.getAttachment(options.messageId, options.attachmentId);
+			if (!result.ok) {
+				showError(result.error);
 				return {
 					ok: false,
 					reason: 'download-failed',
 				};
 			}
+			var resp = result.value;
+			options.saveAttachment(
+				createBlobFromBase64Data(normalizeBase64AttachmentData(resp.data)),
+				options.attachmentName
+			);
 		},
 
 		async deleteCurrentThread(options: ThreadWithModal) {
@@ -255,7 +255,7 @@ export function createThreadViewerController({
 				options.hideModal();
 				return result;
 			} catch (error) {
-				onError(error);
+				showError(error);
 				return {
 					ok: false,
 					reason: 'delete-failed',
@@ -272,7 +272,7 @@ export function createThreadViewerController({
 				options.hideModal();
 				return result;
 			} catch (error) {
-				onError(error);
+				showError(error);
 				return {
 					ok: false,
 					reason: 'archive-failed',

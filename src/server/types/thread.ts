@@ -52,7 +52,6 @@ export interface ThreadSummaryDto {
 	labelIds: string[];
 	visibility: 'updated' | 'visible' | 'when-i-have-time' | 'hidden' | 'stale';
 	isWhenIHaveTime: boolean;
-	needsRefreshing: boolean;
 	totalTimeToReadSeconds: number;
 	recentMessageReadTimeSeconds: number;
 }

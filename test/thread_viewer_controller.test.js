@@ -50,25 +50,20 @@ function createMessengerGetter() {
 
 function createController(overrides = {}) {
 	const { events, messengerGetter } = createMessengerGetter();
-	const errors = [];
 	const wordcountUpdates = [];
 	const controller = createThreadViewerController({
 		appApi: overrides.appApi || {
 			async buildRfc2822() {
-				return 'base64-message';
+				return { ok: true, value: 'base64-message' };
 			},
 			async getAttachment() {
-				return {
-					data: 'aGVsbG8=',
-				};
+				return { ok: true, value: { data: 'aGVsbG8=' } };
 			},
 			async sendMessage() {
-				return {
-					id: 'sent-123',
-				};
+				return { ok: true, value: { id: 'sent-123' } };
 			},
 		},
-		getThreadData: overrides.getThreadData || (async () => ({
+		getThreadData: overrides.getThreadData || (async () => ({ ok: true, value: {
 			messages: [
 				{
 					deleted: true,
@@ -83,11 +78,8 @@ function createController(overrides = {}) {
 					wordcount: 123,
 				},
 			],
-		})),
+		}})),
 		messengerGetter,
-		onError(error) {
-			errors.push(error);
-		},
 		onUpdateMessageWordcount(threadId, messageId, wordcount) {
 			wordcountUpdates.push({ threadId, messageId, wordcount });
 			return Promise.resolve();
@@ -103,7 +95,6 @@ function createController(overrides = {}) {
 	});
 	return {
 		controller,
-		errors,
 		events,
 		wordcountUpdates,
 	};
@@ -205,12 +196,9 @@ test('replyAll validates thread context before sending', async () => {
 
 	assert.deepEqual(result, {
 		ok: false,
-		reason: 'missing-thread-context',
+		error: 'Missing thread id or authenticated email address.',
 	});
-	assert.deepEqual(events, [
-		{ type: 'info', message: 'Sending reply to thread thread-1...' },
-		{ type: 'error', message: 'Missing thread id or authenticated email address.' },
-	]);
+	assert.deepEqual(events, []);
 });
 
 test('replyAll builds and sends the message, then clears and closes the modal', async () => {
@@ -219,14 +207,14 @@ test('replyAll builds and sends the message, then clears and closes the modal', 
 		appApi: {
 			async buildRfc2822(payload) {
 				calls.push(['build', payload]);
-				return 'raw-message';
+				return { ok: true, value: 'raw-message' };
 			},
 			async getAttachment() {
 				throw new Error('unused');
 			},
 			async sendMessage(payload) {
 				calls.push(['send', payload]);
-				return { id: 'gmail-1' };
+				return { ok: true, value: { id: 'gmail-1' } };
 			},
 		},
 	});
@@ -246,7 +234,9 @@ test('replyAll builds and sends the message, then clears and closes the modal', 
 
 	assert.deepEqual(result, {
 		ok: true,
-		messageId: 'gmail-1',
+		value: {
+			messageId: 'gmail-1',
+		},
 	});
 	assert.deepEqual(calls, [
 		['build', {
@@ -262,10 +252,7 @@ test('replyAll builds and sends the message, then clears and closes the modal', 
 		['clearReply'],
 		['hideModal'],
 	]);
-	assert.deepEqual(events, [
-		{ type: 'info', message: 'Sending reply to thread thread-1...' },
-		{ type: 'success', message: 'Successfully sent message with id gmail-1.' },
-	]);
+	assert.deepEqual(events, []);
 });
 
 test('handleKeydown deletes the current thread on Delete when reply is not focused', async () => {

@@ -6,7 +6,7 @@ interface Label {
 	hue?: number;
 }
 
-export interface MsgHandle {
+interface MsgHandle {
 	update(opts: { type: string; message: string }): void;
 }
 
@@ -16,11 +16,11 @@ interface Messenger {
 }
 
 interface AppApi {
-	archiveThread(threadId: string): Promise<void>;
-	deleteThread(threadId: string): Promise<void>;
-	moveThreadToLabel(threadId: string, labelId: string): Promise<void>;
-	archiveBundle(bundleId: string): Promise<void>;
-	deleteBundle(bundleId: string): Promise<void>;
+	archiveThread(threadId: string): Promise<unknown>; //TODO: Remove all these usages of unknown.
+	deleteThread(threadId: string): Promise<unknown>;
+	moveThreadToLabel(threadId: string, labelId: string): Promise<unknown>;
+	archiveBundle(bundleId: string): Promise<unknown>;
+	deleteBundle(bundleId: string): Promise<unknown>;
 }
 
 export interface ActionResult {
@@ -102,7 +102,7 @@ export function createThreadActionController({
 		threadId: string;
 		startMessage: string;
 		successMessage: string;
-		request: () => Promise<void>;
+		request: () => Promise<unknown>; //TODO: fix usage of unknown
 	}): Promise<ActionResult> {
 		const actionMessenger = createActionMessenger(messengerGetter, startMessage);
 		if (!threadId) {
@@ -125,7 +125,7 @@ export function createThreadActionController({
 		bundleId: string;
 		startMessage: string;
 		successMessage: string;
-		request: () => Promise<void>;
+		request: () => Promise<unknown>; //TODO: fix usage of unknown
 	}): Promise<ActionResult> {
 		const actionMessenger = createActionMessenger(messengerGetter, startMessage);
 		if (!bundleId) {

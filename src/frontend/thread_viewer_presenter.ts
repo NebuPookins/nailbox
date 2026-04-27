@@ -1,10 +1,9 @@
+import type { ThreadMessageDto } from '../server/types/thread.js';
+
 type MomentLib = (ts?: unknown) => { isSame(other: unknown, unit: string): boolean; format(fmt: string): string };
 type FilesizeLib = (size: number) => string;
 
-interface Person { name?: string; email?: string; }
-interface Attachment { attachmentId?: string; filename?: string; size?: number; }
-interface MessageBody { sanitized?: string; }
-interface ThreadMessage { messageId?: string; from?: Array<Person | null>; to?: Array<Person | null>; date?: unknown; body?: MessageBody; wordcount?: number; duration?: string; attachments?: Attachment[]; }
+type ThreadMessage = Partial<ThreadMessageDto> & { duration?: string };
 interface RenderOptions { momentLib?: MomentLib; filesizeLib?: FilesizeLib; }
 
 function escapeHtml(value: unknown): string {

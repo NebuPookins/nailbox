@@ -1,6 +1,6 @@
 import frontendApi from './index.js';
 import { showModal, hideModal } from './native_modal.js';
-import { createMessenger } from './messenger_shim.js';
+import { createMessenger, type MsgHandle } from './messenger_shim.js';
 import { createAppShellController } from './app_shell_controller.js';
 import { createThreadListController } from './thread_list_controller.js';
 import {
@@ -11,6 +11,7 @@ import { createIslandManager } from './island_manager.js';
 import { wireModals } from './modal_wiring.js';
 import { createThreadUpdatesSocket } from './thread_updates_socket.js';
 import { normalizeGroupingRulesConfig, type GroupingRulesConfig, type ThreadGroup } from './thread_grouping.js';
+import type { Result, ThreadDataResponse } from './api.js';
 import type { LabelResponse, HideUntilValue } from './api.js';
 
 declare const saveAs: (blob: Blob, name: string) => void;
@@ -26,21 +27,7 @@ interface AuthStatus {
 
 type LabelItem = LabelResponse & { hue?: number };
 
-interface AppError {
-	code?: string;
-	message?: string;
-}
-
 document.addEventListener('DOMContentLoaded', function() {
-	'use strict';
-
-	if (!console) {
-		(window as unknown as Record<string, unknown>).console = {};
-	}
-	if (!console.log) {
-		console.log = function() {};
-	}
-
 	var messengerGetter = (function() {
 		var messenger = createMessenger();
 		return function() { return messenger; };
@@ -85,12 +72,6 @@ document.addEventListener('DOMContentLoaded', function() {
 		return hash;
 	};
 
-	function reportAsyncError(error: unknown): void {
-		if (error) {
-			console.log(error);
-		}
-	}
-
 	function getThreadViewerThreadId(): string | null {
 		return threadViewerIsland ? threadViewerIsland.getThreadId() : null;
 	}
@@ -101,25 +82,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	}
 
-	function handleApiError(error: AppError | null | undefined, fallbackMessage?: string | null): void {
-		if (error && error.code === 'GOOGLE_REAUTH_REQUIRED') {
-			authStatus.connected = false;
-			authStatus.emailAddress = null;
-			threadUpdatesConnection?.disconnect();
-			renderDisconnectedState('Google authorization expired. Reconnect Gmail to continue.');
-			return;
-		}
-		if (error && error.code === 'GOOGLE_AUTH_MISCONFIGURED') {
-			threadUpdatesConnection?.disconnect();
-			renderSetupNeededState('Google OAuth is not configured.');
-			return;
-		}
-		if (fallbackMessage) {
-			messengerGetter().error(fallbackMessage);
-		}
-	}
-
-	function renderSetupNeededState(message?: string): void {
+function renderSetupNeededState(message?: string): void {
 		authShellIsland.setSetupNeeded(message);
 		islands.clearThreadList();
 	}
@@ -133,9 +96,12 @@ document.addEventListener('DOMContentLoaded', function() {
 		authShellIsland.setConnectedLoading({ emailAddress: authStatus.emailAddress });
 	}
 
-	async function loadLabels(): Promise<void> {
-		var labels = await appApi.loadLabels();
-		labelsCache = labels;
+	async function loadLabels(): Promise<Result<void>> {
+		const result = await appApi.loadLabels();
+		if (!result.ok) {
+			return result;
+		}
+		labelsCache = result.value;
 		var labelPickerIslandState = islands.ensureLabelPickerIsland();
 		if (labelPickerIslandState) {
 			labelPickerIslandState.instance.setLabels(islands.buildLabelPickerLabels());
@@ -144,6 +110,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		if (threadListIslandState) {
 			threadListIslandState.instance.setLabels(labelsCache);
 		}
+		return { ok: true, value: undefined };
 	}
 
 	async function loadGroupingRules(): Promise<void> {
@@ -156,13 +123,21 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	}
 
-	async function syncThreadsFromGoogle(updateMessenger: { update(opts: { type: string; message: string }): void }): Promise<void> {
+	async function syncThreadsFromGoogle(updateMessenger: MsgHandle): Promise<void> {
 		updateMessenger = updateMessenger || messengerGetter().info('Syncing Gmail...');
 		updateMessenger.update({
 			type: 'info',
 			message: 'Syncing Gmail to local cache...'
 		});
-		var resp = await appApi.syncThreadsFromGoogle();
+		const result = await appApi.syncThreadsFromGoogle();
+		if (!result.ok) {
+			updateMessenger.update({
+				type: 'error',
+				message: 'Failed to sync Gmail: ' + (result.error?.message || String(result.error))
+			});
+			return;
+		}
+		var resp = result.value;
 		var failedResults = Array.isArray(resp.results) ? resp.results.filter(function(result) {
 			return result.status >= 400;
 		}) : [];
@@ -188,50 +163,38 @@ document.addEventListener('DOMContentLoaded', function() {
 		});
 	}
 
-	async function refreshThreadFromGoogle(threadId: string): Promise<void> {
-		try {
-			await appApi.refreshThread(threadId);
-		} catch (error) {
-			console.log('Failed to refresh thread', threadId);
-		}
-	}
-
-	async function updateUiWithThreadsFromServer(updateMessenger: { update(opts: { type: string; message: string }): void }): Promise<void> {
+	async function updateUiWithThreadsFromServer(updateMessenger: MsgHandle): Promise<void> {
 		updateMessenger = updateMessenger || messengerGetter().info('Refreshing threads from cache...');
 		updateMessenger.update({
 			type: 'info',
 			message: 'Downloading threads from local cache...'
 		});
-		try {
-			var groupsOfThreads = await appApi.loadGroupedThreads() as unknown as ThreadGroup[];
-
-			authShellIsland.setIdle();
-			groupsOfThreads.forEach(function(group) {
-				const itemsToCheck = (group.items ? group.items : group.threads) as Array<{ type?: string; threadId?: string; needsRefreshing?: boolean }>;
-				itemsToCheck.forEach(function(item) {
-					if (item.type !== 'bundle' && item.needsRefreshing) {
-						refreshThreadFromGoogle(item.threadId ?? '');
-					}
-				});
-			});
-			var islandState = islands.ensureThreadListIsland();
-			if (islandState) {
-				islandState.instance.setGroups(groupsOfThreads);
-			}
-			if (groupsOfThreads.length === 0) {
-				authShellIsland.setEmpty();
-			}
-			updateMessenger.update({
-				type: 'success',
-				message: 'GUI updated with cached threads.'
-			});
-		} catch (error) {
+		const result = await appApi.loadGroupedThreads();
+		if (!result.ok) {
 			authShellIsland.setError();
-			throw error;
+			updateMessenger.update({
+				type: 'error',
+				message: 'Failed to load threads: ' + (result.error?.message || String(result.error))
+			});
+			return;
 		}
+		const groupsOfThreads = result.value;
+
+		authShellIsland.setIdle();
+		var islandState = islands.ensureThreadListIsland();
+		if (islandState) {
+			islandState.instance.setGroups(groupsOfThreads);
+		}
+		if (groupsOfThreads.length === 0) {
+			authShellIsland.setEmpty();
+		}
+		updateMessenger.update({
+			type: 'success',
+			message: 'GUI updated with cached threads.'
+		});
 	}
 
-	async function refreshThreadsFromServerCoalesced(updateMessenger: { update(opts: { type: string; message: string }): void }): Promise<void> {
+	async function refreshThreadsFromServerCoalesced(updateMessenger: MsgHandle): Promise<void> {
 		if (threadRefreshInFlight) {
 			pendingThreadRefresh = true;
 			return;
@@ -255,11 +218,9 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	}
 
-	async function getThreadData(threadId: string, attemptNumber: number, updateMessenger: { update(opts: { type: string; message: string }): void }): Promise<{ messages: Array<{ messageId: string; deleted?: boolean; timeToReadSeconds?: number; wordcount?: number; [key: string]: unknown }> }> {
-		try {
-			return await appApi.getThreadData(threadId) as { messages: Array<{ messageId: string; deleted?: boolean; timeToReadSeconds?: number; wordcount?: number; [key: string]: unknown }> };
-
-		} catch (error) {
+	async function getThreadData(threadId: string, attemptNumber: number, updateMessenger: MsgHandle): Promise<Result<ThreadDataResponse>> {
+		const result = await appApi.getThreadData(threadId);
+		if (!result.ok) {
 			if (attemptNumber < 60) {
 				updateMessenger.update({
 					type: 'info',
@@ -271,8 +232,9 @@ document.addEventListener('DOMContentLoaded', function() {
 				type: 'error',
 				message: 'Failed to get thread data after too many retries.'
 			});
-			throw error;
+			return { ok: false, error: result.error };
 		}
+		return { ok: true, value: result.value };
 	}
 
 	function showLaterPicker(threadId: string, subject: string): boolean {
@@ -289,7 +251,11 @@ document.addEventListener('DOMContentLoaded', function() {
 		islandState.instance.open({
 			onHideThread: async function(selectedThreadId: string, hideUntil: HideUntilValue) {
 				var updateMsg = messengerGetter().info('Hiding thread ' + selectedThreadId + '.');
-				await appApi.hideThread(selectedThreadId, hideUntil);
+				const result = await appApi.hideThread(selectedThreadId, hideUntil);
+				if (!result.ok) {
+					updateMsg.update({ type: 'error', message: result.error.message || 'Failed to hide thread.' });
+					return;
+				}
 				updateMsg.update({
 					type: 'success',
 					message: 'Successfully hid thread ' + selectedThreadId + '.'
@@ -335,7 +301,11 @@ document.addEventListener('DOMContentLoaded', function() {
 			bundleId: bundleId,
 			onHideBundle: async function(selectedBundleId: string, hideUntil: HideUntilValue) {
 				var updateMsg = messengerGetter().info('Hiding bundle ' + selectedBundleId + '.');
-				await appApi.hideBundle(selectedBundleId, hideUntil);
+				const result = await appApi.hideBundle(selectedBundleId, hideUntil);
+				if (!result.ok) {
+					updateMsg.update({ type: 'error', message: result.error.message || 'Failed to hide bundle.' });
+					return;
+				}
 				var threadListIslandState = islands.ensureThreadListIsland();
 				if (threadListIslandState) {
 					threadListIslandState.instance.removeBundleRow(selectedBundleId);
@@ -350,11 +320,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		return false;
 	}
 
-	var appApi = frontendApi.createAppApi({
-		onApiError: function(error) {
-			handleApiError(error as AppError, error && error.message);
-		}
-	});
+	var appApi = frontendApi.createAppApi();
 	var threadUpdatesConnection = createThreadUpdatesSocket({
 		onThreadsChanged: function() {
 			if (!authStatus.connected) {
@@ -362,9 +328,13 @@ document.addEventListener('DOMContentLoaded', function() {
 			}
 			refreshThreadsFromServerCoalesced(
 				messengerGetter().info('Refreshing threads from cache...')
-			).catch(reportAsyncError);
+			).catch(function(error: unknown) {
+				messengerGetter().error(error instanceof Error ? error.message : String(error));
+			});
 		},
-		reportError: reportAsyncError,
+		reportError: function(error: unknown) {
+			messengerGetter().error(error instanceof Error ? error.message : String(error));
+		},
 	});
 	function deleteBundleFromUI(bundleId: string): void {
 		var islandState = islands.ensureThreadListIsland();
@@ -393,32 +363,34 @@ document.addEventListener('DOMContentLoaded', function() {
 		deleteThreadFromUI: deleteThreadFromUI,
 		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer,
 		messengerGetter: messengerGetter,
-		reportAsyncError: reportAsyncError,
+		reportAsyncError: function(error: unknown) {
+			messengerGetter().error(error instanceof Error ? error.message : String(error));
+		},
 		onArchiveThread: function(threadId) { threadListController.archiveThread(threadId); },
 		onDeleteThread: function(threadId) { threadListController.deleteThread(threadId); },
 		onOpenLaterPickerForThread: function(threadSummary) { threadListController.openLaterPicker(threadSummary); },
 		onOpenLabelPickerForThread: function(threadSummary) { threadListController.openLabelPicker(threadSummary); },
 		onOpenThread: function(threadSummary) { threadListController.openThread(threadSummary); },
 		onCreateBundle: async function(threadIds: string[]) {
-			try {
-				var response = await appApi.createBundle(threadIds);
-				var threadListIslandState = islands.ensureThreadListIsland();
-				if (threadListIslandState && response.bundleId) {
-					threadListIslandState.instance.createBundleRow(response.bundleId, threadIds);
-				}
-			} catch (error) {
-				reportAsyncError(error);
+			const result = await appApi.createBundle(threadIds);
+			if (!result.ok) {
+				messengerGetter().error(result.error.message);
+				return;
+			}
+			var threadListIslandState = islands.ensureThreadListIsland();
+			if (threadListIslandState && result.value.bundleId) {
+				threadListIslandState.instance.createBundleRow(result.value.bundleId, threadIds);
 			}
 		},
 		onEditBundle: async function(bundleId: string, threadIds: string[], mergeBundleIds: string[]) {
-			try {
-				await appApi.updateBundle(bundleId, threadIds, mergeBundleIds);
-				var threadListIslandState = islands.ensureThreadListIsland();
-				if (threadListIslandState) {
-					threadListIslandState.instance.updateBundleRow(bundleId, threadIds, mergeBundleIds);
-				}
-			} catch (error) {
-				reportAsyncError(error);
+			const result = await appApi.updateBundle(bundleId, threadIds, mergeBundleIds);
+			if (!result.ok) {
+				messengerGetter().error(result.error.message);
+				return;
+			}
+			var threadListIslandState = islands.ensureThreadListIsland();
+			if (threadListIslandState) {
+				threadListIslandState.instance.updateBundleRow(bundleId, threadIds, mergeBundleIds);
 			}
 		},
 		onArchiveBundle: function(bundleId: string) { threadListController.archiveBundle(bundleId); },
@@ -427,7 +399,11 @@ document.addEventListener('DOMContentLoaded', function() {
 		onOpenLabelPickerForBundle: function(bundleSummary) { showLabelPickerForBundle(bundleSummary.bundleId); },
 		onMoveBundle: async function(bundleId: string, labelId: string) {
 			var updateMsg = messengerGetter().info('Labeling bundle ' + bundleId + '...');
-			await appApi.addLabelToBundle(bundleId, labelId);
+			const result = await appApi.addLabelToBundle(bundleId, labelId);
+			if (!result.ok) {
+				updateMsg.update({ type: 'error', message: result.error.message || 'Failed to label bundle.' });
+				return;
+			}
 			var threadListIslandState = islands.ensureThreadListIsland();
 			if (threadListIslandState) {
 				threadListIslandState.instance.removeBundleRow(bundleId);
@@ -438,20 +414,20 @@ document.addEventListener('DOMContentLoaded', function() {
 			});
 		},
 		onUngroup: async function(bundleId: string) {
-			try {
-				var updateMsg = messengerGetter().info('Ungrouping bundle ' + bundleId + '...');
-				await appApi.deleteBundle(bundleId);
-				var threadListIslandState = islands.ensureThreadListIsland();
-				if (threadListIslandState) {
-					threadListIslandState.instance.ungroupBundleRow(bundleId);
-				}
-				updateMsg.update({
-					type: 'success',
-					message: 'Bundle ungrouped.'
-				});
-			} catch (error) {
-				reportAsyncError(error);
+			var updateMsg = messengerGetter().info('Ungrouping bundle ' + bundleId + '...');
+			const result = await appApi.deleteBundle(bundleId);
+			if (!result.ok) {
+				updateMsg.update({ type: 'error', message: result.error.message || 'Failed to ungroup bundle.' });
+				return;
 			}
+			var threadListIslandState = islands.ensureThreadListIsland();
+			if (threadListIslandState) {
+				threadListIslandState.instance.ungroupBundleRow(bundleId);
+			}
+			updateMsg.update({
+				type: 'success',
+				message: 'Bundle ungrouped.'
+			});
 		},
 	});
 	var authShellIsland = frontendApi.mountAuthShellIsland({
@@ -461,14 +437,14 @@ document.addEventListener('DOMContentLoaded', function() {
 			try {
 				await appShellController.disconnectGmail();
 			} catch (error) {
-				reportAsyncError(error);
+				messengerGetter().error(error instanceof Error ? error.message : String(error));
 			}
 		},
 		onRefreshNow: async function() {
 			try {
 				await appShellController.refreshNow();
 			} catch (error) {
-				reportAsyncError(error);
+				messengerGetter().error(error instanceof Error ? error.message : String(error));
 			}
 		},
 	});
@@ -476,37 +452,37 @@ document.addEventListener('DOMContentLoaded', function() {
 		appApi: appApi,
 		getThreadData: getThreadData,
 		messengerGetter: messengerGetter,
-		onError: reportAsyncError,
 		onUpdateMessageWordcount: function(threadId, messageId, wordcount) {
 			return appApi.updateMessageWordcount(threadId, messageId, wordcount ?? 0);
 		},
 		threadActionController: threadActionController
 	});
 	var appShellController = createAppShellController({
-		appApi: appApi,
+		appApi,
 		getAuthStatus: function() {
 			return authStatus;
 		},
-		loadGroupingRules: loadGroupingRules,
-		loadLabels: loadLabels,
-		messengerGetter: messengerGetter,
-		renderConnectedState: renderConnectedState,
-		renderDisconnectedState: renderDisconnectedState,
-		renderSetupNeededState: renderSetupNeededState,
-		reportError: reportAsyncError,
+		loadGroupingRules,
+		loadLabels,
+		messengerGetter,
+		renderConnectedState,
+		renderDisconnectedState,
+		renderSetupNeededState,
 		setAuthStatus: function(nextAuthStatus) {
 			authStatus = nextAuthStatus as AuthStatus;
 		},
-		syncThreadsFromGoogle: syncThreadsFromGoogle,
-		threadUpdatesConnection: threadUpdatesConnection,
-		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer
+		syncThreadsFromGoogle,
+		threadUpdatesConnection,
+		updateUiWithThreadsFromServer,
 	});
 	var threadViewerIsland = frontendApi.mountThreadViewerIsland({
 		container: threadViewerRoot,
 		showModal: function() { showModal(threadViewer); },
 		hideModal: function() { hideModal(threadViewer); },
 		getEmailAddress: function() { return authStatus.emailAddress; },
-		reportError: reportAsyncError,
+		reportError: function(error: unknown) {
+			messengerGetter().error(error instanceof Error ? error.message : String(error));
+		},
 		onReplyAll: async function(opts) {
 			await threadViewerController.replyAll(opts);
 		},
@@ -591,7 +567,9 @@ document.addEventListener('DOMContentLoaded', function() {
 		openLaterPicker: showLaterPicker,
 		openLaterPickerForBundle: function(bundleSummary) { showLaterPickerForBundle(bundleSummary.bundleId); },
 		openThreadViewer,
-		reportError: reportAsyncError,
+		reportError: function(error: unknown) {
+			messengerGetter().error(error instanceof Error ? error.message : String(error));
+		},
 		threadActionController: threadActionController,
 		threadViewerController: threadViewerController
 	});
@@ -607,8 +585,16 @@ document.addEventListener('DOMContentLoaded', function() {
 		getThreadViewerThreadId,
 		clearThreadViewerState,
 		messengerGetter,
-		reportAsyncError,
+		reportAsyncError: function(error: unknown) {
+			messengerGetter().error(error instanceof Error ? error.message : String(error));
+		},
 	});
 
-	appShellController.initialize().catch(reportAsyncError);
+	appShellController.initialize().then(result => {
+		if (!result.ok) {
+			messengerGetter().error(result.error.message);
+		}
+	}).catch(function(error: unknown) {
+		messengerGetter().error(error instanceof Error ? error.message : String(error));
+	});
 });

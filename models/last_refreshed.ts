@@ -1,4 +1,3 @@
-import assert from 'assert';
 
 import nebulog from 'nebulog';
 
@@ -134,31 +133,6 @@ export class LastRefreshedData {
 		return this._scheduleBufferedFlush();
 	}
 
-	/**
-	 * @param threadId [String]
-	 * @param lastMessageAdded [Number] number of milliseconds since the epoch
-	 * marking the point in time that the most recent message in the thread was
-	 * added to that thread.
-	 * @param now [Number] number of milliseconds since the epoch, i.e. Date.now()
-	 * @return [Boolean] true if the thread should be updated due to not having
-	 * been updated in a while.
-	 */
-	needsRefreshing(threadId: string, lastMessageAdded: number, now: number): boolean {
-		const threadLastRefreshed = this._jsonData[threadId];
-		if (threadLastRefreshed === undefined) {
-			return true;
-		}
-		const noMessagesForAtLeast = threadLastRefreshed - lastMessageAdded;
-		const rawHaventCheckedFor = now - threadLastRefreshed;
-		let normalizedHaventCheckedFor: number;
-		if (rawHaventCheckedFor < 0) {
-			logger.warn(`threadId ${threadId}: haventCheckedFor ${rawHaventCheckedFor} = now ${now} - threadLastRefreshed ${threadLastRefreshed} (now now ${Date.now()})`);
-			normalizedHaventCheckedFor = 0;
-		} else {
-			normalizedHaventCheckedFor = rawHaventCheckedFor;
-		}
-		return normalizedHaventCheckedFor > noMessagesForAtLeast;
-	}
 }
 
 /**
@@ -174,38 +148,3 @@ export default {
 	LastRefreshedData,
 };
 
-/**
- * Time 10: Message was added to thread
- * Time 20: Thread was refreshed
- * Time 21: now
- *
- * Don't refresh
- */
-(function test1() {
-	const messageLastAdded = 10;
-	const threadWasRefreshed = 20;
-	const now = 21;
-
-	const underTest = new LastRefreshedData({
-		'123': threadWasRefreshed
-	});
-	assert.equal(underTest.needsRefreshing('123', messageLastAdded, now), false);
-})();
-
-/**
- * Time 10: Message was added to thread
- * Time 20: Thread was refreshed
- * Time 200: now
- *
- * Refresh
- */
-(function test2() {
-	const messageLastAdded = 10;
-	const threadWasRefreshed = 20;
-	const now = 200;
-
-	const underTest = new LastRefreshedData({
-		'123': threadWasRefreshed
-	});
-	assert.equal(underTest.needsRefreshing('123', messageLastAdded, now), true);
-})();

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { type ConditionType, type SortType } from './thread_grouping.js';
+import { type ConditionType, type SortType, type GroupingRulesConfig } from './thread_grouping.js';
+import { type Result } from './api.js';
 
 interface Condition {
 	type: ConditionType;
@@ -15,13 +16,8 @@ interface Rule {
 }
 
 interface GroupingRulesApi {
-	loadRules(): Promise<{ rules: unknown[] }>;
-	saveRules(data: { rules: Rule[] }): Promise<void>;
-}
-
-interface Notify {
-	error?: (msg: string) => void;
-	success?: (msg: string) => void;
+	loadRules(): Promise<Result<GroupingRulesConfig>>;
+	saveRules(payload: unknown): Promise<Result<unknown>>; //TODO: Avoid use of unknown.
 }
 
 function createEmptyRule(): Rule {
@@ -34,7 +30,7 @@ function createEmptyRule(): Rule {
 }
 
 function normalizeRule(rule: unknown): Rule {
-	const r = rule as Record<string, unknown>;
+	const r = rule as Record<string, unknown>; //TODO: Avoid use of unknown.
 	return {
 		name: typeof r?.name === 'string' ? r.name : '',
 		priority: Number.isFinite(Number(r?.priority)) ? Number(r.priority) : 50,
@@ -51,14 +47,11 @@ function normalizeRule(rule: unknown): Rule {
 	};
 }
 
-interface GroupingRulesAppProps {
+function GroupingRulesApp({ api, onSaved, reloadToken }: {
 	api: GroupingRulesApi;
-	notify: Notify | undefined;
 	onSaved: (() => void) | undefined;
 	reloadToken: number;
-}
-
-function GroupingRulesApp({ api, notify, onSaved, reloadToken }: GroupingRulesAppProps) {
+}) {
 	const [rules, setRules] = useState<Rule[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
@@ -68,33 +61,36 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }: GroupingRulesAp
 		let isCancelled = false;
 		setLoading(true);
 		setErrorMessage('');
-		Promise.resolve(api.loadRules())
-			.then((data) => {
+
+		async function loadRules() {
+			try {
+				const result = await api.loadRules();
 				if (isCancelled) {
 					return;
 				}
+				if (!result.ok) {
+					const message = result.error instanceof Error && result.error.message
+						? result.error.message
+						: 'Failed to load email grouping rules.';
+					setErrorMessage(message);
+					return;
+				}
+				const data = result.value;
 				const nextRules = Array.isArray(data?.rules) ? data.rules.map(normalizeRule) : [];
 				setRules(nextRules);
-			})
-			.catch((error: unknown) => {
-				if (isCancelled) {
-					return;
-				}
-				const message = error instanceof Error && error.message
-					? error.message
-					: 'Failed to load email grouping rules.';
-				setErrorMessage(message);
-				notify?.error?.(message);
-			})
-			.finally(() => {
+			} finally {
 				if (!isCancelled) {
 					setLoading(false);
 				}
-			});
+			}
+		}
+
+		loadRules();
+
 		return () => {
 			isCancelled = true;
 		};
-	}, [api, notify, reloadToken]);
+	}, [api, reloadToken]);
 
 	function updateRule(ruleIndex: number, updater: (rule: Rule) => Rule) {
 		setRules((currentRules) => currentRules.map((rule, index) => (
@@ -136,17 +132,18 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }: GroupingRulesAp
 	function saveRules() {
 		setSaving(true);
 		setErrorMessage('');
-		Promise.resolve(api.saveRules({ rules }))
-			.then(() => {
-				notify?.success?.('Email grouping rules saved successfully');
+		Promise.resolve(api.saveRules({ rules })) //TODO: use async instead.
+			.then((result) => {
+				if (!result.ok) {
+					throw result.error;
+				}
 				onSaved?.();
 			})
-			.catch((error: unknown) => {
+			.catch((error: unknown) => { //TODO: Instead of throw/catch, inspect result.
 				const message = error instanceof Error && error.message
 					? error.message
 					: 'Failed to save email grouping rules.';
 				setErrorMessage(message);
-				notify?.error?.(message);
 			})
 			.finally(() => {
 				setSaving(false);
@@ -267,14 +264,11 @@ function GroupingRulesApp({ api, notify, onSaved, reloadToken }: GroupingRulesAp
 	);
 }
 
-interface MountGroupingRulesIslandDeps {
+export function mountGroupingRulesIsland({ api, container, onSaved }: {
 	api: GroupingRulesApi;
 	container: Element;
-	notify?: Notify;
 	onSaved?: () => void;
-}
-
-export function mountGroupingRulesIsland({ api, container, notify, onSaved }: MountGroupingRulesIslandDeps) {
+}) {
 	const root = createRoot(container);
 	let reloadToken = 0;
 
@@ -282,7 +276,6 @@ export function mountGroupingRulesIsland({ api, container, notify, onSaved }: Mo
 		root.render(
 			<GroupingRulesApp
 				api={api}
-				notify={notify}
 				onSaved={onSaved}
 				reloadToken={reloadToken}
 			/>
