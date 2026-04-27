@@ -196,7 +196,7 @@ test('replyAll validates thread context before sending', async () => {
 
 	assert.deepEqual(result, {
 		ok: false,
-		error: 'Missing thread id or authenticated email address.',
+		error: new Error('Missing thread id or authenticated email address.'),
 	});
 	assert.deepEqual(events, []);
 });

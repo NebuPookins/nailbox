@@ -192,7 +192,7 @@ export function createThreadViewerController({
 			if (!threadId || !options.emailAddress) {
 				return {
 					ok: false,
-					error: 'Missing thread id or authenticated email address.',
+					error: new Error('Missing thread id or authenticated email address.'),
 				};
 			}
 			//TODO: We currently buildRfc2822 and sendMessage separately, which results in two round-trips to the server. We should consider combining these into a single API method.
@@ -225,7 +225,7 @@ export function createThreadViewerController({
 			return {
 				ok: true,
 				value: {
-					messageId: resp.id,
+					messageId: resp.id ?? '',
 				},
 			};
 		},

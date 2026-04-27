@@ -1,4 +1,4 @@
-import type { ThreadMessageDto } from '../server/types/thread.js';
+import type { ThreadMessageDto, PersonDto } from '../server/types/thread.js';
 
 type MomentLib = (ts?: unknown) => { isSame(other: unknown, unit: string): boolean; format(fmt: string): string };
 type FilesizeLib = (size: number) => string;
@@ -44,7 +44,7 @@ function formatFilesize(size: number | undefined, filesizeLib: FilesizeLib | und
 	return String(size) + ' bytes';
 }
 
-function renderPeople(people: Array<Person | null> | undefined): string {
+function renderPeople(people: Array<PersonDto | null> | undefined): string {
 	return (people || []).map(function(person) {
 		return person && person.name ? escapeHtml(person.name) : '';
 	}).filter(Boolean).join(' ');
