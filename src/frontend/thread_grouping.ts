@@ -193,7 +193,7 @@ export function groupThreads({
 						return sender.email && sender.email.includes(condition.value);
 					});
 				case 'subject':
-					return item.type === 'thread' && Boolean(item.subject && item.subject.includes(condition.value));
+					return item.type !== 'bundle' && Boolean((item as ThreadSummary).subject && (item as ThreadSummary).subject.includes(condition.value));
 				default:
 					return false;
 			}

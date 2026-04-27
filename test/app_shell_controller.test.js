@@ -101,9 +101,9 @@ test('initialize bootstraps a connected session and opens thread updates connect
 	assert.deepEqual(calls, [
 		'loadAuthStatus',
 		'renderConnectedState',
+		'loadGroupingRules',
 		['updateUiWithThreadsFromServer', true],
 		'loadLabels',
-		'loadGroupingRules',
 		'connectThreadUpdates',
 	]);
 	assert.deepEqual(events, [

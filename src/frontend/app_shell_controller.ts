@@ -55,15 +55,15 @@ export function createAppShellController(options: {
 	async function bootstrapConnectedApp() {
 		renderConnectedState();
 		try {
-			await updateUiWithThreadsFromServer(messengerGetter().info('Loading cached threads...'));
-			const labelsResult = await loadLabels();
-			if (!labelsResult.ok) {
-				messengerGetter().error('Failed to load Gmail labels. Continuing with cached mail.');
-			}
 			try {
 				await loadGroupingRules();
 			} catch (error) {
 				messengerGetter().error('Failed to load grouping rules. Continuing with current grouping.');
+			}
+			await updateUiWithThreadsFromServer(messengerGetter().info('Loading cached threads...'));
+			const labelsResult = await loadLabels();
+			if (!labelsResult.ok) {
+				messengerGetter().error('Failed to load Gmail labels. Continuing with cached mail.');
 			}
 		} catch (error) {
 			messengerGetter().error('Failed to refresh cached threads.');
