@@ -74,32 +74,6 @@ const VISIBILITY_PRIORITY: Record<Visibility, number> = {
 	hidden: 1,
 };
 
-export function normalizeGroupingRulesConfig(value: unknown): GroupingRulesConfig {
-	const rawValue = value as {rules?: unknown[]} | null | undefined;
-	const rawRules = Array.isArray(rawValue?.rules) ? rawValue.rules : [];
-	return {
-		rules: rawRules.map(function(rule) {
-			const rawRule = rule as {name?: unknown; priority?: unknown; sortType?: unknown; conditions?: unknown[]};
-			return {
-				name: typeof rawRule?.name === 'string' ? rawRule.name : '',
-				priority: Number.isFinite(Number(rawRule?.priority)) ? Number(rawRule.priority) : 50,
-				sortType: rawRule?.sortType === 'shortest' ? 'shortest' : 'mostRecent',
-				conditions: Array.isArray(rawRule?.conditions)
-					? rawRule.conditions.map(function(condition) {
-						const rawCondition = condition as {type?: unknown; value?: unknown};
-						return {
-							type: rawCondition?.type === 'sender_name' || rawCondition?.type === 'sender_email' || rawCondition?.type === 'subject'
-								? rawCondition.type
-								: 'sender_email',
-							value: typeof rawCondition?.value === 'string' ? rawCondition.value : '',
-						} as GroupingCondition;
-					})
-					: [],
-			};
-		}),
-	};
-}
-
 export function buildBundleSummary(bundle: BundleData, memberThreads: ThreadSummary[]): BundleSummary {
 	const seenEmails = new Set<string>();
 	const dedupedSenders = memberThreads
