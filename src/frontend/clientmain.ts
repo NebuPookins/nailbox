@@ -116,7 +116,10 @@ function renderSetupNeededState(message?: string): void {
 	async function loadGroupingRules(): Promise<void> {
 		var rulesApi = frontendApi.createGroupingRulesApi();
 		var response = await rulesApi.loadRules();
-		groupingRulesCache = normalizeGroupingRulesConfig(response);
+		if (!response.ok) {
+			throw response.error instanceof Error ? response.error : new Error('Failed to load grouping rules.');
+		}
+		groupingRulesCache = normalizeGroupingRulesConfig(response.value);
 		var threadListIslandState = islands.ensureThreadListIsland();
 		if (threadListIslandState) {
 			threadListIslandState.instance.setGroupingRules(groupingRulesCache);
