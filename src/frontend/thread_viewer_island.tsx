@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import type { ThreadMessageDto } from '../server/types/thread.js';
+import type { ThreadMessageDto, PersonDto } from '../server/types/thread.js';
 
 type ThreadMessage = ThreadMessageDto & { duration?: string };
 
@@ -25,7 +25,7 @@ function pluralize(n: number, singular: string, plural: string): string {
 	return n === 1 ? singular : plural;
 }
 
-function renderPeople(people: Array<Person | null> | undefined): string {
+function renderPeople(people: Array<PersonDto | null> | undefined): string {
 	return (people || [])
 		.map(function(p) { return p && p.name ? p.name : ''; })
 		.filter(Boolean)

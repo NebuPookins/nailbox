@@ -460,6 +460,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 	const [selectedMergeBundleIds, setSelectedMergeBundleIds] = useState<Set<string>>(new Set());
 	const [expandedBundleIds, setExpandedBundleIds] = useState<Set<string>>(new Set());
 	const [editingBundleId, setEditingBundleId] = useState<string | null>(null);
+	const [viewMode, setViewMode] = useState<'classic' | 'quick-deal'>('classic');
 
 	if (!groups || groups.length === 0) {
 		return null;
@@ -543,10 +544,80 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 		setExpandedBundleIds(next);
 	}
 
+	function renderItemRow(item: ThreadRowItem): React.ReactElement {
+		if (item.type === 'bundle') {
+			const bundle = item as BundleSummary;
+			const isExpanded = expandedBundleIds.has(bundle.bundleId);
+			return (
+				<BundleRow
+					key={bundle.bundleId}
+					bundle={bundle}
+					isExpanded={isExpanded}
+					isRemoving={removingBundleIds.has(bundle.bundleId)}
+					showCheckbox={selectionMode && editingBundleId !== null && editingBundleId !== bundle.bundleId}
+					isSelected={selectedMergeBundleIds.has(bundle.bundleId)}
+					onArchive={onArchiveBundle}
+					onEdit={handleEditBundle}
+					onOpenLaterPicker={onOpenLaterPickerForBundle}
+					onOpenLabelPicker={onOpenLabelPickerForBundle}
+					onUngroup={onUngroup}
+					onToggleExpand={handleToggleExpand}
+					onToggleSelectBundle={handleToggleSelectBundle}
+				>
+					{isExpanded ? (bundle.memberThreads || []).map(function(thread) {
+						const isEditingThisBundle = selectionMode && editingBundleId === bundle.bundleId;
+						return (
+							<ThreadRow
+								key={thread.threadId}
+								thread={thread}
+								labels={labels}
+								isRemoving={removingThreadIds.has(thread.threadId)}
+								showCheckbox={isEditingThisBundle}
+								isSelected={selectedThreadIds.has(thread.threadId)}
+								onArchive={onArchive}
+								onDelete={onDelete}
+								onOpenLaterPicker={onOpenLaterPicker}
+								onOpenLabelPicker={onOpenLabelPicker}
+								onOpenThread={onOpenThread}
+								onToggleSelect={handleToggleSelect}
+							/>
+						);
+					}) : null}
+				</BundleRow>
+			);
+		}
+		const thread = item as ThreadSummary;
+		const isBundled = bundledThreadIds.has(thread.threadId);
+		return (
+			<ThreadRow
+				key={thread.threadId}
+				thread={thread}
+				labels={labels}
+				isRemoving={removingThreadIds.has(thread.threadId)}
+				showCheckbox={selectionMode && !isBundled}
+				isSelected={selectedThreadIds.has(thread.threadId)}
+				onArchive={onArchive}
+				onDelete={onDelete}
+				onOpenLaterPicker={onOpenLaterPicker}
+				onOpenLabelPicker={onOpenLabelPicker}
+				onOpenThread={onOpenThread}
+				onToggleSelect={handleToggleSelect}
+			/>
+		);
+	}
+
 	return (
 		<React.Fragment>
 			<div style={{position: 'sticky', top: 0, zIndex: 10, background: '#fff'}}>
-				<div className="thread-list-header" style={{display: 'flex', justifyContent: 'flex-end', padding: '4px 8px'}}>
+				<div className="thread-list-header" style={{display: 'flex', justifyContent: 'space-between', padding: '4px 8px'}}>
+					<button
+						className={'btn btn-xs ' + (viewMode === 'quick-deal' ? 'btn-primary' : 'btn-default')}
+						title="Show all emails sorted by recent read time, with 'When I have time' emails at the bottom"
+						onClick={() => setViewMode(viewMode === 'quick-deal' ? 'classic' : 'quick-deal')}
+					>
+						<span className="glyphicon glyphicon-flash"></span>{' '}
+						{viewMode === 'quick-deal' ? 'Classic View' : 'Quick Deal'}
+					</button>
 					{!selectionMode ? (
 						<button
 							className="btn btn-xs btn-default"
@@ -566,7 +637,16 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 					/>
 				) : null}
 			</div>
-			{groups.map(function(group, groupIdx) {
+			{viewMode === 'quick-deal' ? (function() {
+				const allItems = groups.flatMap(function(g) { return g.items; });
+				const normalItems = allItems.filter(function(item) { return item.visibility !== 'when-i-have-time'; });
+				const laterItems = allItems.filter(function(item) { return item.visibility === 'when-i-have-time'; });
+				function byRecentTime(a: ThreadRowItem, b: ThreadRowItem) {
+					return a.recentMessageReadTimeSeconds - b.recentMessageReadTimeSeconds;
+				}
+				const sortedItems = [...normalItems.sort(byRecentTime), ...laterItems.sort(byRecentTime)];
+				return sortedItems.map(renderItemRow);
+			})() : groups.map(function(group, groupIdx) {
 				const items: ThreadRowItem[] = group.items;
 
 				const groupTotalTime = items.reduce(function(sum, item) {
@@ -586,68 +666,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 								{' · '}Recent: {formatReadTime(groupRecentTime)}
 							</span>
 						</div>
-						{items.map(function(item) {
-							if (item.type === 'bundle') {
-								const bundle = item as BundleSummary;
-								const isExpanded = expandedBundleIds.has(bundle.bundleId);
-								return (
-									<BundleRow
-										key={bundle.bundleId}
-										bundle={bundle}
-										isExpanded={isExpanded}
-										isRemoving={removingBundleIds.has(bundle.bundleId)}
-										showCheckbox={selectionMode && editingBundleId !== null && editingBundleId !== bundle.bundleId}
-										isSelected={selectedMergeBundleIds.has(bundle.bundleId)}
-										onArchive={onArchiveBundle}
-										onEdit={handleEditBundle}
-										onOpenLaterPicker={onOpenLaterPickerForBundle}
-										onOpenLabelPicker={onOpenLabelPickerForBundle}
-										onUngroup={onUngroup}
-										onToggleExpand={handleToggleExpand}
-										onToggleSelectBundle={handleToggleSelectBundle}
-									>
-										{isExpanded ? (bundle.memberThreads || []).map(function(thread) {
-											const isEditingThisBundle = selectionMode && editingBundleId === bundle.bundleId;
-											return (
-												<ThreadRow
-													key={thread.threadId}
-													thread={thread}
-													labels={labels}
-													isRemoving={removingThreadIds.has(thread.threadId)}
-													showCheckbox={isEditingThisBundle}
-													isSelected={selectedThreadIds.has(thread.threadId)}
-													onArchive={onArchive}
-													onDelete={onDelete}
-													onOpenLaterPicker={onOpenLaterPicker}
-													onOpenLabelPicker={onOpenLabelPicker}
-													onOpenThread={onOpenThread}
-													onToggleSelect={handleToggleSelect}
-												/>
-											);
-										}) : null}
-									</BundleRow>
-								);
-							}
-
-							const thread = item as ThreadSummary;
-							const isBundled = bundledThreadIds.has(thread.threadId);
-							return (
-								<ThreadRow
-									key={thread.threadId}
-									thread={thread}
-									labels={labels}
-									isRemoving={removingThreadIds.has(thread.threadId)}
-									showCheckbox={selectionMode && !isBundled}
-									isSelected={selectedThreadIds.has(thread.threadId)}
-									onArchive={onArchive}
-									onDelete={onDelete}
-									onOpenLaterPicker={onOpenLaterPicker}
-									onOpenLabelPicker={onOpenLabelPicker}
-									onOpenThread={onOpenThread}
-									onToggleSelect={handleToggleSelect}
-								/>
-							);
-						})}
+						{items.map(renderItemRow)}
 					</React.Fragment>
 				);
 			})}
