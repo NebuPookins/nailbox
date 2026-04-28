@@ -111,10 +111,12 @@ export function mountLabelPickerIsland({ container, notify, onDismiss, onMoveThr
 		threadId: null,
 		bundleId: null,
 	};
+	let openCount = 0;
 
 	function renderApp() {
 		root.render(
 			<LabelPickerApp
+				key={openCount}
 				notify={notify}
 				onDismiss={onDismiss}
 				onMoveThread={onMoveThread}
@@ -136,12 +138,14 @@ export function mountLabelPickerIsland({ container, notify, onDismiss, onMoveThr
 			state.labels = Array.isArray(labels) ? labels : [];
 			state.threadId = threadId || null;
 			state.bundleId = null;
+			openCount++;
 			renderApp();
 		},
 		openForBundle({ labels, bundleId }: { labels?: Label[]; bundleId: string }) {
 			state.labels = Array.isArray(labels) ? labels : [];
 			state.threadId = null;
 			state.bundleId = bundleId;
+			openCount++;
 			renderApp();
 		},
 		setLabels(labels: Label[]) {
