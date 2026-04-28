@@ -12,7 +12,7 @@ import { wireModals } from './modal_wiring.js';
 import { createThreadUpdatesSocket } from './thread_updates_socket.js';
 import { type GroupingRulesConfig } from './thread_grouping.js';
 import type { Result, ThreadDataResponse } from './api.js';
-import type { LabelResponse, HideUntilValue } from './api.js';
+import type { LabelResponse, HideUntilValue, AppApi } from './api.js';
 
 declare const saveAs: (blob: Blob, name: string) => void;
 
@@ -323,7 +323,7 @@ function renderSetupNeededState(message?: string): void {
 		return false;
 	}
 
-	var appApi = frontendApi.createAppApi();
+	var appApi: AppApi = frontendApi.createAppApi();
 	var threadUpdatesConnection = createThreadUpdatesSocket({
 		onThreadsChanged: function() {
 			if (!authStatus.connected) {
