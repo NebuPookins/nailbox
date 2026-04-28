@@ -1,3 +1,5 @@
+import { AppApi, JsonValue, Result } from "./api.js";
+
 interface Label {
 	id: string;
 	type?: string;
@@ -15,13 +17,6 @@ interface Messenger {
 	error(message: string): MsgHandle;
 }
 
-interface AppApi {
-	archiveThread(threadId: string): Promise<unknown>; //TODO: Remove all these usages of unknown.
-	deleteThread(threadId: string): Promise<unknown>;
-	moveThreadToLabel(threadId: string, labelId: string): Promise<unknown>;
-	archiveBundle(bundleId: string): Promise<unknown>;
-	deleteBundle(bundleId: string): Promise<unknown>;
-}
 
 export interface ActionResult {
 	ok: boolean;
@@ -88,7 +83,7 @@ export function createThreadActionController({
 	onThreadRemoved,
 	onBundleRemoved,
 }: {
-	appApi: AppApi;
+	appApi: AppApi
 	messengerGetter: () => Messenger;
 	onThreadRemoved?: (threadId: string) => void;
 	onBundleRemoved?: (bundleId: string) => void;
@@ -102,7 +97,7 @@ export function createThreadActionController({
 		threadId: string;
 		startMessage: string;
 		successMessage: string;
-		request: () => Promise<unknown>; //TODO: fix usage of unknown
+		request: () => Promise<Result<JsonValue>>;
 	}): Promise<ActionResult> {
 		const actionMessenger = createActionMessenger(messengerGetter, startMessage);
 		if (!threadId) {
