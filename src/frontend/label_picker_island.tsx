@@ -29,6 +29,7 @@ interface LabelPickerAppProps {
 
 function LabelPickerApp({ notify, onDismiss, onMoveThread, onMoveBundle, state }: LabelPickerAppProps) {
 	const [pendingLabelId, setPendingLabelId] = useState('');
+	const [filterText, setFilterText] = useState('');
 	const hasTarget = Boolean(state.threadId) || Boolean(state.bundleId);
 
 	async function handleLabelClick(labelId: string) {
@@ -61,10 +62,23 @@ function LabelPickerApp({ notify, onDismiss, onMoveThread, onMoveBundle, state }
 		return <p className="text-muted">No visible labels available.</p>;
 	}
 
+	const lowerFilter = filterText.toLowerCase();
+	const visibleLabels = filterText
+		? state.labels.filter((label) => getLabelDisplayName(label).toLowerCase().includes(lowerFilter))
+		: state.labels;
+
 	return (
 		<div className="label-picker-app">
+			<input
+				autoFocus
+				className="form-control mb-2"
+				onChange={(e) => setFilterText(e.target.value)}
+				placeholder="Filter labels..."
+				type="text"
+				value={filterText}
+			/>
 			<div className="label-picker-grid">
-				{state.labels.map((label) => (
+				{visibleLabels.map((label) => (
 					<button
 						className={`btn ${label.type === 'system' ? 'btn-warning' : ''}`}
 						data-label-id={label.id}
