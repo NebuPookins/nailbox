@@ -63,9 +63,6 @@ function LabelPickerApp({ notify, onDismiss, onMoveThread, onMoveBundle, state }
 	}
 
 	const lowerFilter = filterText.toLowerCase();
-	const visibleLabels = filterText
-		? state.labels.filter((label) => getLabelDisplayName(label).toLowerCase().includes(lowerFilter))
-		: state.labels;
 
 	return (
 		<div className="label-picker-app">
@@ -78,19 +75,23 @@ function LabelPickerApp({ notify, onDismiss, onMoveThread, onMoveBundle, state }
 				value={filterText}
 			/>
 			<div className="label-picker-grid">
-				{visibleLabels.map((label) => (
-					<button
-						className={`btn ${label.type === 'system' ? 'btn-warning' : ''}`}
-						data-label-id={label.id}
-						disabled={!hasTarget || pendingLabelId.length > 0}
-						key={label.id}
-						onClick={() => handleLabelClick(label.id)}
-						style={getLabelButtonStyle(label)}
-						type="button"
-					>
-						{pendingLabelId === label.id ? 'Working...' : getLabelDisplayName(label)}
-					</button>
-				))}
+				{state.labels.map((label) => {
+					const matches = !filterText || getLabelDisplayName(label).toLowerCase().includes(lowerFilter);
+					const dimmedClass = matches ? '' : ' label-picker-dimmed';
+					return (
+						<button
+							className={`btn ${label.type === 'system' ? 'btn-warning' : ''}${dimmedClass}`}
+							data-label-id={label.id}
+							disabled={!hasTarget || pendingLabelId.length > 0}
+							key={label.id}
+							onClick={() => handleLabelClick(label.id)}
+							style={getLabelButtonStyle(label)}
+							type="button"
+						>
+							{pendingLabelId === label.id ? 'Working...' : getLabelDisplayName(label)}
+						</button>
+					);
+				})}
 			</div>
 		</div>
 	);
