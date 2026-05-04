@@ -53,6 +53,7 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 	reloadToken: number;
 }) {
 	const [rules, setRules] = useState<Rule[]>([]);
+	const [expanded, setExpanded] = useState<boolean[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
@@ -78,6 +79,7 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 				const data = result.value;
 				const nextRules = Array.isArray(data?.rules) ? data.rules.map(normalizeRule) : [];
 				setRules(nextRules);
+				setExpanded(nextRules.map(() => false));
 			} finally {
 				if (!isCancelled) {
 					setLoading(false);
@@ -100,10 +102,18 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 
 	function addRule() {
 		setRules((currentRules) => currentRules.concat(createEmptyRule()));
+		setExpanded((current) => current.concat(true));
 	}
 
 	function removeRule(ruleIndex: number) {
 		setRules((currentRules) => currentRules.filter((_, index) => index !== ruleIndex));
+		setExpanded((current) => current.filter((_, index) => index !== ruleIndex));
+	}
+
+	function toggleExpanded(ruleIndex: number) {
+		setExpanded((current) => current.map((value, index) => (
+			index === ruleIndex ? !value : value
+		)));
 	}
 
 	function addCondition(ruleIndex: number) {
@@ -170,10 +180,19 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 					<p className="text-muted">No rules defined yet.</p>
 				) : rules.map((rule, ruleIndex) => (
 					<div className="panel panel-default" key={`${ruleIndex}-${reloadToken}`} style={{ marginBottom: '15px' }}>
-						<div className="panel-heading">
+						<div
+							aria-expanded={expanded[ruleIndex] ? true : false}
+							className="panel-heading"
+							onClick={() => toggleExpanded(ruleIndex)}
+							style={{ cursor: 'pointer', position: 'relative' }}
+						>
+							<span
+								className={`glyphicon glyphicon-chevron-${expanded[ruleIndex] ? 'down' : 'right'}`}
+								style={{ position: 'absolute', top: '14px', right: '14px', color: '#888' }}
+							/>
 							<div className="row">
 								<div className="col-xs-12 col-sm-3">
-									<label>
+									<label onClick={(event) => event.stopPropagation()}>
 										Label
 										<input
 											className="form-control"
@@ -185,7 +204,7 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 									</label>
 								</div>
 								<div className="col-xs-12 col-sm-2">
-									<label>
+									<label onClick={(event) => event.stopPropagation()}>
 										Priority
 										<input
 											className="form-control"
@@ -200,7 +219,7 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 									</label>
 								</div>
 								<div className="col-xs-12 col-sm-3">
-									<label>
+									<label onClick={(event) => event.stopPropagation()}>
 										Sort by
 										<select
 											className="form-control"
@@ -212,13 +231,14 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 										</select>
 									</label>
 								</div>
-								<div className="col-xs-12 col-sm-2">
+								<div className="col-xs-12 col-sm-2" onClick={(event) => event.stopPropagation()}>
 									<button className="btn btn-danger btn-sm" onClick={() => removeRule(ruleIndex)} type="button">
 										<span className="glyphicon glyphicon-trash" /> Remove Rule
 									</button>
 								</div>
 							</div>
 						</div>
+						{expanded[ruleIndex] ? (
 						<div className="panel-body">
 							{rule.conditions.length === 0 ? (
 								<p className="text-muted">No conditions defined.</p>
@@ -261,6 +281,7 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 								<span className="glyphicon glyphicon-plus" /> Add Condition
 							</button>
 						</div>
+						) : null}
 					</div>
 				))}
 			</div>
