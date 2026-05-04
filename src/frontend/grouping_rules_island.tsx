@@ -78,6 +78,7 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 				}
 				const data = result.value;
 				const nextRules = Array.isArray(data?.rules) ? data.rules.map(normalizeRule) : [];
+				nextRules.sort((a, b) => a.priority - b.priority);
 				setRules(nextRules);
 				setExpanded(nextRules.map(() => false));
 			} finally {
