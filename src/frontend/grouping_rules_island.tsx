@@ -173,35 +173,44 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 						<div className="panel-heading">
 							<div className="row">
 								<div className="col-xs-12 col-sm-3">
-									<input
-										className="form-control"
-										onChange={(event) => updateRule(ruleIndex, (currentRule) => ({ ...currentRule, name: event.target.value }))}
-										placeholder="Rule Name"
-										type="text"
-										value={rule.name}
-									/>
+									<label>
+										Label
+										<input
+											className="form-control"
+											onChange={(event) => updateRule(ruleIndex, (currentRule) => ({ ...currentRule, name: event.target.value }))}
+											placeholder="Rule Name"
+											type="text"
+											value={rule.name}
+										/>
+									</label>
 								</div>
 								<div className="col-xs-12 col-sm-2">
-									<input
-										className="form-control"
-										onChange={(event) => updateRule(ruleIndex, (currentRule) => ({
-											...currentRule,
-											priority: Number.parseInt(event.target.value, 10) || 50,
-										}))}
-										placeholder="Priority"
-										type="number"
-										value={rule.priority}
-									/>
+									<label>
+										Priority
+										<input
+											className="form-control"
+											onChange={(event) => updateRule(ruleIndex, (currentRule) => ({
+												...currentRule,
+												priority: Number.parseInt(event.target.value, 10) || 50,
+											}))}
+											placeholder="Priority"
+											type="number"
+											value={rule.priority}
+										/>
+									</label>
 								</div>
 								<div className="col-xs-12 col-sm-3">
-									<select
-										className="form-control"
-										onChange={(event) => updateRule(ruleIndex, (currentRule) => ({ ...currentRule, sortType: event.target.value as SortType }))}
-										value={rule.sortType}
-									>
-										<option value="mostRecent">Most Recent</option>
-										<option value="shortest">Shortest</option>
-									</select>
+									<label>
+										Sort by
+										<select
+											className="form-control"
+											onChange={(event) => updateRule(ruleIndex, (currentRule) => ({ ...currentRule, sortType: event.target.value as SortType }))}
+											value={rule.sortType}
+										>
+											<option value="mostRecent">Most Recent</option>
+											<option value="shortest">Shortest</option>
+										</select>
+									</label>
 								</div>
 								<div className="col-xs-12 col-sm-2">
 									<button className="btn btn-danger btn-sm" onClick={() => removeRule(ruleIndex)} type="button">
