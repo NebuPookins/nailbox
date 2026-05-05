@@ -76,22 +76,11 @@ export function threadMatchesRule(thread: ThreadSummaryDto, rule: GroupingRule):
 }
 
 function itemMatchesRule(item: ThreadRowItem, rule: GroupingRule): boolean {
-	if (item.type === 'thread') {
+	if (item.type !== 'bundle') {
 		return threadMatchesRule(item, rule);
 	}
-	// For bundles, match against the bundle's deduplicated senders
-	return rule.conditions.some((condition) => {
-		switch (condition.type) {
-			case 'sender_name':
-				return item.senders.some((s) => s.name && s.name.includes(condition.value));
-			case 'sender_email':
-				return item.senders.some((s) => s.email && s.email.includes(condition.value));
-			case 'subject':
-				return false; // bundles don't have a single subject
-			default:
-				return false;
-		}
-	});
+	// A bundle matches if any of its member threads matches.
+	return item.memberThreads.some((thread) => threadMatchesRule(thread, rule));
 }
 
 export function groupThreads(

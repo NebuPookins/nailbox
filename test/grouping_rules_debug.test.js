@@ -21,15 +21,16 @@ function makeThread(overrides = {}) {
 }
 
 function makeBundle(overrides = {}) {
+	const memberThreads = overrides.memberThreads || [];
 	return {
 		type: 'bundle',
 		bundleId: overrides.bundleId || 'b1',
-		threadIds: ['t1', 't2'],
+		threadIds: memberThreads.length > 0 ? memberThreads.map((t) => t.threadId) : ['t1', 't2'],
 		senders: overrides.senders || [{ name: 'Alice', email: 'alice@example.com' }],
 		lastUpdated: 1,
 		visibility: overrides.visibility || 'updated',
-		threadCount: 2,
-		memberThreads: [],
+		threadCount: memberThreads.length || 2,
+		memberThreads,
 		totalTimeToReadSeconds: 10,
 		recentMessageReadTimeSeconds: 10,
 	};
@@ -101,20 +102,68 @@ test('traceGrouping reports per-sender details for sender conditions', () => {
 	assert.equal(cond.details[1].value, 'bob@elsewhere.com');
 });
 
-test('traceGrouping subject conditions never match for bundles', () => {
-	const bundle = makeBundle({ senders: [{ name: 'Alice', email: 'alice@example.com' }] });
+test('traceGrouping for bundles matches when any member thread matches a subject condition', () => {
+	const memberA = makeThread({ threadId: 'a', subject: 'Quarterly report' });
+	const memberB = makeThread({ threadId: 'b', subject: 'Lunch plans' });
+	const bundle = makeBundle({
+		senders: [{ name: 'Alice', email: 'alice@example.com' }],
+		memberThreads: [memberA, memberB],
+	});
 	const trace = traceGrouping(bundle, {
 		rules: [{
 			name: 'BySubject',
 			priority: 10,
 			sortType: 'mostRecent',
-			conditions: [{ type: 'subject', value: 'anything' }],
+			conditions: [{ type: 'subject', value: 'report' }],
+		}],
+	});
+	assert.equal(trace.matchedRuleName, 'BySubject');
+	assert.equal(trace.rules[0].matched, true);
+	assert.equal(trace.rules[0].threadEvaluations.length, 2);
+	assert.equal(trace.rules[0].threadEvaluations[0].matched, true);
+	assert.equal(trace.rules[0].threadEvaluations[0].threadId, 'a');
+	assert.equal(trace.rules[0].threadEvaluations[1].matched, false);
+	assert.equal(trace.rules[0].threadEvaluations[1].threadId, 'b');
+});
+
+test('traceGrouping for bundles does not match when no member thread matches', () => {
+	const memberA = makeThread({ threadId: 'a', senders: [{ name: 'Alice', email: 'alice@elsewhere.com' }] });
+	const memberB = makeThread({ threadId: 'b', senders: [{ name: 'Bob', email: 'bob@elsewhere.com' }] });
+	const bundle = makeBundle({
+		memberThreads: [memberA, memberB],
+	});
+	const trace = traceGrouping(bundle, {
+		rules: [{
+			name: 'Work',
+			priority: 10,
+			sortType: 'mostRecent',
+			conditions: [{ type: 'sender_email', value: '@work.com' }],
 		}],
 	});
 	assert.equal(trace.matchedRuleName, null);
 	assert.equal(trace.rules[0].matched, false);
-	assert.equal(trace.rules[0].conditions[0].matched, false);
-	assert.match(trace.rules[0].conditions[0].reason, /bundle/i);
+	assert.equal(trace.rules[0].threadEvaluations.length, 2);
+	assert.equal(trace.rules[0].threadEvaluations.every((e) => !e.matched), true);
+});
+
+test('traceGrouping for bundles matches when any member thread matches a sender condition', () => {
+	const memberA = makeThread({ threadId: 'a', senders: [{ name: 'Alice', email: 'alice@elsewhere.com' }] });
+	const memberB = makeThread({ threadId: 'b', senders: [{ name: 'Bob', email: 'bob@work.com' }] });
+	const bundle = makeBundle({
+		memberThreads: [memberA, memberB],
+	});
+	const trace = traceGrouping(bundle, {
+		rules: [{
+			name: 'Work',
+			priority: 10,
+			sortType: 'mostRecent',
+			conditions: [{ type: 'sender_email', value: '@work.com' }],
+		}],
+	});
+	assert.equal(trace.matchedRuleName, 'Work');
+	assert.equal(trace.rules[0].matched, true);
+	assert.equal(trace.rules[0].threadEvaluations[0].matched, false);
+	assert.equal(trace.rules[0].threadEvaluations[1].matched, true);
 });
 
 test('traceGrouping appends "When I Have Time" suffix when item visibility is when-i-have-time', () => {

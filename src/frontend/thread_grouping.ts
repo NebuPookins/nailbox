@@ -155,22 +155,32 @@ export function groupThreads({
 		return item.type === 'bundle' ? item.bundleId : item.threadId;
 	}
 
-	function itemMatchesRule(item: ThreadRowItem, rule: GroupingRule): boolean {
+	function threadMatchesRule(thread: ThreadSummary, rule: GroupingRule): boolean {
 		return rule.conditions.some(function(condition) {
 			switch (condition.type) {
 				case 'sender_name':
-					return item.senders.some(function(sender) {
+					return thread.senders.some(function(sender) {
 						return sender.name && sender.name.includes(condition.value);
 					});
 				case 'sender_email':
-					return item.senders.some(function(sender) {
+					return thread.senders.some(function(sender) {
 						return sender.email && sender.email.includes(condition.value);
 					});
 				case 'subject':
-					return item.type !== 'bundle' && Boolean((item as ThreadSummary).subject && (item as ThreadSummary).subject.includes(condition.value));
+					return Boolean(thread.subject && thread.subject.includes(condition.value));
 				default:
 					return false;
 			}
+		});
+	}
+
+	function itemMatchesRule(item: ThreadRowItem, rule: GroupingRule): boolean {
+		if (item.type !== 'bundle') {
+			return threadMatchesRule(item, rule);
+		}
+		const memberThreads = item.memberThreads || [];
+		return memberThreads.some(function(thread) {
+			return threadMatchesRule(thread, rule);
 		});
 	}
 
