@@ -117,9 +117,10 @@ interface ThreadRowProps {
 	onOpenLabelPicker: (payload: LaterPickerPayload) => void;
 	onOpenThread: (payload: ThreadOpenPayload) => void;
 	onToggleSelect?: (threadId: string) => void;
+	onDebugGrouping: (item: ThreadRowItem) => void;
 }
 
-function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onToggleSelect }: ThreadRowProps) {
+function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onToggleSelect, onDebugGrouping }: ThreadRowProps) {
 	const rowRef = useRef<HTMLDivElement>(null);
 
 	useEffect(function() {
@@ -262,6 +263,13 @@ function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onArc
 							>
 								<span className="glyphicon glyphicon-option-horizontal"></span>
 							</a>
+							<button
+								className="btn btn-xs btn-default debug-grouping"
+								title="Debug grouping rules"
+								onClick={function(e) { e.stopPropagation(); onDebugGrouping(thread); }}
+							>
+								<span className="glyphicon glyphicon-search"></span>
+							</button>
 						</React.Fragment>
 					) : null}
 				</div>
@@ -284,9 +292,10 @@ interface BundleRowProps {
 	onUngroup: (bundleId: string) => void;
 	onToggleExpand: (bundleId: string) => void;
 	onToggleSelectBundle?: (bundle: BundleSummary) => void;
+	onDebugGrouping: (item: ThreadRowItem) => void;
 }
 
-function BundleRow({ bundle, isExpanded, isRemoving, children, showCheckbox, isSelected, onArchive, onEdit, onOpenLaterPicker, onOpenLabelPicker, onUngroup, onToggleExpand, onToggleSelectBundle }: BundleRowProps) {
+function BundleRow({ bundle, isExpanded, isRemoving, children, showCheckbox, isSelected, onArchive, onEdit, onOpenLaterPicker, onOpenLabelPicker, onUngroup, onToggleExpand, onToggleSelectBundle, onDebugGrouping }: BundleRowProps) {
 	const rowRef = useRef<HTMLDivElement>(null);
 
 	useEffect(function() {
@@ -397,6 +406,13 @@ function BundleRow({ bundle, isExpanded, isRemoving, children, showCheckbox, isS
 					>
 						<span className="glyphicon glyphicon-scissors"></span>
 					</button>
+					<button
+						className="btn btn-xs btn-default debug-grouping"
+						title="Debug grouping rules"
+						onClick={function(e) { e.stopPropagation(); onDebugGrouping(bundle); }}
+					>
+						<span className="glyphicon glyphicon-search"></span>
+					</button>
 				</div>
 			</div>
 			{isExpanded && children ? (
@@ -451,9 +467,10 @@ interface ThreadListAppProps {
 	onOpenLaterPickerForBundle: (payload: BundleLaterPickerPayload) => void;
 	onOpenLabelPickerForBundle: (payload: BundleLaterPickerPayload) => void;
 	onUngroup: (bundleId: string) => void;
+	onDebugGrouping: (item: ThreadRowItem) => void;
 }
 
-function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup }: ThreadListAppProps) {
+function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup, onDebugGrouping }: ThreadListAppProps) {
 	const [selectionMode, setSelectionMode] = useState(false);
 	const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
 	const [selectedMergeBundleIds, setSelectedMergeBundleIds] = useState<Set<string>>(new Set());
@@ -562,6 +579,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 					onUngroup={onUngroup}
 					onToggleExpand={handleToggleExpand}
 					onToggleSelectBundle={handleToggleSelectBundle}
+					onDebugGrouping={onDebugGrouping}
 				>
 					{isExpanded ? (bundle.memberThreads || []).map(function(thread) {
 						const isEditingThisBundle = selectionMode && editingBundleId === bundle.bundleId;
@@ -579,6 +597,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 								onOpenLabelPicker={onOpenLabelPicker}
 								onOpenThread={onOpenThread}
 								onToggleSelect={handleToggleSelect}
+								onDebugGrouping={onDebugGrouping}
 							/>
 						);
 					}) : null}
@@ -601,6 +620,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 				onOpenLabelPicker={onOpenLabelPicker}
 				onOpenThread={onOpenThread}
 				onToggleSelect={handleToggleSelect}
+				onDebugGrouping={onDebugGrouping}
 			/>
 		);
 	}
@@ -688,9 +708,10 @@ interface MountThreadListIslandDeps {
 	onOpenLaterPickerForBundle: (payload: BundleLaterPickerPayload) => void;
 	onOpenLabelPickerForBundle: (payload: BundleLaterPickerPayload) => void;
 	onUngroup: (bundleId: string) => void;
+	onDebugGrouping: (item: ThreadRowItem) => void;
 }
 
-export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup }: MountThreadListIslandDeps) {
+export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup, onDebugGrouping }: MountThreadListIslandDeps) {
 	const root = createRoot(container);
 	let groups: ThreadGroup[] = [];
 	let labels: LabelInfo[] = [];
@@ -716,6 +737,7 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 				onOpenLaterPickerForBundle={onOpenLaterPickerForBundle}
 				onOpenLabelPickerForBundle={onOpenLabelPickerForBundle}
 				onUngroup={onUngroup}
+				onDebugGrouping={onDebugGrouping}
 			/>
 		);
 	}
