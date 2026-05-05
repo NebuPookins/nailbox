@@ -21,13 +21,23 @@ export interface ConditionTrace {
 	details: ConditionMatchDetail[];
 }
 
+export interface ThreadEvaluation {
+	threadId: string;
+	subject: string;
+	conditions: ConditionTrace[];
+	matched: boolean;
+}
+
 export interface RuleTrace {
 	ruleName: string;
 	priority: number;
-	conditions: ConditionTrace[];
 	matched: boolean;
 	skipped: boolean;
 	skippedReason?: string;
+	/** Populated when the item being traced is a single thread. */
+	conditions?: ConditionTrace[];
+	/** Populated when the item being traced is a bundle. One entry per member thread. */
+	threadEvaluations?: ThreadEvaluation[];
 }
 
 export interface GroupingTrace {
@@ -51,11 +61,11 @@ function describeCondition(condition: GroupingCondition): string {
 	}
 }
 
-function evaluateCondition(item: ThreadRowItem, condition: GroupingCondition): ConditionTrace {
+function evaluateConditionAgainstThread(thread: ThreadSummary, condition: GroupingCondition): ConditionTrace {
 	const description = describeCondition(condition);
 	switch (condition.type) {
 		case 'sender_name': {
-			const senders = item.senders || [];
+			const senders = thread.senders || [];
 			const details: ConditionMatchDetail[] = senders.map((sender) => ({
 				field: 'sender name',
 				value: sender.name || '(no name)',
@@ -70,7 +80,7 @@ function evaluateCondition(item: ThreadRowItem, condition: GroupingCondition): C
 			return {type: condition.type, value: condition.value, matched, reason, details};
 		}
 		case 'sender_email': {
-			const senders = item.senders || [];
+			const senders = thread.senders || [];
 			const details: ConditionMatchDetail[] = senders.map((sender) => ({
 				field: 'sender email',
 				value: sender.email || '(no email)',
@@ -85,16 +95,6 @@ function evaluateCondition(item: ThreadRowItem, condition: GroupingCondition): C
 			return {type: condition.type, value: condition.value, matched, reason, details};
 		}
 		case 'subject': {
-			if (item.type === 'bundle') {
-				return {
-					type: condition.type,
-					value: condition.value,
-					matched: false,
-					reason: `${description}: bundles do not have a single subject, so subject conditions never match for bundles.`,
-					details: [],
-				};
-			}
-			const thread = item as ThreadSummary;
 			const subject = thread.subject || '';
 			const matched = Boolean(subject && subject.includes(condition.value));
 			const detail: ConditionMatchDetail = {
@@ -120,13 +120,36 @@ function evaluateCondition(item: ThreadRowItem, condition: GroupingCondition): C
 	}
 }
 
-function evaluateRule(item: ThreadRowItem, rule: GroupingRule): {matched: boolean; conditions: ConditionTrace[]} {
+function evaluateThread(thread: ThreadSummary, rule: GroupingRule): {matched: boolean; conditions: ConditionTrace[]} {
 	if (!Array.isArray(rule.conditions) || rule.conditions.length === 0) {
 		return {matched: false, conditions: []};
 	}
-	const conditions = rule.conditions.map((condition) => evaluateCondition(item, condition));
+	const conditions = rule.conditions.map((condition) => evaluateConditionAgainstThread(thread, condition));
 	const matched = conditions.some((c) => c.matched);
 	return {matched, conditions};
+}
+
+function evaluateRule(item: ThreadRowItem, rule: GroupingRule): {
+	matched: boolean;
+	conditions?: ConditionTrace[];
+	threadEvaluations?: ThreadEvaluation[];
+} {
+	if (item.type !== 'bundle') {
+		const {matched, conditions} = evaluateThread(item as ThreadSummary, rule);
+		return {matched, conditions};
+	}
+	const memberThreads = item.memberThreads || [];
+	const threadEvaluations: ThreadEvaluation[] = memberThreads.map((thread) => {
+		const {matched, conditions} = evaluateThread(thread, rule);
+		return {
+			threadId: thread.threadId,
+			subject: thread.subject || '',
+			conditions,
+			matched,
+		};
+	});
+	const matched = threadEvaluations.some((evaluation) => evaluation.matched);
+	return {matched, threadEvaluations};
 }
 
 export function traceGrouping(item: ThreadRowItem, groupingRules: GroupingRulesConfig): GroupingTrace {
@@ -139,22 +162,22 @@ export function traceGrouping(item: ThreadRowItem, groupingRules: GroupingRulesC
 			ruleTraces.push({
 				ruleName: rule.name,
 				priority: rule.priority,
-				conditions: [],
 				matched: false,
 				skipped: true,
 				skippedReason: `An earlier rule already matched.`,
 			});
 			continue;
 		}
-		const {matched, conditions} = evaluateRule(item, rule);
+		const evaluation = evaluateRule(item, rule);
 		ruleTraces.push({
 			ruleName: rule.name,
 			priority: rule.priority,
-			conditions,
-			matched,
+			matched: evaluation.matched,
 			skipped: false,
+			conditions: evaluation.conditions,
+			threadEvaluations: evaluation.threadEvaluations,
 		});
-		if (matched) {
+		if (evaluation.matched) {
 			matchedRuleName = rule.name;
 		}
 	}

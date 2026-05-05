@@ -1,7 +1,7 @@
 import React from 'react';
 import {createRoot, type Root} from 'react-dom/client';
 import type {GroupingRulesConfig, ThreadRowItem, ThreadSummary, BundleSummary} from './thread_grouping.js';
-import {traceGrouping, type ConditionTrace, type RuleTrace, type GroupingTrace} from './grouping_rules_debug.js';
+import {traceGrouping, type ConditionTrace, type RuleTrace, type ThreadEvaluation, type GroupingTrace} from './grouping_rules_debug.js';
 
 interface DebugAppProps {
 	item: ThreadRowItem | null;
@@ -34,7 +34,36 @@ function ConditionRow({condition}: {condition: ConditionTrace}) {
 	);
 }
 
-function RulePanel({ruleTrace, ruleIndex}: {ruleTrace: RuleTrace; ruleIndex: number}) {
+function ThreadEvaluationBlock({evaluation, threadIndex}: {evaluation: ThreadEvaluation; threadIndex: number}) {
+	const borderColor = evaluation.matched ? '#3c763d' : '#ccc';
+	const headerColor = evaluation.matched ? '#3c763d' : '#999';
+	const headerLabel = evaluation.matched ? 'Matched' : 'Did not match';
+	return (
+		<div style={{borderLeft: `3px solid ${borderColor}`, paddingLeft: '10px', marginBottom: '10px'}}>
+			<div style={{marginBottom: '4px'}}>
+				<strong>Thread #{threadIndex + 1}</strong>{' '}
+				<small className="text-muted">{evaluation.threadId}</small>
+				<span style={{color: headerColor, fontWeight: 'bold', marginLeft: '8px'}}>{headerLabel}</span>
+			</div>
+			{evaluation.subject ? (
+				<div style={{marginBottom: '4px', color: '#555'}}>
+					<small><strong>Subject:</strong> {evaluation.subject}</small>
+				</div>
+			) : null}
+			{evaluation.conditions.length === 0 ? (
+				<div className="text-muted">Rule has no conditions.</div>
+			) : (
+				<ul style={{paddingLeft: '20px'}}>
+					{evaluation.conditions.map((condition, idx) => (
+						<ConditionRow key={idx} condition={condition} />
+					))}
+				</ul>
+			)}
+		</div>
+	);
+}
+
+function RulePanel({ruleTrace, ruleIndex, isBundle}: {ruleTrace: RuleTrace; ruleIndex: number; isBundle: boolean}) {
 	let panelClass = 'panel panel-default';
 	let headerLabel = 'Did not match';
 	let headerColor = '#999';
@@ -60,11 +89,30 @@ function RulePanel({ruleTrace, ruleIndex}: {ruleTrace: RuleTrace; ruleIndex: num
 			<div className="panel-body">
 				{ruleTrace.skipped ? (
 					<div className="text-muted">{ruleTrace.skippedReason}</div>
-				) : ruleTrace.conditions.length === 0 ? (
+				) : isBundle ? (
+					(() => {
+						const evaluations = ruleTrace.threadEvaluations || [];
+						if (evaluations.length === 0) {
+							return <div className="text-muted">Bundle has no member threads to evaluate.</div>;
+						}
+						return (
+							<>
+								<p style={{marginBottom: '10px'}}>
+									<small className="text-muted">
+										A bundle matches this rule if <strong>any</strong> of its member threads matches.
+									</small>
+								</p>
+								{evaluations.map((evaluation, idx) => (
+									<ThreadEvaluationBlock key={evaluation.threadId || idx} evaluation={evaluation} threadIndex={idx} />
+								))}
+							</>
+						);
+					})()
+				) : (ruleTrace.conditions || []).length === 0 ? (
 					<div className="text-muted">Rule has no conditions, so it cannot match.</div>
 				) : (
 					<ul style={{paddingLeft: '20px'}}>
-						{ruleTrace.conditions.map((condition, idx) => (
+						{(ruleTrace.conditions || []).map((condition, idx) => (
 							<ConditionRow key={idx} condition={condition} />
 						))}
 					</ul>
@@ -134,7 +182,7 @@ function DebugApp({item, groupingRules, onClose}: DebugAppProps) {
 					<p className="text-muted">No grouping rules are configured.</p>
 				) : (
 					trace.rules.map((ruleTrace, idx) => (
-						<RulePanel key={idx} ruleTrace={ruleTrace} ruleIndex={idx} />
+						<RulePanel key={idx} ruleTrace={ruleTrace} ruleIndex={idx} isBundle={item.type === 'bundle'} />
 					))
 				)}
 			</div>
