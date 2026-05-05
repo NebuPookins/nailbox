@@ -22,6 +22,7 @@ interface Islands {
 	ensureLabelPickerIsland(): { instance: { clear(): void } } | null;
 	ensureLaterPickerIsland(): { instance: { clear(): void } } | null;
 	ensureGroupingRulesIsland(): { instance: { refresh(): void }; wasCreated: boolean } | null;
+	ensureGroupingRulesDebugIsland(): { instance: { clear(): void } } | null;
 }
 
 export function wireModals({
@@ -30,6 +31,7 @@ export function wireModals({
 	laterPicker,
 	settingsBtn,
 	settingsModal,
+	groupingRulesDebugModal,
 	threadViewerController,
 	islands,
 	getThreadViewerThreadId,
@@ -42,6 +44,7 @@ export function wireModals({
 	laterPicker: HTMLElement;
 	settingsBtn: HTMLElement;
 	settingsModal: HTMLElement;
+	groupingRulesDebugModal: HTMLElement;
 	threadViewerController: ThreadViewerController;
 	islands: Islands;
 	getThreadViewerThreadId(): string | null;
@@ -100,5 +103,12 @@ export function wireModals({
 		btn.addEventListener('click', function() {
 			hideModal(settingsModal);
 		});
+	});
+
+	groupingRulesDebugModal.addEventListener('hidden.bs.modal', function() {
+		var islandState = islands.ensureGroupingRulesDebugIsland();
+		if (islandState && typeof islandState.instance.clear === 'function') {
+			islandState.instance.clear();
+		}
 	});
 }

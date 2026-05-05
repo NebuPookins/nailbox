@@ -45,6 +45,8 @@ document.addEventListener('DOMContentLoaded', function() {
 	var settingsBtn = document.getElementById('settings-btn')!;
 	var settingsModal = document.getElementById('settings-modal')!;
 	var groupingRulesRoot = document.getElementById('grouping-rules-root');
+	var groupingRulesDebugModal = document.getElementById('grouping-rules-debug-modal')!;
+	var groupingRulesDebugRoot = document.getElementById('grouping-rules-debug-root');
 
 	var authStatus: AuthStatus = {
 		configured: false,
@@ -355,12 +357,15 @@ function renderSetupNeededState(message?: string): void {
 	var islands = createIslandManager({
 		frontendApi: frontendApi,
 		groupingRulesRoot: groupingRulesRoot,
+		groupingRulesDebugRoot: groupingRulesDebugRoot,
 		labelPickerRoot: labelPickerRoot,
 		laterPickerRoot: laterPickerRoot,
 		threadListRoot: threadListRoot,
 		hideSettingsModal: function() { hideModal(settingsModal); },
 		hideLabelPicker: function() { hideModal(labelPicker); },
 		hideLaterPicker: function() { hideModal(laterPicker); },
+		showGroupingRulesDebugModal: function() { showModal(groupingRulesDebugModal); },
+		hideGroupingRulesDebugModal: function() { hideModal(groupingRulesDebugModal); },
 		threadActionController: threadActionController,
 		getLabels: function() { return labelsCache; },
 		deleteThreadFromUI: deleteThreadFromUI,
@@ -415,6 +420,14 @@ function renderSetupNeededState(message?: string): void {
 				type: 'success',
 				message: 'Bundle labeled and removed from inbox.'
 			});
+		},
+		onDebugGrouping: function(item) {
+			var debugIslandState = islands.ensureGroupingRulesDebugIsland();
+			if (!debugIslandState) {
+				messengerGetter().error('Failed to load grouping rules debug viewer.');
+				return;
+			}
+			debugIslandState.instance.open(item, groupingRulesCache);
 		},
 		onUngroup: async function(bundleId: string) {
 			var updateMsg = messengerGetter().info('Ungrouping bundle ' + bundleId + '...');
@@ -583,6 +596,7 @@ function renderSetupNeededState(message?: string): void {
 		laterPicker,
 		settingsBtn,
 		settingsModal,
+		groupingRulesDebugModal,
 		threadViewerController,
 		islands,
 		getThreadViewerThreadId,

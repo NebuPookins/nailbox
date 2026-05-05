@@ -1,6 +1,7 @@
 import { filterSelectableLabels } from './thread_action_controller.js';
-import type { GroupingRulesConfig, ThreadGroup } from './thread_grouping.js';
+import type { GroupingRulesConfig, ThreadGroup, ThreadRowItem } from './thread_grouping.js';
 import type { HideUntilValue } from './api.js';
+import type { GroupingRulesDebugIsland } from './grouping_rules_debug_island.js';
 
 interface LabelData {
 	id: string;
@@ -80,6 +81,7 @@ interface IslandState<T> {
 
 interface FrontendApi {
 	mountGroupingRulesSettings?(opts: { container: Element; onSaved?: () => void }): GroupingRulesIsland;
+	mountGroupingRulesDebugIsland?(opts: { container: Element; showModal: () => void; hideModal: () => void }): GroupingRulesDebugIsland;
 	mountLaterPickerIsland?(opts: { container: Element; notify: Notify; onDismiss?: () => void; onHidden?: (id: string) => void }): LaterPickerIsland;
 	mountLabelPickerIsland?(opts: { container: Element; notify: Notify; onDismiss?: () => void; onMoveThread?: (threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined>; onMoveBundle?: (bundleId: string, labelId: string) => Promise<void> }): LabelPickerIsland;
 	mountThreadListIsland?(opts: {
@@ -95,18 +97,22 @@ interface FrontendApi {
 		onOpenLaterPickerForBundle: (payload: BundleLaterPickerPayload) => void;
 		onOpenLabelPickerForBundle: (payload: BundleLaterPickerPayload) => void;
 		onUngroup: (bundleId: string) => void;
+		onDebugGrouping: (item: ThreadRowItem) => void;
 	}): ThreadListIsland;
 }
 
 export function createIslandManager({
 	frontendApi,
 	groupingRulesRoot,
+	groupingRulesDebugRoot,
 	labelPickerRoot,
 	laterPickerRoot,
 	threadListRoot,
 	hideSettingsModal,
 	hideLabelPicker,
 	hideLaterPicker,
+	showGroupingRulesDebugModal,
+	hideGroupingRulesDebugModal,
 	threadActionController,
 	getLabels,
 	deleteThreadFromUI,
@@ -126,15 +132,19 @@ export function createIslandManager({
 	onOpenLabelPickerForBundle,
 	onMoveBundle,
 	onUngroup,
+	onDebugGrouping,
 }: {
 	frontendApi: FrontendApi;
 	groupingRulesRoot: Element | null;
+	groupingRulesDebugRoot: Element | null;
 	labelPickerRoot: Element | null;
 	laterPickerRoot: Element | null;
 	threadListRoot: Element | null;
 	hideSettingsModal(): void;
 	hideLabelPicker(): void;
 	hideLaterPicker(): void;
+	showGroupingRulesDebugModal(): void;
+	hideGroupingRulesDebugModal(): void;
 	threadActionController: ThreadActionController;
 	getLabels(): LabelData[];
 	deleteThreadFromUI(threadId: string): void;
@@ -154,8 +164,10 @@ export function createIslandManager({
 	onOpenLabelPickerForBundle(payload: BundleLaterPickerPayload): void;
 	onMoveBundle(bundleId: string, labelId: string): Promise<void>;
 	onUngroup(bundleId: string): void;
+	onDebugGrouping(item: ThreadRowItem): void;
 }) {
 	let groupingRulesIsland: GroupingRulesIsland | null = null;
+	let groupingRulesDebugIsland: GroupingRulesDebugIsland | null = null;
 	let labelPickerIsland: LabelPickerIsland | null = null;
 	let laterPickerIsland: LaterPickerIsland | null = null;
 	let threadListIsland: ThreadListIsland | null = null;
@@ -210,6 +222,30 @@ export function createIslandManager({
 		});
 		return {
 			instance: groupingRulesIsland,
+			wasCreated: true
+		};
+	}
+
+	function ensureGroupingRulesDebugIsland(): IslandState<GroupingRulesDebugIsland> | null {
+		if (groupingRulesDebugIsland) {
+			return {
+				instance: groupingRulesDebugIsland,
+				wasCreated: false
+			};
+		}
+		if (!groupingRulesDebugRoot) {
+			return null;
+		}
+		if (typeof frontendApi.mountGroupingRulesDebugIsland !== 'function') {
+			return null;
+		}
+		groupingRulesDebugIsland = frontendApi.mountGroupingRulesDebugIsland({
+			container: groupingRulesDebugRoot,
+			showModal: showGroupingRulesDebugModal,
+			hideModal: hideGroupingRulesDebugModal,
+		});
+		return {
+			instance: groupingRulesDebugIsland,
 			wasCreated: true
 		};
 	}
@@ -297,6 +333,7 @@ export function createIslandManager({
 			onOpenLaterPickerForBundle: onOpenLaterPickerForBundle,
 			onOpenLabelPickerForBundle: onOpenLabelPickerForBundle,
 			onUngroup: onUngroup,
+			onDebugGrouping: onDebugGrouping,
 		});
 		return {
 			instance: threadListIsland,
@@ -315,6 +352,7 @@ export function createIslandManager({
 		buildLabelPickerLabels,
 		clearThreadList,
 		ensureGroupingRulesIsland,
+		ensureGroupingRulesDebugIsland,
 		ensureLabelPickerIsland,
 		ensureLaterPickerIsland,
 		ensureThreadListIsland,

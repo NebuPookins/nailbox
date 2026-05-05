@@ -2,13 +2,15 @@ import { createAppApi, createGroupingRulesApi } from './api.js';
 import type { AppApi, Result, JsonValue, HideUntilValue } from './api.js';
 import { mountAuthShellIsland } from './auth_shell_island.js';
 import { mountGroupingRulesIsland } from './grouping_rules_island.js';
+import { mountGroupingRulesDebugIsland } from './grouping_rules_debug_island.js';
 import { mountLabelPickerIsland } from './label_picker_island.js';
 import { mountLaterPickerIsland } from './later_picker_island.js';
 import { mountThreadListIsland } from './thread_list_island.js';
 import { mountThreadViewerIsland } from './thread_viewer_island.js';
 import type { ThreadViewerAdapter } from './thread_viewer_island.js';
 import type { Notify } from './island_manager.js';
-import type { GroupingRulesConfig, ThreadGroup } from './thread_grouping.js';
+import type { GroupingRulesConfig, ThreadGroup, ThreadRowItem } from './thread_grouping.js';
+import type { GroupingRulesDebugIsland } from './grouping_rules_debug_island.js';
 
 export function mountGroupingRulesSettings({ container, onSaved }: {
 	container: Element;
@@ -79,11 +81,17 @@ interface FrontendApi {
 		openForBundle(opts: { bundleId: string; onHideBundle: (bundleId: string, hideUntil: HideUntilValue) => Promise<void> }): void;
 		unmount(): void;
 	};
+	mountGroupingRulesDebugIsland(opts: {
+		container: Element;
+		showModal: () => void;
+		hideModal: () => void;
+	}): GroupingRulesDebugIsland;
 	mountThreadListIsland(opts: {
 		container: Element;
 		onArchive: (threadId: string) => void;
 		onArchiveBundle: (bundleId: string) => void;
 		onCreateBundle: (threadIds: string[]) => void;
+		onDebugGrouping: (item: ThreadRowItem) => void;
 		onDelete: (threadId: string) => void;
 		onEditBundle: (bundleId: string, threadIds: string[], mergeBundleIds: string[]) => void;
 		onOpenLabelPicker: (payload: { threadId: string; subject: string }) => void;
@@ -126,6 +134,7 @@ const frontendApi: FrontendApi = {
 	createAppApi,
 	createGroupingRulesApi,
 	mountAuthShellIsland,
+	mountGroupingRulesDebugIsland,
 	mountGroupingRulesIsland,
 	mountGroupingRulesSettings,
 	mountLabelPickerIsland,
