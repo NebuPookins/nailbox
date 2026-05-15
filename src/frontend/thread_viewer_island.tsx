@@ -233,19 +233,19 @@ function ThreadViewerApp({
 				</div>
 			</div>
 			<div className="modal-footer">
-				<button className="btn btn-xs btn-success archive-thread" title="Done" onClick={onArchive}>
+				<button className="btn btn-sm btn-success archive-thread" title="Done" onClick={onArchive}>
 					<span className="glyphicon glyphicon-ok"></span>
 				</button>
-				<button className="btn btn-xs btn-danger delete" title="Delete" onClick={onDelete}>
+				<button className="btn btn-sm btn-danger delete" title="Delete" onClick={onDelete}>
 					<span className="glyphicon glyphicon-remove"></span>
 				</button>
-				<button className="btn btn-xs btn-warning later" title="Later" onClick={onOpenLaterPicker}>
+				<button className="btn btn-sm btn-warning later" title="Later" onClick={onOpenLaterPicker}>
 					<span className="glyphicon glyphicon-time"></span>
 				</button>
-				<button className="btn btn-xs btn-primary label-thread" title="Label" onClick={onOpenLabelPicker}>
+				<button className="btn btn-sm btn-primary label-thread" title="Label" onClick={onOpenLabelPicker}>
 					<span className="glyphicon glyphicon-list"></span>
 				</button>
-				<button className="btn btn-xs btn-default view-on-gmail" title="View on Gmail" onClick={onViewOnGmail}>
+				<button className="btn btn-sm btn-default view-on-gmail" title="View on Gmail" onClick={onViewOnGmail}>
 					<span className="glyphicon glyphicon-option-horizontal"></span>
 				</button>
 				<button className="btn btn-default" type="button" onClick={onClose}>Close</button>

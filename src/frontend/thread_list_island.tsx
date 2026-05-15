@@ -226,35 +226,35 @@ function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onArc
 					{!showCheckbox ? (
 						<React.Fragment>
 							<button
-								className="btn btn-xs btn-success archive-thread"
+								className="btn btn-sm btn-success archive-thread"
 								title="Done"
 								onClick={function(e) { e.stopPropagation(); onArchive(thread.threadId); }}
 							>
 								<span className="glyphicon glyphicon-ok"></span>
 							</button>
 							<button
-								className="btn btn-xs btn-danger delete"
+								className="btn btn-sm btn-danger delete"
 								title="Delete"
 								onClick={function(e) { e.stopPropagation(); onDelete(thread.threadId); }}
 							>
 								<span className="glyphicon glyphicon-remove"></span>
 							</button>
 							<button
-								className="btn btn-xs btn-warning later"
+								className="btn btn-sm btn-warning later"
 								title="Later"
 								onClick={function(e) { e.stopPropagation(); onOpenLaterPicker({ threadId: thread.threadId, subject: thread.subject || '' }); }}
 							>
 								<span className="glyphicon glyphicon-time"></span>
 							</button>
 							<button
-								className="btn btn-xs btn-primary label-thread"
+								className="btn btn-sm btn-primary label-thread"
 								title="Label"
 								onClick={function(e) { e.stopPropagation(); onOpenLabelPicker({ threadId: thread.threadId, subject: thread.subject || '' }); }}
 							>
 								<span className="glyphicon glyphicon-list"></span>
 							</button>
 							<a
-								className="btn btn-xs btn-default view-on-gmail"
+								className="btn btn-sm btn-default view-on-gmail"
 								title="View on Gmail"
 								href={'https://mail.google.com/mail/u/0/#inbox/' + thread.threadId}
 								target="_blank"
@@ -264,7 +264,7 @@ function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onArc
 								<span className="glyphicon glyphicon-option-horizontal"></span>
 							</a>
 							<button
-								className="btn btn-xs btn-default debug-grouping"
+								className="btn btn-sm btn-default debug-grouping"
 								title="Debug grouping rules"
 								onClick={function(e) { e.stopPropagation(); onDebugGrouping(thread); }}
 							>
@@ -372,42 +372,42 @@ function BundleRow({ bundle, isExpanded, isRemoving, children, showCheckbox, isS
 					{formatReadTime(bundle.recentMessageReadTimeSeconds) as string}
 					<br />
 					<button
-						className="btn btn-xs btn-success archive-thread"
+						className="btn btn-sm btn-success archive-thread"
 						title="Archive all"
 						onClick={function(e) { e.stopPropagation(); onArchive(bundle.bundleId); }}
 					>
 						<span className="glyphicon glyphicon-ok"></span>
 					</button>
 					<button
-						className="btn btn-xs btn-warning later"
+						className="btn btn-sm btn-warning later"
 						title="Later"
 						onClick={function(e) { e.stopPropagation(); onOpenLaterPicker({ bundleId: bundle.bundleId }); }}
 					>
 						<span className="glyphicon glyphicon-time"></span>
 					</button>
 					<button
-						className="btn btn-xs btn-primary label-bundle"
+						className="btn btn-sm btn-primary label-bundle"
 						title="Label all"
 						onClick={function(e) { e.stopPropagation(); onOpenLabelPicker({ bundleId: bundle.bundleId }); }}
 					>
 						<span className="glyphicon glyphicon-list"></span>
 					</button>
 					<button
-						className="btn btn-xs btn-info"
+						className="btn btn-sm btn-info"
 						title="Edit bundle membership"
 						onClick={function(e) { e.stopPropagation(); onEdit(bundle); }}
 					>
 						<span className="glyphicon glyphicon-pencil"></span>
 					</button>
 					<button
-						className="btn btn-xs btn-default"
+						className="btn btn-sm btn-default"
 						title="Ungroup"
 						onClick={function(e) { e.stopPropagation(); onUngroup(bundle.bundleId); }}
 					>
 						<span className="glyphicon glyphicon-scissors"></span>
 					</button>
 					<button
-						className="btn btn-xs btn-default debug-grouping"
+						className="btn btn-sm btn-default debug-grouping"
 						title="Debug grouping rules"
 						onClick={function(e) { e.stopPropagation(); onDebugGrouping(bundle); }}
 					>

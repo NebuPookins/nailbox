@@ -112,6 +112,90 @@ html(lang="en")
 				width: 90%;
 				max-width: 1000px;
 			}
+			@media (max-width: 767px) {
+				html, body {
+					overflow-x: hidden;
+				}
+				/* Rebalance Bootstrap .row negative margins to match tighter container gutter */
+				.container {
+					padding-left: 10px;
+					padding-right: 10px;
+				}
+				.row {
+					margin-left: -10px;
+					margin-right: -10px;
+				}
+				.row > [class*="col-"] {
+					padding-left: 10px;
+					padding-right: 10px;
+				}
+				/* Stack thread columns vertically so buttons have room */
+				.thread .row > [class*="col-"] {
+					width: 100%;
+					float: none;
+				}
+				/* Prevent long unbreakable text from overflowing */
+				.thread .senders,
+				.thread .subject,
+				.thread .snippet,
+				.thread .receivers {
+					overflow-wrap: break-word;
+					word-break: break-word;
+					max-width: 100%;
+				}
+				/* Larger tap targets for action buttons */
+				.thread .btn,
+				.thread a.btn {
+					min-height: 40px;
+					min-width: 40px;
+					padding: 8px 10px;
+					font-size: 14px;
+					margin-right: 2px;
+					margin-bottom: 4px;
+				}
+				.thread-list-header .btn {
+					padding: 6px 10px;
+					font-size: 13px;
+				}
+				#auth-shell-controls-root.pull-right {
+					float: none !important;
+					display: block;
+					margin-bottom: 6px;
+				}
+				#settings-btn {
+					width: 100%;
+					margin-bottom: 6px;
+					box-sizing: border-box;
+				}
+				.modal-dialog {
+					margin: 8px;
+					width: auto !important;
+				}
+				#thread-viewer .modal-dialog {
+					margin: 0 !important;
+				}
+				.modal-footer .btn {
+					min-height: 40px;
+					min-width: 40px;
+					padding: 8px 12px;
+					font-size: 14px;
+					margin-bottom: 4px;
+				}
+				/* Constrain HTML email content to fit the screen */
+				.message-body img,
+				.message-body table,
+				.message-body td,
+				.message-body div {
+					max-width: 100% !important;
+					box-sizing: border-box !important;
+				}
+				.message-body img {
+					height: auto !important;
+				}
+				.message-body table {
+					word-break: break-word;
+				}
+			}
 	body
 		.container
 			#auth-shell-status-root
