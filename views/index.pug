@@ -187,13 +187,23 @@ html(lang="en")
 				.message-body td,
 				.message-body div {
 					max-width: 100% !important;
+					min-width: 0 !important;
 					box-sizing: border-box !important;
 				}
 				.message-body img {
 					height: auto !important;
 				}
+				/* Belt-and-suspenders: kill any inline min-width on any element */
+				.message-body [style*="min-width"] {
+					min-width: 0 !important;
+				}
+				/* Some emails also use the HTML width attribute (e.g. width="600").
+				   max-width:100% handles it, but force width:auto to be safe on tables. */
 				.message-body table {
 					word-break: break-word;
+					width: auto !important;
+					border-collapse: collapse !important;
+					border-spacing: 0 !important;
 				}
 			}
 	body
