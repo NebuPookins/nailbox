@@ -3,7 +3,6 @@ import util from 'util';
 import _ from 'lodash';
 import mailcomposer from 'mailcomposer';
 import {marked} from 'marked';
-import base64url from 'base64url';
 import hljs from 'highlight.js';
 import posthtml from 'posthtml';
 import Optional from 'optional-js';
@@ -187,7 +186,7 @@ export function createRfc2822Service(dependencies: {
 			replyMessage,
 		});
 		const mimeMessage = await buildMimeMessage(mail, logger);
-		return (base64url as unknown as {encode: (input: string | Buffer) => string}).encode(mimeMessage);
+		return mimeMessage.toString('base64url');
 	}
 
 	return {
