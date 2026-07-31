@@ -1,7 +1,6 @@
 import util from 'util';
 import { createServer } from 'node:http';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import bodyParser from 'body-parser';
 import path from 'path';
 import nebulog from 'nebulog';
 
@@ -152,8 +151,8 @@ app.set('views', path.join(process.cwd(), 'views'));
 app.set('view engine', 'pug');
 app.locals.assetPath = frontendAssetService.assetPath;
 app.use('/public', express.static('public'));
-app.use(bodyParser.json({limit: '10mb'}));
-app.use(bodyParser.urlencoded({limit: '10mb', parameterLimit: 10000, extended: true }));
+app.use(express.json({limit: '10mb'}));
+app.use(express.urlencoded({limit: '10mb', parameterLimit: 10000, extended: true }));
 app.use(function (req: Request, res: Response, next: NextFunction) {
 	//Log each request.
 	logger.info(util.format("%s %s => %s %s %s", new Date().toISOString(), req.ip, req.protocol, req.method, req.url));
