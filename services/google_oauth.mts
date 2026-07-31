@@ -177,19 +177,47 @@ async function refreshAccessToken(config: AppConfig): Promise<TokenResponse> {
 	}
 }
 
+async function refreshAndStoreAccessToken(config: AppConfig): Promise<void> {
+	const googleOAuth = getGoogleOAuthConfig(config);
+	const refreshedToken = await refreshAccessToken(config);
+	googleOAuth.accessToken = refreshedToken.access_token;
+	googleOAuth.accessTokenExpiresAt = new Date(Date.now() + ((refreshedToken.expires_in ?? 3600) * 1000)).toISOString();
+	if (typeof refreshedToken.refresh_token === 'string' && refreshedToken.refresh_token.length > 0) {
+		googleOAuth.refreshToken = refreshedToken.refresh_token;
+	}
+	if (typeof refreshedToken.scope === 'string' && refreshedToken.scope.length > 0) {
+		googleOAuth.scope = refreshedToken.scope;
+	}
+}
+
+/*
+ * A single sync or bundle action fans out into dozens of concurrent Gmail
+ * requests. Without this, an expired access token makes every one of them fire
+ * its own refresh, which gets us rate limited by Google and lets a slow
+ * response overwrite a newer access token. Instead, the first caller to notice
+ * the expiry does the refresh and the rest wait for it. Callers sharing a
+ * refresh must therefore share the same AppConfig instance, which they do:
+ * main.mts loads it once and passes that object around.
+ */
+const inFlightTokenRefreshes = new WeakMap<AppConfig, Promise<void>>();
+
 async function ensureValidAccessToken(config: AppConfig): Promise<{accessToken: string; didUpdateCredentials: boolean}> {
 	const googleOAuth = getGoogleOAuthConfig(config);
 	let didUpdateCredentials = false;
 	if (accessTokenNeedsRefresh(googleOAuth)) {
-		const refreshedToken = await refreshAccessToken(config);
-		googleOAuth.accessToken = refreshedToken.access_token;
-		googleOAuth.accessTokenExpiresAt = new Date(Date.now() + ((refreshedToken.expires_in ?? 3600) * 1000)).toISOString();
-		if (typeof refreshedToken.refresh_token === 'string' && refreshedToken.refresh_token.length > 0) {
-			googleOAuth.refreshToken = refreshedToken.refresh_token;
+		let refresh = inFlightTokenRefreshes.get(config);
+		if (!refresh) {
+			refresh = refreshAndStoreAccessToken(config).finally(() => {
+				inFlightTokenRefreshes.delete(config);
+			});
+			inFlightTokenRefreshes.set(config, refresh);
 		}
-		if (typeof refreshedToken.scope === 'string' && refreshedToken.scope.length > 0) {
-			googleOAuth.scope = refreshedToken.scope;
-		}
+		await refresh;
+		/*
+		 * Everyone who shared the refresh reports it, so a rotated refresh token
+		 * still gets persisted even if the caller that started the refresh fails
+		 * before it saves.
+		 */
 		didUpdateCredentials = true;
 	}
 	return {
