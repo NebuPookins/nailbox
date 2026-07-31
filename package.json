@@ -30,7 +30,6 @@
     "marked": "^4.0.10",
     "mimelib": "^0.2.19",
     "nebulog": "^0.2.1",
-    "node-fs": "^0.1.7",
     "optional-js": "^1.2.1",
     "posthtml": "^0.13.3",
     "pug": "^3.0.0",
