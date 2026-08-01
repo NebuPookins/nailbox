@@ -2,7 +2,7 @@ import assert from 'assert';
 import util from 'util';
 
 import sanitizeHtml from 'sanitize-html';
-import htmlEntities from 'html-entities';
+import {decode} from 'html-entities';
 import nebulog from 'nebulog';
 
 import {
@@ -13,8 +13,6 @@ import {
 } from '../validation/contracts.js';
 import type {ThreadSummaryDto, ThreadMessageDto} from '../types/thread.js';
 
-const Entities = htmlEntities.AllHtmlEntities;
-const entities = new Entities();
 const logger = nebulog.make({filename: 'src/server/services/thread_service.js', level: 'info'});
 
 export function createThreadService(dependencies: {
@@ -149,7 +147,7 @@ export function createThreadService(dependencies: {
 					receivers: thread.recipients(),
 					lastUpdated: thread.lastUpdated(),
 					subject: thread.subject(),
-					snippet: maybeMostRecentSnippetInThread ? entities.decode(maybeMostRecentSnippetInThread) : null,
+					snippet: maybeMostRecentSnippetInThread ? decode(maybeMostRecentSnippetInThread) : null,
 					messageIds: thread.messageIds(),
 					labelIds: thread.labelIds(),
 					visibility: hideUntils.get({threadId: thread.id(), lastUpdated: thread.lastUpdated()}).getVisibility(thread.lastUpdated(), now),

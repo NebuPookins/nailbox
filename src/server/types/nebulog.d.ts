@@ -15,11 +15,6 @@ declare module 'sanitize-html' {
   export = sanitizeHtml;
 }
 
-declare module 'html-entities' {
-  const htmlEntities: any;
-  export = htmlEntities;
-}
-
 declare module 'mailcomposer' {
   const mailcomposer: any;
   export = mailcomposer;
