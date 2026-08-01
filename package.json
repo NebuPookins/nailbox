@@ -20,7 +20,7 @@
   "author": "Nebu Pookins <nebupookins@gmail.com>",
   "private": true,
   "dependencies": {
-    "express": "^4.13.4",
+    "express": "^5.2.1",
     "highlight.js": "^10.1.2",
     "html-entities": "^1.2.0",
     "lodash": "^4.2.1",
