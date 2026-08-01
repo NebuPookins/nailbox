@@ -1,12 +1,10 @@
 import _ from 'lodash';
 import assert from 'assert';
-import htmlEntities from 'html-entities';
+import {encode} from 'html-entities';
 import nebulog from 'nebulog';
 import mimelib from 'mimelib';
 import util from 'util';
 
-const Entities = htmlEntities.AllHtmlEntities;
-const entities = new Entities();
 const logger = nebulog.make({filename: 'models/message.ts', level: 'debug'});
 
 export interface EmailAddress {
@@ -99,7 +97,7 @@ function formatPartAsHtml(messagePart: GmailMessagePart, threadId: string): stri
 	logger.info(`Formatting part with mime type ${messagePart.mimeType} as HTML...`)
 	switch (messagePart.mimeType) {
 		case 'text/plain':
-			return '<pre>' + entities.encode(mimelib.decodeBase64(messagePart.body.data ?? '')) + '</pre>';
+			return '<pre>' + encode(mimelib.decodeBase64(messagePart.body.data ?? '')) + '</pre>';
 		case 'text/html':
 			return mimelib.decodeBase64(messagePart.body.data ?? '');
 		default:
