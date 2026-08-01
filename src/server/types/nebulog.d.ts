@@ -33,7 +33,7 @@ declare module 'mimelib' {
 
 declare module 'optional-js' {
   const Optional: any;
-  export = Optional;
+  export default Optional;
 }
 
 declare module 'posthtml' {
