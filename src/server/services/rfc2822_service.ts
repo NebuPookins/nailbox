@@ -60,14 +60,20 @@ function renderHighlightedCode(code: string, lang: string): string {
 		.html;
 }
 
+marked.use({
+	renderer: {
+		code({text, lang}: {text: string; lang?: string}): string {
+			const highlighted = renderHighlightedCode(text, lang ?? '');
+			const langClass = lang ? ` class="language-${lang}"` : '';
+			return `<pre><code${langClass}>${highlighted}</code></pre>`;
+		},
+	},
+});
+
 async function markdownToHtml(bodyPlusSignature: string): Promise<string> {
-	const content = marked.parse(bodyPlusSignature, {
+	const content = await marked.parse(bodyPlusSignature, {
 		gfm: true,
-		tables: true,
 		breaks: true,
-		smartLists: true,
-		smartypants: true,
-		highlight: renderHighlightedCode,
 	});
 	return posthtml()
 		.use((tree: any) => {

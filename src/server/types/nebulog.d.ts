@@ -20,12 +20,6 @@ declare module 'mailcomposer' {
   export = mailcomposer;
 }
 
-declare module 'marked' {
-  const marked: any;
-  export { marked };
-  export default marked;
-}
-
 declare module 'mimelib' {
   const mimelib: any;
   export = mimelib;
