@@ -88,6 +88,7 @@ interface FrontendApi {
 		container: Element;
 		onArchive: (id: string) => void;
 		onDelete: (id: string) => void;
+		onMarkSpam: (id: string) => void;
 		onOpenLaterPicker: (payload: LaterPickerPayload) => void;
 		onOpenLabelPicker: (payload: LaterPickerPayload) => void;
 		onOpenThread: (payload: ThreadOpenPayload) => void;
@@ -121,6 +122,7 @@ export function createIslandManager({
 	reportAsyncError,
 	onArchiveThread,
 	onDeleteThread,
+	onMarkThreadAsSpam,
 	onOpenLaterPickerForThread,
 	onOpenLabelPickerForThread,
 	onOpenThread,
@@ -153,6 +155,7 @@ export function createIslandManager({
 	reportAsyncError(error: unknown): void;
 	onArchiveThread(threadId: string): void;
 	onDeleteThread(threadId: string): void;
+	onMarkThreadAsSpam(threadId: string): void;
 	onOpenLaterPickerForThread(payload: LaterPickerPayload): void;
 	onOpenLabelPickerForThread(payload: LaterPickerPayload): void;
 	onOpenThread(payload: ThreadOpenPayload): void;
@@ -324,6 +327,7 @@ export function createIslandManager({
 			container: threadListRoot,
 			onArchive: onArchiveThread,
 			onDelete: onDeleteThread,
+			onMarkSpam: onMarkThreadAsSpam,
 			onOpenLaterPicker: onOpenLaterPickerForThread,
 			onOpenLabelPicker: onOpenLabelPickerForThread,
 			onOpenThread: onOpenThread,

@@ -93,3 +93,67 @@ test('openThread builds viewer options before delegating to the viewer controlle
 		['open', 'thread-1'],
 	]);
 });
+
+test('markThreadAsSpam delegates to the thread action controller', async () => {
+	const calls = [];
+	const controller = createThreadListController({
+		openLabelPicker() {
+			throw new Error('unused');
+		},
+		openLaterPicker() {
+			throw new Error('unused');
+		},
+		openThreadViewer() {
+			throw new Error('unused');
+		},
+		reportError(error) {
+			calls.push(['error', error.message]);
+		},
+		threadActionController: {
+			async markThreadAsSpam(threadId) {
+				calls.push(['spam', threadId]);
+			},
+		},
+		threadViewerController: {
+			async openThread() {
+				throw new Error('unused');
+			},
+		},
+	});
+
+	await controller.markThreadAsSpam('thread-1');
+
+	assert.deepEqual(calls, [['spam', 'thread-1']]);
+});
+
+test('markThreadAsSpam reports errors raised by the thread action controller', async () => {
+	const calls = [];
+	const controller = createThreadListController({
+		openLabelPicker() {
+			throw new Error('unused');
+		},
+		openLaterPicker() {
+			throw new Error('unused');
+		},
+		openThreadViewer() {
+			throw new Error('unused');
+		},
+		reportError(error) {
+			calls.push(['error', error.message]);
+		},
+		threadActionController: {
+			async markThreadAsSpam() {
+				throw new Error('gmail rejected the request');
+			},
+		},
+		threadViewerController: {
+			async openThread() {
+				throw new Error('unused');
+			},
+		},
+	});
+
+	await controller.markThreadAsSpam('thread-1');
+
+	assert.deepEqual(calls, [['error', 'gmail rejected the request']]);
+});

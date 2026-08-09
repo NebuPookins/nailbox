@@ -35,6 +35,31 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 		await bundles.save();
 	}
 
+	/**
+	 * Runs a Gmail request that takes a thread out of the inbox, then drops the
+	 * thread from the local cache and from any bundle it belonged to. Responds
+	 * with Gmail's payload on success, or 500 if the cached copy survived.
+	 */
+	async function removeThreadFromInboxAndCache(
+		res: Response,
+		threadId: string,
+		gmailRequestOptions: {method: string; path: string; json?: unknown},
+	): Promise<void> {
+		const gmailResponse = await withGmailApi(res, async (gmailRequest: any) => {
+			return gmailRequest(gmailRequestOptions);
+		});
+		if (gmailResponse == null) {
+			return;
+		}
+		const isSuccessful = await threadRepository.deleteThread(threadId);
+		if (isSuccessful) {
+			await cleanupBundleAfterThreadDeletion(threadId);
+			res.status(200).send(gmailResponse);
+			return;
+		}
+		res.sendStatus(500);
+	}
+
 	app.get('/api/threads/profile', async function(req: Request, res: Response) {
 		try {
 			const profile = await withGmailApi(res, async (gmailRequest: any) => {
@@ -127,22 +152,10 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 	app.post(/^\/api\/threads\/([a-z0-9]+)\/trash$/, async function(req: Request, res: Response) {
 		const threadId = req.params[0];
 		try {
-			const gmailResponse = await withGmailApi(res, async (gmailRequest: any) => {
-				return gmailRequest({
-					method: 'POST',
-					path: `/threads/${threadId}/trash`,
-				});
+			await removeThreadFromInboxAndCache(res, threadId, {
+				method: 'POST',
+				path: `/threads/${threadId}/trash`,
 			});
-			if (gmailResponse == null) {
-				return;
-			}
-			const isSuccessful = await threadRepository.deleteThread(threadId);
-			if (isSuccessful) {
-				await cleanupBundleAfterThreadDeletion(threadId);
-				res.status(200).send(gmailResponse);
-				return;
-			}
-			res.sendStatus(500);
 		} catch (error) {
 			logger.error(util.inspect(error));
 			res.sendStatus(500);
@@ -152,25 +165,30 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 	app.post(/^\/api\/threads\/([a-z0-9]+)\/archive$/, async function(req: Request, res: Response) {
 		const threadId = req.params[0];
 		try {
-			const gmailResponse = await withGmailApi(res, async (gmailRequest: any) => {
-				return gmailRequest({
-					method: 'POST',
-					path: `/threads/${threadId}/modify`,
-					json: {
-						removeLabelIds: ['INBOX'],
-					},
-				});
+			await removeThreadFromInboxAndCache(res, threadId, {
+				method: 'POST',
+				path: `/threads/${threadId}/modify`,
+				json: {
+					removeLabelIds: ['INBOX'],
+				},
 			});
-			if (gmailResponse == null) {
-				return;
-			}
-			const isSuccessful = await threadRepository.deleteThread(threadId);
-			if (isSuccessful) {
-				await cleanupBundleAfterThreadDeletion(threadId);
-				res.status(200).send(gmailResponse);
-				return;
-			}
+		} catch (error) {
+			logger.error(util.inspect(error));
 			res.sendStatus(500);
+		}
+	});
+
+	app.post(/^\/api\/threads\/([a-z0-9]+)\/spam$/, async function(req: Request, res: Response) {
+		const threadId = req.params[0];
+		try {
+			await removeThreadFromInboxAndCache(res, threadId, {
+				method: 'POST',
+				path: `/threads/${threadId}/modify`,
+				json: {
+					removeLabelIds: ['INBOX'],
+					addLabelIds: ['SPAM'],
+				},
+			});
 		} catch (error) {
 			logger.error(util.inspect(error));
 			res.sendStatus(500);
@@ -181,26 +199,14 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 		const threadId = req.params[0];
 		try {
 			const {labelId} = normalizeGmailMoveThreadDto(req.body);
-			const gmailResponse = await withGmailApi(res, async (gmailRequest: any) => {
-				return gmailRequest({
-					method: 'POST',
-					path: `/threads/${threadId}/modify`,
-					json: {
-						removeLabelIds: ['INBOX', 'UNREAD'],
-						addLabelIds: [labelId],
-					},
-				});
+			await removeThreadFromInboxAndCache(res, threadId, {
+				method: 'POST',
+				path: `/threads/${threadId}/modify`,
+				json: {
+					removeLabelIds: ['INBOX', 'UNREAD'],
+					addLabelIds: [labelId],
+				},
 			});
-			if (gmailResponse == null) {
-				return;
-			}
-			const isSuccessful = await threadRepository.deleteThread(threadId);
-			if (isSuccessful) {
-				await cleanupBundleAfterThreadDeletion(threadId);
-				res.status(200).send(gmailResponse);
-				return;
-			}
-			res.sendStatus(500);
 		} catch (error) {
 			const err = error as Error & {code?: string};
 			if (err.code === 'INVALID_CONTRACT') {

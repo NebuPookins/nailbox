@@ -60,6 +60,30 @@ function reportMissingThreadId(actionMessenger: MsgHandle | null): ActionResult 
 	};
 }
 
+function reportFailedRequest(actionMessenger: MsgHandle | null, error: Error): ActionResult {
+	updateMessenger(actionMessenger, 'error', error.message || 'The request failed.');
+	return {
+		ok: false,
+		reason: 'request-failed',
+	};
+}
+
+/**
+ * Runs a request that is expected to resolve to a Result, converting a rejected
+ * promise (a network failure never reaches the Result path) into a failed
+ * Result so callers have a single failure branch to handle.
+ */
+async function attemptRequest(request: () => Promise<Result<JsonValue>>): Promise<Result<JsonValue>> {
+	try {
+		return await request();
+	} catch (error) {
+		return {
+			ok: false,
+			error: error instanceof Error ? error : new Error(String(error)),
+		};
+	}
+}
+
 function defaultSuccessMessage(verb: string, threadId: string): string {
 	return `Successfully ${verb} thread ${threadId}.`;
 }
@@ -103,7 +127,10 @@ export function createThreadActionController({
 		if (!threadId) {
 			return reportMissingThreadId(actionMessenger);
 		}
-		await request();
+		const result = await attemptRequest(request);
+		if (!result.ok) {
+			return reportFailedRequest(actionMessenger, result.error);
+		}
 		onThreadRemoved?.(threadId);
 		updateMessenger(actionMessenger, 'success', successMessage);
 		return {
@@ -120,14 +147,17 @@ export function createThreadActionController({
 		bundleId: string;
 		startMessage: string;
 		successMessage: string;
-		request: () => Promise<unknown>; //TODO: fix usage of unknown
+		request: () => Promise<Result<JsonValue>>;
 	}): Promise<ActionResult> {
 		const actionMessenger = createActionMessenger(messengerGetter, startMessage);
 		if (!bundleId) {
 			updateMessenger(actionMessenger, 'error', 'Missing bundle id.');
 			return {ok: false, reason: 'missing-bundle-id'};
 		}
-		await request();
+		const result = await attemptRequest(request);
+		if (!result.ok) {
+			return reportFailedRequest(actionMessenger, result.error);
+		}
 		onBundleRemoved?.(bundleId);
 		updateMessenger(actionMessenger, 'success', successMessage);
 		return {ok: true};
@@ -148,6 +178,14 @@ export function createThreadActionController({
 				startMessage: `Deleting thread ${threadId}...`,
 				successMessage: `Successfully deleted message ${threadId}`,
 				request: () => appApi.deleteThread(threadId),
+			});
+		},
+		markThreadAsSpam(threadId: string) {
+			return runThreadAction({
+				threadId,
+				startMessage: `Reporting thread ${threadId} as spam...`,
+				successMessage: `Successfully reported thread ${threadId} as spam.`,
+				request: () => appApi.markThreadAsSpam(threadId),
 			});
 		},
 		archiveBundle(bundleId: string) {

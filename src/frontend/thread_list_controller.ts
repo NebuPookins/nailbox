@@ -3,6 +3,7 @@ import type { BundleSummary } from './thread_grouping.js';
 interface ThreadActionController {
 	deleteThread(threadId: string): Promise<unknown>;
 	archiveThread(threadId: string): Promise<unknown>;
+	markThreadAsSpam(threadId: string): Promise<unknown>;
 	archiveBundle(bundleId: string): Promise<unknown>;
 	deleteBundle(bundleId: string): Promise<unknown>;
 }
@@ -53,6 +54,14 @@ export function createThreadListController({
 		async archiveThread(threadId: string) {
 			try {
 				await threadActionController.archiveThread(threadId);
+			} catch (error) {
+				reportError(error);
+			}
+		},
+
+		async markThreadAsSpam(threadId: string) {
+			try {
+				await threadActionController.markThreadAsSpam(threadId);
 			} catch (error) {
 				reportError(error);
 			}
