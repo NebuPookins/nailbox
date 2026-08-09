@@ -83,6 +83,7 @@ interface HandleKeydownOptions {
 interface ThreadActionController {
 	deleteThread(threadId: string): Promise<{ ok: boolean; reason?: string } | undefined>;
 	archiveThread(threadId: string): Promise<{ ok: boolean; reason?: string } | undefined>;
+	markThreadAsSpam(threadId: string): Promise<{ ok: boolean; reason?: string } | undefined>;
 }
 
 import { type Rfc2822Payload } from './api.js';
@@ -140,6 +141,31 @@ export function createThreadViewerController({
 }) {
 	function showError(error: unknown): void {
 		messengerGetter().error(error instanceof Error ? error.message : String(error));
+	}
+	/**
+	 * Builds a thread-viewer action that runs `action` against the currently open
+	 * thread and closes the viewer only once the action reports success.
+	 */
+	function runCurrentThreadAction(
+		action: (threadId: string) => Promise<{ ok: boolean; reason?: string } | undefined>,
+		failureReason: string
+	) {
+		return async function(options: ThreadWithModal) {
+			try {
+				const result = await action(options.threadId ?? '');
+				if (!result || !result.ok) {
+					return result;
+				}
+				options.hideModal();
+				return result;
+			} catch (error) {
+				showError(error);
+				return {
+					ok: false,
+					reason: failureReason,
+				};
+			}
+		};
 	}
 	return {
 		async openThread(options: OpenThreadOptions) {
@@ -246,39 +272,20 @@ export function createThreadViewerController({
 			);
 		},
 
-		async deleteCurrentThread(options: ThreadWithModal) {
-			try {
-				var result = await threadActionController.deleteThread(options.threadId ?? '');
-				if (!result || !result.ok) {
-					return result;
-				}
-				options.hideModal();
-				return result;
-			} catch (error) {
-				showError(error);
-				return {
-					ok: false,
-					reason: 'delete-failed',
-				};
-			}
-		},
+		deleteCurrentThread: runCurrentThreadAction(
+			(threadId) => threadActionController.deleteThread(threadId),
+			'delete-failed'
+		),
 
-		async archiveCurrentThread(options: ThreadWithModal) {
-			try {
-				var result = await threadActionController.archiveThread(options.threadId ?? '');
-				if (!result || !result.ok) {
-					return result;
-				}
-				options.hideModal();
-				return result;
-			} catch (error) {
-				showError(error);
-				return {
-					ok: false,
-					reason: 'archive-failed',
-				};
-			}
-		},
+		archiveCurrentThread: runCurrentThreadAction(
+			(threadId) => threadActionController.archiveThread(threadId),
+			'archive-failed'
+		),
+
+		markCurrentThreadAsSpam: runCurrentThreadAction(
+			(threadId) => threadActionController.markThreadAsSpam(threadId),
+			'mark-spam-failed'
+		),
 
 		showLabelPicker(options: ShowLabelPickerOptions) {
 			return options.openLabelPicker();

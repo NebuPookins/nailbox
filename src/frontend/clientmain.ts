@@ -384,6 +384,7 @@ function renderSetupNeededState(message?: string): void {
 		},
 		onArchiveThread: function(threadId) { threadListController.archiveThread(threadId); },
 		onDeleteThread: function(threadId) { threadListController.deleteThread(threadId); },
+		onMarkThreadAsSpam: function(threadId) { threadListController.markThreadAsSpam(threadId); },
 		onOpenLaterPickerForThread: function(threadSummary) { threadListController.openLaterPicker(threadSummary); },
 		onOpenLabelPickerForThread: function(threadSummary) { threadListController.openLabelPicker(threadSummary); },
 		onOpenThread: function(threadSummary) { threadListController.openThread(threadSummary); },
@@ -531,6 +532,9 @@ function renderSetupNeededState(message?: string): void {
 		},
 		onArchiveThread: async function(opts) {
 			await threadViewerController.archiveCurrentThread(opts);
+		},
+		onMarkThreadAsSpam: async function(opts) {
+			await threadViewerController.markCurrentThreadAsSpam(opts);
 		},
 		onOpenLaterPicker: function(opts) {
 			return threadViewerController.showLaterPicker({

@@ -94,6 +94,7 @@ interface FrontendApi {
 		onDebugGrouping: (item: ThreadRowItem) => void;
 		onDelete: (threadId: string) => void;
 		onEditBundle: (bundleId: string, threadIds: string[], mergeBundleIds: string[]) => void;
+		onMarkSpam: (threadId: string) => void;
 		onOpenLabelPicker: (payload: { threadId: string; subject: string }) => void;
 		onOpenLabelPickerForBundle: (payload: { bundleId: string }) => void;
 		onOpenLaterPicker: (payload: { threadId: string; subject: string }) => void;
@@ -116,6 +117,7 @@ interface FrontendApi {
 		hideModal: () => void;
 		onArchiveThread: (opts: { threadId: string | null; hideModal: () => void }) => Promise<void>;
 		onDeleteThread: (opts: { threadId: string | null; hideModal: () => void }) => Promise<void>;
+		onMarkThreadAsSpam: (opts: { threadId: string | null; hideModal: () => void }) => Promise<void>;
 		onDownloadAttachment: (opts: { messageId: string; attachmentId: string; attachmentName: string }) => Promise<void>;
 		onOpenLabelPicker: (opts: { threadId: string | null; subject: string; hideThreadViewer: () => void }) => void;
 		onOpenLaterPicker: (opts: { threadId: string | null; subject: string; hideModal: () => void }) => void;

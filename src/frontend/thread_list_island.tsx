@@ -113,6 +113,7 @@ interface ThreadRowProps {
 	isSelected?: boolean;
 	onArchive: (threadId: string) => void;
 	onDelete: (threadId: string) => void;
+	onMarkSpam: (threadId: string) => void;
 	onOpenLaterPicker: (payload: LaterPickerPayload) => void;
 	onOpenLabelPicker: (payload: LaterPickerPayload) => void;
 	onOpenThread: (payload: ThreadOpenPayload) => void;
@@ -120,7 +121,7 @@ interface ThreadRowProps {
 	onDebugGrouping: (item: ThreadRowItem) => void;
 }
 
-function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onToggleSelect, onDebugGrouping }: ThreadRowProps) {
+function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onArchive, onDelete, onMarkSpam, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onToggleSelect, onDebugGrouping }: ThreadRowProps) {
 	const rowRef = useRef<HTMLDivElement>(null);
 
 	useEffect(function() {
@@ -252,6 +253,13 @@ function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onArc
 								onClick={function(e) { e.stopPropagation(); onOpenLabelPicker({ threadId: thread.threadId, subject: thread.subject || '' }); }}
 							>
 								<span className="glyphicon glyphicon-list"></span>
+							</button>
+							<button
+								className="btn btn-sm btn-info mark-spam"
+								title="Report spam"
+								onClick={function(e) { e.stopPropagation(); onMarkSpam(thread.threadId); }}
+							>
+								<span className="glyphicon glyphicon-ban-circle"></span>
 							</button>
 							<a
 								className="btn btn-sm btn-default view-on-gmail"
@@ -458,6 +466,7 @@ interface ThreadListAppProps {
 	removingBundleIds: Set<string>;
 	onArchive: (threadId: string) => void;
 	onDelete: (threadId: string) => void;
+	onMarkSpam: (threadId: string) => void;
 	onOpenLaterPicker: (payload: LaterPickerPayload) => void;
 	onOpenLabelPicker: (payload: LaterPickerPayload) => void;
 	onOpenThread: (payload: ThreadOpenPayload) => void;
@@ -470,7 +479,7 @@ interface ThreadListAppProps {
 	onDebugGrouping: (item: ThreadRowItem) => void;
 }
 
-function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup, onDebugGrouping }: ThreadListAppProps) {
+function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, onArchive, onDelete, onMarkSpam, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup, onDebugGrouping }: ThreadListAppProps) {
 	const [selectionMode, setSelectionMode] = useState(false);
 	const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
 	const [selectedMergeBundleIds, setSelectedMergeBundleIds] = useState<Set<string>>(new Set());
@@ -593,6 +602,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 								isSelected={selectedThreadIds.has(thread.threadId)}
 								onArchive={onArchive}
 								onDelete={onDelete}
+								onMarkSpam={onMarkSpam}
 								onOpenLaterPicker={onOpenLaterPicker}
 								onOpenLabelPicker={onOpenLabelPicker}
 								onOpenThread={onOpenThread}
@@ -616,6 +626,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 				isSelected={selectedThreadIds.has(thread.threadId)}
 				onArchive={onArchive}
 				onDelete={onDelete}
+				onMarkSpam={onMarkSpam}
 				onOpenLaterPicker={onOpenLaterPicker}
 				onOpenLabelPicker={onOpenLabelPicker}
 				onOpenThread={onOpenThread}
@@ -699,6 +710,7 @@ interface MountThreadListIslandDeps {
 	container: Element;
 	onArchive: (threadId: string) => void;
 	onDelete: (threadId: string) => void;
+	onMarkSpam: (threadId: string) => void;
 	onOpenLaterPicker: (payload: LaterPickerPayload) => void;
 	onOpenLabelPicker: (payload: LaterPickerPayload) => void;
 	onOpenThread: (payload: ThreadOpenPayload) => void;
@@ -711,7 +723,7 @@ interface MountThreadListIslandDeps {
 	onDebugGrouping: (item: ThreadRowItem) => void;
 }
 
-export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup, onDebugGrouping }: MountThreadListIslandDeps) {
+export function mountThreadListIsland({ container, onArchive, onDelete, onMarkSpam, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup, onDebugGrouping }: MountThreadListIslandDeps) {
 	const root = createRoot(container);
 	let groups: ThreadGroup[] = [];
 	let labels: LabelInfo[] = [];
@@ -728,6 +740,7 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onOpenLa
 				removingBundleIds={removingBundleIds}
 				onArchive={onArchive}
 				onDelete={onDelete}
+				onMarkSpam={onMarkSpam}
 				onOpenLaterPicker={onOpenLaterPicker}
 				onOpenLabelPicker={onOpenLabelPicker}
 				onOpenThread={onOpenThread}

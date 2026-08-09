@@ -200,3 +200,170 @@ test('thread trash route deletes the bundle when deleting leaves fewer than two 
 	assert.equal(saveCalls, 1);
 	assert.equal(res.statusCode, 200);
 });
+
+test('thread spam route labels the thread as spam and deletes the cached thread', async () => {
+	const app = createFakeApp();
+	let deletedThreadId = null;
+	registerThreadActionRoutes(app, {
+		lastRefresheds: {},
+		logger: { error() {}, info() {}, warn() {} },
+		threadRepository: {
+			async deleteThread(threadId) {
+				deletedThreadId = threadId;
+				return true;
+			},
+		},
+		async withGmailApi(_res, callback) {
+			return callback(async (request) => {
+				assert.equal(request.method, 'POST');
+				assert.equal(request.path, '/threads/abc123/modify');
+				assert.deepEqual(request.json, {
+					removeLabelIds: ['INBOX'],
+					addLabelIds: ['SPAM'],
+				});
+				return { id: 'gmail-response' };
+			});
+		},
+	});
+
+	const handler = findPostHandler(app, '/^\\/api\\/threads\\/([a-z0-9]+)\\/spam$/');
+	const res = createFakeResponse();
+
+	await handler({ params: ['abc123'] }, res);
+
+	assert.equal(deletedThreadId, 'abc123');
+	assert.equal(res.statusCode, 200);
+	assert.deepEqual(res.body, { id: 'gmail-response' });
+});
+
+test('thread spam route fails if cached thread deletion fails', async () => {
+	const app = createFakeApp();
+	registerThreadActionRoutes(app, {
+		lastRefresheds: {},
+		logger: { error() {}, info() {}, warn() {} },
+		threadRepository: {
+			async deleteThread() {
+				return false;
+			},
+		},
+		async withGmailApi(_res, callback) {
+			return callback(async () => ({ id: 'gmail-response' }));
+		},
+	});
+
+	const handler = findPostHandler(app, '/^\\/api\\/threads\\/([a-z0-9]+)\\/spam$/');
+	const res = createFakeResponse();
+
+	await handler({ params: ['abc123'] }, res);
+
+	assert.equal(res.sentStatus, 500);
+});
+
+test('thread spam route updates bundle membership when reporting one bundled thread', async () => {
+	const app = createFakeApp();
+	const bundleUpdates = [];
+	let saveCalls = 0;
+	registerThreadActionRoutes(app, {
+		bundles: {
+			getBundleForThread(threadId) {
+				assert.equal(threadId, 'abc123');
+				return {
+					bundleId: 'bundle-1',
+					threadIds: ['abc123', 'def456', 'ghi789'],
+				};
+			},
+			updateBundle(bundleId, threadIds) {
+				bundleUpdates.push({ bundleId, threadIds });
+			},
+			deleteBundle() {
+				throw new Error('should not delete bundle');
+			},
+			async save() {
+				saveCalls += 1;
+			},
+		},
+		lastRefresheds: {},
+		logger: { error() {}, info() {}, warn() {} },
+		threadRepository: {
+			async deleteThread() {
+				return true;
+			},
+		},
+		async withGmailApi(_res, callback) {
+			return callback(async () => ({ id: 'gmail-response' }));
+		},
+	});
+
+	const handler = findPostHandler(app, '/^\\/api\\/threads\\/([a-z0-9]+)\\/spam$/');
+	const res = createFakeResponse();
+
+	await handler({ params: ['abc123'] }, res);
+
+	assert.deepEqual(bundleUpdates, [{
+		bundleId: 'bundle-1',
+		threadIds: ['def456', 'ghi789'],
+	}]);
+	assert.equal(saveCalls, 1);
+	assert.equal(res.statusCode, 200);
+});
+
+test('thread move route applies the label, drops INBOX and UNREAD, and deletes the cached thread', async () => {
+	const app = createFakeApp();
+	let deletedThreadId = null;
+	registerThreadActionRoutes(app, {
+		lastRefresheds: {},
+		logger: { error() {}, info() {}, warn() {} },
+		threadRepository: {
+			async deleteThread(threadId) {
+				deletedThreadId = threadId;
+				return true;
+			},
+		},
+		async withGmailApi(_res, callback) {
+			return callback(async (request) => {
+				assert.equal(request.method, 'POST');
+				assert.equal(request.path, '/threads/abc123/modify');
+				assert.deepEqual(request.json, {
+					removeLabelIds: ['INBOX', 'UNREAD'],
+					addLabelIds: ['Label_2'],
+				});
+				return { id: 'gmail-response' };
+			});
+		},
+	});
+
+	const handler = findPostHandler(app, '/^\\/api\\/threads\\/([a-z0-9]+)\\/move$/');
+	const res = createFakeResponse();
+
+	await handler({ params: ['abc123'], body: { labelId: 'Label_2' } }, res);
+
+	assert.equal(deletedThreadId, 'abc123');
+	assert.equal(res.statusCode, 200);
+	assert.deepEqual(res.body, { id: 'gmail-response' });
+});
+
+test('thread move route rejects an invalid body without calling Gmail', async () => {
+	const app = createFakeApp();
+	let gmailCalled = false;
+	registerThreadActionRoutes(app, {
+		lastRefresheds: {},
+		logger: { error() {}, info() {}, warn() {} },
+		threadRepository: {
+			async deleteThread() {
+				throw new Error('should not delete the cached thread');
+			},
+		},
+		async withGmailApi(_res, callback) {
+			gmailCalled = true;
+			return callback(async () => ({ id: 'gmail-response' }));
+		},
+	});
+
+	const handler = findPostHandler(app, '/^\\/api\\/threads\\/([a-z0-9]+)\\/move$/');
+	const res = createFakeResponse();
+
+	await handler({ params: ['abc123'], body: {} }, res);
+
+	assert.equal(gmailCalled, false);
+	assert.equal(res.statusCode, 400);
+});

@@ -394,6 +394,11 @@ export function createAppApi() {
 				}
 			});
 		},
+		markThreadAsSpam(threadId: string): Promise<Result<JsonValue>> {
+			return request(`/api/threads/${threadId}/spam`, {
+				method: 'POST',
+			});
+		},
 		moveThreadToLabel(threadId: string, labelId: string): Promise<Result<JsonValue>> {
 			return request(`/api/threads/${threadId}/move`, {
 				body: JSON.stringify({labelId}),

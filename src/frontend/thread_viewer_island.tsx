@@ -149,6 +149,7 @@ interface ThreadViewerAppProps {
 	onDownloadAttachment: (opts: { messageId: string; attachmentId: string; attachmentName: string }) => void;
 	onDelete: () => void;
 	onArchive: () => void;
+	onMarkSpam: () => void;
 	onOpenLaterPicker: () => void;
 	onOpenLabelPicker: () => void;
 	onViewOnGmail: () => void;
@@ -170,6 +171,7 @@ function ThreadViewerApp({
 	onDownloadAttachment,
 	onDelete,
 	onArchive,
+	onMarkSpam,
 	onOpenLaterPicker,
 	onOpenLabelPicker,
 	onViewOnGmail,
@@ -245,6 +247,9 @@ function ThreadViewerApp({
 				<button className="btn btn-sm btn-primary label-thread" title="Label" onClick={onOpenLabelPicker}>
 					<span className="glyphicon glyphicon-list"></span>
 				</button>
+				<button className="btn btn-sm btn-info mark-spam" title="Report spam" onClick={onMarkSpam}>
+					<span className="glyphicon glyphicon-ban-circle"></span>
+				</button>
 				<button className="btn btn-sm btn-default view-on-gmail" title="View on Gmail" onClick={onViewOnGmail}>
 					<span className="glyphicon glyphicon-option-horizontal"></span>
 				</button>
@@ -271,12 +276,8 @@ interface ReplyAllOpts {
 	hideModal: () => void;
 }
 
-interface DeleteThreadOpts {
-	threadId: string | null;
-	hideModal: () => void;
-}
-
-interface ArchiveThreadOpts {
+/** Identifies the open thread and lets an action close the viewer when it succeeds. */
+interface ThreadModalOpts {
 	threadId: string | null;
 	hideModal: () => void;
 }
@@ -311,8 +312,9 @@ interface MountThreadViewerIslandDeps {
 	reportError: (error: Error) => void;
 	onReplyAll: (opts: ReplyAllOpts) => Promise<void>;
 	onDownloadAttachment: (opts: DownloadAttachmentOpts) => Promise<void>;
-	onDeleteThread: (opts: DeleteThreadOpts) => Promise<void>;
-	onArchiveThread: (opts: ArchiveThreadOpts) => Promise<void>;
+	onDeleteThread: (opts: ThreadModalOpts) => Promise<void>;
+	onArchiveThread: (opts: ThreadModalOpts) => Promise<void>;
+	onMarkThreadAsSpam: (opts: ThreadModalOpts) => Promise<void>;
 	onOpenLaterPicker: (opts: LaterPickerOpts) => void;
 	onOpenLabelPicker: (opts: LabelPickerOpts) => void;
 	onViewOnGmail: (opts: ViewOnGmailOpts) => void;
@@ -348,6 +350,7 @@ export function mountThreadViewerIsland({
 	onDownloadAttachment,
 	onDeleteThread,
 	onArchiveThread,
+	onMarkThreadAsSpam,
 	onOpenLaterPicker,
 	onOpenLabelPicker,
 	onViewOnGmail,
@@ -409,6 +412,12 @@ export function mountThreadViewerIsland({
 				}}
 				onArchive={function() {
 					onArchiveThread({
+						threadId: state.threadId,
+						hideModal: hideModal,
+					}).catch(reportError);
+				}}
+				onMarkSpam={function() {
+					onMarkThreadAsSpam({
 						threadId: state.threadId,
 						hideModal: hideModal,
 					}).catch(reportError);
