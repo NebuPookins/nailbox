@@ -4,6 +4,23 @@ import type {Application, Request, Response} from 'express';
 
 import {normalizeGmailMoveThreadDto, normalizeHideUntilDto} from '../validation/contracts.js';
 
+function validateBundleThreadIds(value: unknown): {threadIds?: string[]; humanErrorMessage?: string} {
+	if (!value || !Array.isArray((value as {threadIds?: unknown}).threadIds)) {
+		return {humanErrorMessage: 'threadIds must be an array of at least 2 thread IDs.'};
+	}
+	const threadIds = (value as {threadIds: unknown[]}).threadIds;
+	if (threadIds.length < 2) {
+		return {humanErrorMessage: 'threadIds must be an array of at least 2 thread IDs.'};
+	}
+	if (!threadIds.every((id) => typeof id === 'string')) {
+		return {humanErrorMessage: 'All threadIds must be strings.'};
+	}
+	if (new Set(threadIds).size !== threadIds.length) {
+		return {humanErrorMessage: 'threadIds must not contain duplicates.'};
+	}
+	return {threadIds};
+}
+
 export default function registerBundleRoutes(app: Application, dependencies: any): void {
 	const {
 		bundles,
@@ -24,16 +41,12 @@ export default function registerBundleRoutes(app: Application, dependencies: any
 
 	app.post('/api/bundles', async function(req: Request, res: Response) {
 		try {
-			const body = req.body;
-			if (!body || !Array.isArray(body.threadIds) || body.threadIds.length < 2) {
-				res.status(400).send({humanErrorMessage: 'threadIds must be an array of at least 2 thread IDs.'});
+			const validation = validateBundleThreadIds(req.body);
+			if (!validation.threadIds) {
+				res.status(400).send({humanErrorMessage: validation.humanErrorMessage});
 				return;
 			}
-			const threadIds: string[] = body.threadIds;
-			if (!threadIds.every((id) => typeof id === 'string')) {
-				res.status(400).send({humanErrorMessage: 'All threadIds must be strings.'});
-				return;
-			}
+			const {threadIds} = validation;
 			// Check that none of the threadIds are already in a bundle
 			for (const threadId of threadIds) {
 				if (bundles.getBundleForThread(threadId)) {
@@ -59,16 +72,13 @@ export default function registerBundleRoutes(app: Application, dependencies: any
 				res.sendStatus(404);
 				return;
 			}
+			const validation = validateBundleThreadIds(req.body);
+			if (!validation.threadIds) {
+				res.status(400).send({humanErrorMessage: validation.humanErrorMessage});
+				return;
+			}
+			const {threadIds} = validation;
 			const body = req.body;
-			if (!body || !Array.isArray(body.threadIds) || body.threadIds.length < 2) {
-				res.status(400).send({humanErrorMessage: 'threadIds must be an array of at least 2 thread IDs.'});
-				return;
-			}
-			const threadIds: string[] = body.threadIds;
-			if (!threadIds.every((id) => typeof id === 'string')) {
-				res.status(400).send({humanErrorMessage: 'All threadIds must be strings.'});
-				return;
-			}
 			// Optional: bundles to merge into this one (their threads are absorbed, then they are deleted)
 			const mergeBundleIds: string[] = Array.isArray(body.mergeBundleIds)
 				? body.mergeBundleIds.filter((id: unknown) => typeof id === 'string')
