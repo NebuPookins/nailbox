@@ -10,7 +10,7 @@ import { createThreadViewerController } from './thread_viewer_controller.js';
 import { createIslandManager } from './island_manager.js';
 import { wireModals } from './modal_wiring.js';
 import { createThreadUpdatesSocket } from './thread_updates_socket.js';
-import { type GroupingRulesConfig } from './thread_grouping.js';
+import { type GroupingRulesConfig, type ThreadOpenPayload } from './thread_grouping.js';
 import type { Result, ThreadDataResponse } from './api.js';
 import type { LabelResponse, HideUntilValue, AppApi } from './api.js';
 
@@ -55,6 +55,8 @@ document.addEventListener('DOMContentLoaded', function() {
 	var groupingRulesRoot = document.getElementById('grouping-rules-root');
 	var groupingRulesDebugModal = document.getElementById('grouping-rules-debug-modal')!;
 	var groupingRulesDebugRoot = document.getElementById('grouping-rules-debug-root');
+	var senderRuleModal = document.getElementById('sender-rule-modal')!;
+	var senderRuleRoot = document.getElementById('sender-rule-root');
 
 	var authStatus: AuthStatus = {
 		configured: false,
@@ -299,6 +301,15 @@ function renderSetupNeededState(message?: string): void {
 		return false;
 	}
 
+	function openSenderRulePicker(senderEmail: string): void {
+		var islandState = islands.ensureSenderRuleIsland();
+		if (!islandState) {
+			messengerGetter().error('Failed to load sender rule picker.');
+			return;
+		}
+		islandState.instance.open(senderEmail);
+	}
+
 	function showLaterPickerForBundle(bundleId: string): boolean {
 		var islandState = islands.ensureLaterPickerIsland();
 		if (!bundleId) {
@@ -368,12 +379,15 @@ function renderSetupNeededState(message?: string): void {
 		groupingRulesDebugRoot: groupingRulesDebugRoot,
 		labelPickerRoot: labelPickerRoot,
 		laterPickerRoot: laterPickerRoot,
+		senderRuleRoot: senderRuleRoot,
 		threadListRoot: threadListRoot,
 		hideSettingsModal: function() { hideModal(settingsModal); },
 		hideLabelPicker: function() { hideModal(labelPicker); },
 		hideLaterPicker: function() { hideModal(laterPicker); },
 		showGroupingRulesDebugModal: function() { showModal(groupingRulesDebugModal); },
 		hideGroupingRulesDebugModal: function() { hideModal(groupingRulesDebugModal); },
+		showSenderRuleModal: function() { showModal(senderRuleModal); },
+		hideSenderRuleModal: function() { hideModal(senderRuleModal); },
 		threadActionController: threadActionController,
 		getLabels: function() { return labelsCache; },
 		deleteThreadFromUI: deleteThreadFromUI,
@@ -438,6 +452,7 @@ function renderSetupNeededState(message?: string): void {
 			}
 			debugIslandState.instance.open(item, groupingRulesCache);
 		},
+		onAddSenderRule: openSenderRulePicker,
 		onUngroup: async function(bundleId: string) {
 			var updateMsg = messengerGetter().info('Ungrouping bundle ' + bundleId + '...');
 			const result = await appApi.deleteBundle(bundleId);
@@ -514,6 +529,7 @@ function renderSetupNeededState(message?: string): void {
 		reportError: function(error: unknown) {
 			messengerGetter().error(error instanceof Error ? error.message : String(error));
 		},
+		onAddSenderRule: openSenderRulePicker,
 		onReplyAll: async function(opts) {
 			await threadViewerController.replyAll(opts);
 		},
@@ -573,7 +589,7 @@ function renderSetupNeededState(message?: string): void {
 			});
 		},
 	});
-	function openThreadViewer(threadSummary: { threadId?: string; subject?: string; snippet?: string; sendersText?: string; receiversText?: string }) {
+	function openThreadViewer(threadSummary: Partial<ThreadOpenPayload>) {
 		return threadViewerIsland.open(threadSummary);
 	}
 	var threadListController = createThreadListController({
@@ -615,6 +631,7 @@ function renderSetupNeededState(message?: string): void {
 		settingsBtn,
 		settingsModal,
 		groupingRulesDebugModal,
+		senderRuleModal,
 		threadViewerController,
 		islands,
 		getThreadViewerThreadId,

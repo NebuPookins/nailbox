@@ -1,3 +1,5 @@
+import { formatPerson } from './person_presenter.js';
+
 type MomentLib = (ts?: unknown) => { isSame(other: unknown, unit: string): boolean; format(fmt: string): string };
 
 interface Label { id: string; name?: string; type?: string; }
@@ -79,24 +81,6 @@ function renderParticipants(people: Person[] | undefined): string {
 	}).filter(Boolean).join(' ');
 }
 
-function renderPrimaryPerson(person: Person | undefined): string {
-	if (!person) {
-		return '';
-	}
-	var name = person.name || '';
-	var email = person.email || '';
-	if (!name && !email) {
-		return '';
-	}
-	if (!name) {
-		return email;
-	}
-	if (!email) {
-		return name;
-	}
-	return name + ' (' + email + ')';
-}
-
 function renderCountSuffix(items: unknown[] | undefined, subtractAmount: number): string {
 	var count = Math.max((items || []).length - subtractAmount, 0);
 	if (count <= 0) {
@@ -116,7 +100,7 @@ export function renderThreadItem(thread: ThreadData, options: RenderThreadItemOp
 	var visibility = escapeHtml(thread.visibility || '');
 	var sendersTitle = escapeHtml(renderParticipants(senders));
 	var receiversTitle = escapeHtml(renderParticipants(receivers));
-	var primarySender = escapeHtml(renderPrimaryPerson(senders[0]));
+	var primarySender = escapeHtml(formatPerson(senders[0]));
 	var primaryReceiver = escapeHtml(receivers[0] && receivers[0].name ? receivers[0].name : '');
 	var badgesHtml = mainDisplayedLabelIds.map(function(labelId) {
 		return '<span class="badge">' + escapeHtml(getLabelName(labelId, labels)) + '</span>';

@@ -43,12 +43,14 @@ html(lang="en")
 				line-height: 1.2;
 				margin-top: 6px;
 			}
-			#label-picker-root .label-picker-grid {
+			#label-picker-root .label-picker-grid,
+			#sender-rule-root .sender-rule-grid {
 				display: flex;
 				flex-wrap: wrap;
 				gap: 8px;
 			}
-			#label-picker-root .label-picker-grid .btn {
+			#label-picker-root .label-picker-grid .btn,
+			#sender-rule-root .sender-rule-grid .btn {
 				min-width: 120px;
 			}
 			#label-picker-root .label-picker-grid .btn.label-picker-dimmed {
@@ -248,6 +250,10 @@ html(lang="en")
 			.modal-dialog.modal-lg
 				.modal-content
 					#grouping-rules-debug-root
+		#sender-rule-modal.modal.fade(tabindex="-1" role="dialog")
+			.modal-dialog
+				.modal-content
+					#sender-rule-root
 		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.2.1/lodash.js')
 		script(type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.11.2/moment.js')
 		script(type='text/javascript' src="public/filesize.min.js")

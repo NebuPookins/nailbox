@@ -1,7 +1,8 @@
 import { filterSelectableLabels } from './thread_action_controller.js';
-import type { GroupingRulesConfig, ThreadGroup, ThreadRowItem } from './thread_grouping.js';
+import type { GroupingRulesConfig, ThreadGroup, ThreadOpenPayload, ThreadRowItem } from './thread_grouping.js';
 import type { HideUntilValue } from './api.js';
 import type { GroupingRulesDebugIsland } from './grouping_rules_debug_island.js';
+import type { SenderRuleIsland } from './sender_rule_island.js';
 
 interface LabelData {
 	id: string;
@@ -42,14 +43,6 @@ interface BundleLaterPickerPayload {
 	bundleId: string;
 }
 
-interface ThreadOpenPayload {
-	threadId: string;
-	subject: string;
-	snippet: string;
-	sendersText: string;
-	receiversText: string;
-}
-
 interface LaterPickerIsland {
 	open(opts: { onHideThread: (threadId: string, hideUntil: HideUntilValue) => Promise<void>; threadId: string }): void;
 	openForBundle(opts: { bundleId: string; onHideBundle: (bundleId: string, hideUntil: HideUntilValue) => Promise<void> }): void;
@@ -82,10 +75,12 @@ interface IslandState<T> {
 interface FrontendApi {
 	mountGroupingRulesSettings?(opts: { container: Element; onSaved?: () => void }): GroupingRulesIsland;
 	mountGroupingRulesDebugIsland?(opts: { container: Element; showModal: () => void; hideModal: () => void }): GroupingRulesDebugIsland;
+	mountSenderRulePicker?(opts: { container: Element; showModal: () => void; hideModal: () => void; onSaved: () => void }): SenderRuleIsland;
 	mountLaterPickerIsland?(opts: { container: Element; notify: Notify; onDismiss?: () => void; onHidden?: (id: string) => void }): LaterPickerIsland;
 	mountLabelPickerIsland?(opts: { container: Element; notify: Notify; onDismiss?: () => void; onMoveThread?: (threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined>; onMoveBundle?: (bundleId: string, labelId: string) => Promise<void> }): LabelPickerIsland;
 	mountThreadListIsland?(opts: {
 		container: Element;
+		onAddSenderRule: (senderEmail: string) => void;
 		onArchive: (id: string) => void;
 		onDelete: (id: string) => void;
 		onMarkSpam: (id: string) => void;
@@ -108,12 +103,15 @@ export function createIslandManager({
 	groupingRulesDebugRoot,
 	labelPickerRoot,
 	laterPickerRoot,
+	senderRuleRoot,
 	threadListRoot,
 	hideSettingsModal,
 	hideLabelPicker,
 	hideLaterPicker,
 	showGroupingRulesDebugModal,
 	hideGroupingRulesDebugModal,
+	showSenderRuleModal,
+	hideSenderRuleModal,
 	threadActionController,
 	getLabels,
 	deleteThreadFromUI,
@@ -135,18 +133,22 @@ export function createIslandManager({
 	onMoveBundle,
 	onUngroup,
 	onDebugGrouping,
+	onAddSenderRule,
 }: {
 	frontendApi: FrontendApi;
 	groupingRulesRoot: Element | null;
 	groupingRulesDebugRoot: Element | null;
 	labelPickerRoot: Element | null;
 	laterPickerRoot: Element | null;
+	senderRuleRoot: Element | null;
 	threadListRoot: Element | null;
 	hideSettingsModal(): void;
 	hideLabelPicker(): void;
 	hideLaterPicker(): void;
 	showGroupingRulesDebugModal(): void;
 	hideGroupingRulesDebugModal(): void;
+	showSenderRuleModal(): void;
+	hideSenderRuleModal(): void;
 	threadActionController: ThreadActionController;
 	getLabels(): LabelData[];
 	deleteThreadFromUI(threadId: string): void;
@@ -168,11 +170,13 @@ export function createIslandManager({
 	onMoveBundle(bundleId: string, labelId: string): Promise<void>;
 	onUngroup(bundleId: string): void;
 	onDebugGrouping(item: ThreadRowItem): void;
+	onAddSenderRule(senderEmail: string): void;
 }) {
 	let groupingRulesIsland: GroupingRulesIsland | null = null;
 	let groupingRulesDebugIsland: GroupingRulesDebugIsland | null = null;
 	let labelPickerIsland: LabelPickerIsland | null = null;
 	let laterPickerIsland: LaterPickerIsland | null = null;
+	let senderRuleIsland: SenderRuleIsland | null = null;
 	let threadListIsland: ThreadListIsland | null = null;
 
 	function buildLabelPickerLabels(): LabelData[] {
@@ -200,6 +204,14 @@ export function createIslandManager({
 		};
 	}
 
+	/** Reloads the saved rules and re-groups the thread list against them. */
+	function refreshAfterGroupingRulesSaved(): void {
+		Promise.resolve(onGroupingRulesSaved?.()).catch(reportAsyncError);
+		updateUiWithThreadsFromServer(
+			messengerGetter().info('Refreshing threads from cache...')
+		).catch(reportAsyncError);
+	}
+
 	function ensureGroupingRulesIsland(): IslandState<GroupingRulesIsland> | null {
 		if (groupingRulesIsland) {
 			return {
@@ -216,11 +228,8 @@ export function createIslandManager({
 		groupingRulesIsland = frontendApi.mountGroupingRulesSettings({
 			container: groupingRulesRoot,
 			onSaved: function() {
-				Promise.resolve(onGroupingRulesSaved?.()).catch(reportAsyncError);
 				hideSettingsModal();
-				updateUiWithThreadsFromServer(
-					messengerGetter().info('Refreshing threads from cache...')
-				).catch(reportAsyncError);
+				refreshAfterGroupingRulesSaved();
 			}
 		});
 		return {
@@ -249,6 +258,31 @@ export function createIslandManager({
 		});
 		return {
 			instance: groupingRulesDebugIsland,
+			wasCreated: true
+		};
+	}
+
+	function ensureSenderRuleIsland(): IslandState<SenderRuleIsland> | null {
+		if (senderRuleIsland) {
+			return {
+				instance: senderRuleIsland,
+				wasCreated: false
+			};
+		}
+		if (!senderRuleRoot) {
+			return null;
+		}
+		if (typeof frontendApi.mountSenderRulePicker !== 'function') {
+			return null;
+		}
+		senderRuleIsland = frontendApi.mountSenderRulePicker({
+			container: senderRuleRoot,
+			showModal: showSenderRuleModal,
+			hideModal: hideSenderRuleModal,
+			onSaved: refreshAfterGroupingRulesSaved,
+		});
+		return {
+			instance: senderRuleIsland,
 			wasCreated: true
 		};
 	}
@@ -325,6 +359,7 @@ export function createIslandManager({
 		}
 		threadListIsland = frontendApi.mountThreadListIsland({
 			container: threadListRoot,
+			onAddSenderRule: onAddSenderRule,
 			onArchive: onArchiveThread,
 			onDelete: onDeleteThread,
 			onMarkSpam: onMarkThreadAsSpam,
@@ -359,6 +394,7 @@ export function createIslandManager({
 		ensureGroupingRulesDebugIsland,
 		ensureLabelPickerIsland,
 		ensureLaterPickerIsland,
+		ensureSenderRuleIsland,
 		ensureThreadListIsland,
 	};
 }

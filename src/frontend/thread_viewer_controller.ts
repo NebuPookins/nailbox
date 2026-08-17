@@ -11,21 +11,18 @@ interface Messenger {
 	error(message: string): MsgHandle;
 }
 
-import type { ThreadMessageDto } from '../server/types/thread.js';
+import type { PersonDto, ThreadMessageDto } from '../server/types/thread.js';
+import type { ThreadOpenPayload } from './thread_grouping.js';
 import type { Result, ThreadDataResponse } from './api.js';
 
 type RenderedMessage = ThreadMessageDto & { duration: string };
 
-interface OpenThreadOptions {
+interface OpenThreadOptions extends Partial<ThreadOpenPayload> {
 	threadId: string;
-	subject?: string;
-	snippet?: string;
-	sendersText?: string;
-	receiversText?: string;
 	setThreadId(id: string): void;
 	setTitle(title: string): void;
-	setSenders(s: string): void;
-	setReceivers(s: string): void;
+	setSenders(people: PersonDto[]): void;
+	setReceivers(people: PersonDto[]): void;
 	setThreadsLoadingText(text: string): void;
 	showLoading(): void;
 	showModal(): void;
@@ -173,8 +170,8 @@ export function createThreadViewerController({
 			var actionMessenger = messengerGetter().info('Downloading thread data for ' + threadId + '...');
 			options.setThreadId(threadId);
 			options.setTitle(options.subject || '');
-			options.setSenders(options.sendersText || '');
-			options.setReceivers(options.receiversText || '');
+			options.setSenders(options.senders || []);
+			options.setReceivers(options.receivers || []);
 			options.setThreadsLoadingText(options.snippet || '');
 			options.showLoading();
 			options.showModal();
