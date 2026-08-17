@@ -1,3 +1,5 @@
+import type { PersonDto } from '../server/types/thread.js';
+
 type Visibility = 'updated' | 'visible' | 'when-i-have-time' | 'stale' | 'hidden';
 export type SortType = 'mostRecent' | 'shortest';
 export type ConditionType = 'sender_name' | 'sender_email' | 'subject';
@@ -38,6 +40,15 @@ export interface BundleSummary {
 }
 
 export type ThreadRowItem = ThreadSummary | BundleSummary;
+
+/** What the thread list hands to the thread viewer when a row is opened. */
+export interface ThreadOpenPayload {
+	threadId: string;
+	subject: string;
+	snippet: string;
+	senders: PersonDto[];
+	receivers: PersonDto[];
+}
 
 export interface ThreadGroup {
 	label: string;

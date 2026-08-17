@@ -455,8 +455,8 @@ export type AppApi = ReturnType<typeof createAppApi>;
 export function createGroupingRulesApi(): {
 	/** Loads the current email grouping rules configuration from the server. */
 	loadRules(): Promise<Result<GroupingRulesConfig>>;
-	/** Saves the provided grouping rules configuration to the server. */
-	saveRules(payload: JsonValue): Promise<Result<JsonValue>>;
+	/** Saves the given configuration to the server, replacing the stored one. */
+	saveRules(config: GroupingRulesConfig): Promise<Result<JsonValue>>;
 } {
 	return {
 		async loadRules(): Promise<Result<GroupingRulesConfig>> {
@@ -471,11 +471,13 @@ export function createGroupingRulesApi(): {
 				return { ok: false, error: new Error(parseResult.error.message) };
 			}
 		},
-		saveRules(payload: JsonValue): Promise<Result<JsonValue>> {
+		saveRules(config: GroupingRulesConfig): Promise<Result<JsonValue>> {
 			return request('/api/email-grouping-rules', {
-				body: JSON.stringify(payload),
+				body: JSON.stringify(config),
 				method: 'POST',
 			});
 		},
 	};
 }
+
+export type GroupingRulesApi = ReturnType<typeof createGroupingRulesApi>;

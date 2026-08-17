@@ -125,8 +125,8 @@ test('openThread renders deleted-message notice and non-deleted messages', async
 		hideLoading() {
 			rendered.push(['hideLoading']);
 		},
-		receiversText: 'Receiver',
-		sendersText: 'Sender',
+		receivers: [{ name: 'Receiver', email: 'receiver@example.com' }],
+		senders: [{ name: 'Sender', email: 'sender@example.com' }],
 		setReceivers(value) {
 			rendered.push(['receivers', value]);
 		},
@@ -157,8 +157,8 @@ test('openThread renders deleted-message notice and non-deleted messages', async
 	assert.deepEqual(rendered, [
 		['threadId', 'thread-1'],
 		['title', 'Subject'],
-		['senders', 'Sender'],
-		['receivers', 'Receiver'],
+		['senders', [{ name: 'Sender', email: 'sender@example.com' }]],
+		['receivers', [{ name: 'Receiver', email: 'receiver@example.com' }]],
 		['snippet', 'Loading snippet'],
 		['showLoading'],
 		['showModal'],

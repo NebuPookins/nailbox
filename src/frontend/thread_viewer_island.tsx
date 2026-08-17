@@ -1,6 +1,9 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ThreadMessageDto, PersonDto } from '../server/types/thread.js';
+import type { ThreadOpenPayload } from './thread_grouping.js';
+import { AddSenderRuleButton } from './add_sender_rule_button.js';
+import { formatPerson } from './person_presenter.js';
 
 type ThreadMessage = ThreadMessageDto & { duration?: string };
 
@@ -12,8 +15,8 @@ interface DeletedMessagesPayload {
 interface ThreadViewerState {
 	threadId: string | null;
 	subject: string;
-	senders: string;
-	receivers: string;
+	senders: PersonDto[];
+	receivers: PersonDto[];
 	loadingText: string;
 	isLoading: boolean;
 	messages: ThreadMessage[];
@@ -25,11 +28,43 @@ function pluralize(n: number, singular: string, plural: string): string {
 	return n === 1 ? singular : plural;
 }
 
-function renderPeople(people: Array<PersonDto | null> | undefined): string {
-	return (people || [])
-		.map(function(p) { return p && p.name ? p.name : ''; })
-		.filter(Boolean)
-		.join(' ');
+interface PeopleListProps {
+	people: Array<PersonDto | null> | undefined;
+	onAddSenderRule?: (senderEmail: string) => void;
+}
+
+/** Keeps only the people there is something to show for. */
+function displayablePeople(people: Array<PersonDto | null> | undefined): PersonDto[] {
+	return (people || []).filter(function(person): person is PersonDto {
+		return Boolean(person && (person.name || person.email));
+	});
+}
+
+/**
+ * Renders people as `Name (email)`, optionally with a button that turns each
+ * address into an email grouping rule. People with neither a name nor an email
+ * are skipped.
+ */
+function PeopleList({ people, onAddSenderRule }: PeopleListProps) {
+	const displayable = displayablePeople(people);
+	if (displayable.length === 0) {
+		return null;
+	}
+	return (
+		<>
+			{displayable.map(function(person, index) {
+				return (
+					<span className="person" key={index}>
+						{index > 0 ? ', ' : ''}
+						{formatPerson(person)}
+						{onAddSenderRule ? (
+							<AddSenderRuleButton person={person} onAddSenderRule={onAddSenderRule} />
+						) : null}
+					</span>
+				);
+			})}
+		</>
+	);
 }
 
 function formatPrettyTimestamp(timestamp: number): string {
@@ -78,19 +113,21 @@ function DeletedMessagesNotice({ num, threadId }: DeletedMessagesNoticeProps) {
 
 interface MessagePanelProps {
 	message: ThreadMessage;
+	onAddSenderRule: (senderEmail: string) => void;
 	onDownloadAttachment: (opts: { messageId: string; attachmentId: string; attachmentName: string }) => void;
 }
 
-function MessagePanel({ message, onDownloadAttachment }: MessagePanelProps) {
+function MessagePanel({ message, onAddSenderRule, onDownloadAttachment }: MessagePanelProps) {
 	return (
 		<div className="message panel panel-default" data-message-id={message.messageId}>
 			<div className="panel-heading">
 				<div className="panel-title">
 					<div className="row">
 						<div className="col-xs-6">
-							<strong>From</strong>{' '}{renderPeople(message.from)}
-							{message.to && message.to[0] && message.to[0].name
-								? <><strong>To</strong>{' '}{renderPeople(message.to)}</>
+							<strong>From</strong>{' '}
+							<PeopleList people={message.from} onAddSenderRule={onAddSenderRule} />
+							{displayablePeople(message.to).length > 0
+								? <>{' '}<strong>To</strong>{' '}<PeopleList people={message.to} /></>
 								: null}
 						</div>
 						<div className="col-xs-2">{formatPrettyTimestamp(message.date)}</div>
@@ -136,14 +173,15 @@ function MessagePanel({ message, onDownloadAttachment }: MessagePanelProps) {
 
 interface ThreadViewerAppProps {
 	subject: string;
-	senders: string;
-	receivers: string;
+	senders: PersonDto[];
+	receivers: PersonDto[];
 	loadingText: string;
 	isLoading: boolean;
 	messages: ThreadMessage[];
 	deletedMessages: DeletedMessagesPayload | null;
 	replyText: string;
 	lastMessageId: string | null;
+	onAddSenderRule: (senderEmail: string) => void;
 	onReplyTextChange: (text: string) => void;
 	onReplyAll: (body: string, inReplyTo: string | null) => void;
 	onDownloadAttachment: (opts: { messageId: string; attachmentId: string; attachmentName: string }) => void;
@@ -166,6 +204,7 @@ function ThreadViewerApp({
 	deletedMessages,
 	replyText,
 	lastMessageId,
+	onAddSenderRule,
 	onReplyTextChange,
 	onReplyAll,
 	onDownloadAttachment,
@@ -185,9 +224,14 @@ function ThreadViewerApp({
 				</button>
 				<h4 className="modal-title">{subject}</h4>
 				<strong>Senders&nbsp;</strong>
-				<span className="senders">{senders}</span>
+				<span className="senders">
+					<PeopleList people={senders} onAddSenderRule={onAddSenderRule} />
+				</span>
+				{' '}
 				<strong>Receivers&nbsp;</strong>
-				<span className="receivers">{receivers}</span>
+				<span className="receivers">
+					<PeopleList people={receivers} />
+				</span>
 			</div>
 			<div className="modal-body">
 				{isLoading && (
@@ -213,6 +257,7 @@ function ThreadViewerApp({
 							<MessagePanel
 								key={message.messageId || i}
 								message={message}
+								onAddSenderRule={onAddSenderRule}
 								onDownloadAttachment={onDownloadAttachment}
 							/>
 						);
@@ -259,13 +304,7 @@ function ThreadViewerApp({
 	);
 }
 
-interface ThreadSummaryInput {
-	threadId?: string;
-	subject?: string;
-	snippet?: string;
-	sendersText?: string;
-	receiversText?: string;
-}
+type ThreadSummaryInput = Partial<ThreadOpenPayload>;
 
 interface ReplyAllOpts {
 	body: string;
@@ -310,6 +349,7 @@ interface MountThreadViewerIslandDeps {
 	hideModal: () => void;
 	getEmailAddress: () => string | null;
 	reportError: (error: Error) => void;
+	onAddSenderRule: (senderEmail: string) => void;
 	onReplyAll: (opts: ReplyAllOpts) => Promise<void>;
 	onDownloadAttachment: (opts: DownloadAttachmentOpts) => Promise<void>;
 	onDeleteThread: (opts: ThreadModalOpts) => Promise<void>;
@@ -326,10 +366,10 @@ export interface ThreadViewerAdapter {
 	clearThreads: () => void;
 	getCurrentThreadId: () => string | null;
 	hideLoading: () => void;
-	receiversText: string | undefined;
-	sendersText: string | undefined;
-	setReceivers: (text: string) => void;
-	setSenders: (text: string) => void;
+	receivers: PersonDto[] | undefined;
+	senders: PersonDto[] | undefined;
+	setReceivers: (people: PersonDto[]) => void;
+	setSenders: (people: PersonDto[]) => void;
 	setThreadId: (threadId: string) => void;
 	setThreadsLoadingText: (text: string) => void;
 	setTitle: (subject: string) => void;
@@ -346,6 +386,7 @@ export function mountThreadViewerIsland({
 	hideModal,
 	getEmailAddress,
 	reportError,
+	onAddSenderRule,
 	onReplyAll,
 	onDownloadAttachment,
 	onDeleteThread,
@@ -360,8 +401,8 @@ export function mountThreadViewerIsland({
 	let state: ThreadViewerState = {
 		threadId: null,
 		subject: '',
-		senders: '',
-		receivers: '',
+		senders: [],
+		receivers: [],
 		loadingText: '',
 		isLoading: false,
 		messages: [],
@@ -384,6 +425,7 @@ export function mountThreadViewerIsland({
 				deletedMessages={state.deletedMessages}
 				replyText={state.replyText}
 				lastMessageId={lastMessageId}
+				onAddSenderRule={onAddSenderRule}
 				onReplyTextChange={function(text) {
 					state.replyText = text;
 					render();
@@ -450,8 +492,8 @@ export function mountThreadViewerIsland({
 		state = {
 			threadId: null,
 			subject: threadSummary.subject || '',
-			senders: threadSummary.sendersText || '',
-			receivers: threadSummary.receiversText || '',
+			senders: threadSummary.senders || [],
+			receivers: threadSummary.receivers || [],
 			loadingText: threadSummary.snippet || '',
 			isLoading: false,
 			messages: [],
@@ -480,14 +522,14 @@ export function mountThreadViewerIsland({
 				state.isLoading = false;
 				render();
 			},
-			receiversText: threadSummary.receiversText,
-			sendersText: threadSummary.sendersText,
-			setReceivers: function(text) {
-				state.receivers = text;
+			receivers: threadSummary.receivers,
+			senders: threadSummary.senders,
+			setReceivers: function(people) {
+				state.receivers = people;
 				render();
 			},
-			setSenders: function(text) {
-				state.senders = text;
+			setSenders: function(people) {
+				state.senders = people;
 				render();
 			},
 			setThreadId: function(threadId) {
@@ -521,8 +563,8 @@ export function mountThreadViewerIsland({
 		state = {
 			threadId: null,
 			subject: '',
-			senders: '',
-			receivers: '',
+			senders: [],
+			receivers: [],
 			loadingText: '',
 			isLoading: false,
 			messages: [],

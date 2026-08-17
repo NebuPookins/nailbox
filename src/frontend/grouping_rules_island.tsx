@@ -17,7 +17,7 @@ interface Rule {
 
 interface GroupingRulesApi {
 	loadRules(): Promise<Result<GroupingRulesConfig>>;
-	saveRules(payload: unknown): Promise<Result<unknown>>; //TODO: Avoid use of unknown.
+	saveRules(config: GroupingRulesConfig): Promise<Result<unknown>>;
 }
 
 function createEmptyRule(): Rule {

@@ -1,4 +1,4 @@
-import type { BundleSummary } from './thread_grouping.js';
+import type { BundleSummary, ThreadOpenPayload } from './thread_grouping.js';
 
 interface ThreadActionController {
 	deleteThread(threadId: string): Promise<unknown>;
@@ -17,13 +17,7 @@ interface ThreadPayload {
 	subject: string;
 }
 
-interface ThreadViewPayload {
-	threadId?: string;
-	subject?: string;
-	snippet?: string;
-	sendersText?: string;
-	receiversText?: string;
-}
+type ThreadViewPayload = Partial<ThreadOpenPayload>;
 
 export function createThreadListController({
 	openLabelPicker,

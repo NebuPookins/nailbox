@@ -1,15 +1,16 @@
 import { createAppApi, createGroupingRulesApi } from './api.js';
-import type { AppApi, Result, JsonValue, HideUntilValue } from './api.js';
+import type { AppApi, GroupingRulesApi, HideUntilValue } from './api.js';
 import { mountAuthShellIsland } from './auth_shell_island.js';
 import { mountGroupingRulesIsland } from './grouping_rules_island.js';
 import { mountGroupingRulesDebugIsland } from './grouping_rules_debug_island.js';
 import { mountLabelPickerIsland } from './label_picker_island.js';
 import { mountLaterPickerIsland } from './later_picker_island.js';
+import { mountSenderRuleIsland, type SenderRuleIsland } from './sender_rule_island.js';
 import { mountThreadListIsland } from './thread_list_island.js';
 import { mountThreadViewerIsland } from './thread_viewer_island.js';
 import type { ThreadViewerAdapter } from './thread_viewer_island.js';
 import type { Notify } from './island_manager.js';
-import type { GroupingRulesConfig, ThreadGroup, ThreadRowItem } from './thread_grouping.js';
+import type { GroupingRulesConfig, ThreadGroup, ThreadOpenPayload, ThreadRowItem } from './thread_grouping.js';
 import type { GroupingRulesDebugIsland } from './grouping_rules_debug_island.js';
 
 export function mountGroupingRulesSettings({ container, onSaved }: {
@@ -23,12 +24,24 @@ export function mountGroupingRulesSettings({ container, onSaved }: {
 	});
 }
 
+export function mountSenderRulePicker({ container, showModal, hideModal, onSaved }: {
+	container: Element;
+	showModal: () => void;
+	hideModal: () => void;
+	onSaved: () => void;
+}): SenderRuleIsland {
+	return mountSenderRuleIsland({
+		api: createGroupingRulesApi(),
+		container,
+		showModal,
+		hideModal,
+		onSaved,
+	});
+}
+
 interface FrontendApi {
 	createAppApi(): AppApi;
-	createGroupingRulesApi(): {
-		loadRules(): Promise<Result<GroupingRulesConfig>>;
-		saveRules(payload: JsonValue): Promise<Result<JsonValue>>;
-	};
+	createGroupingRulesApi(): GroupingRulesApi;
 	mountAuthShellIsland(opts: {
 		statusContainer: Element;
 		authControlsContainer: Element;
@@ -43,7 +56,7 @@ interface FrontendApi {
 		setSetupNeeded(message?: string | null): void;
 	};
 	mountGroupingRulesIsland(opts: {
-		api: { loadRules(): Promise<Result<GroupingRulesConfig>>; saveRules(payload: unknown): Promise<Result<unknown>> };
+		api: GroupingRulesApi;
 		container: Element;
 		onSaved?: () => void;
 	}): {
@@ -86,8 +99,15 @@ interface FrontendApi {
 		showModal: () => void;
 		hideModal: () => void;
 	}): GroupingRulesDebugIsland;
+	mountSenderRulePicker(opts: {
+		container: Element;
+		showModal: () => void;
+		hideModal: () => void;
+		onSaved: () => void;
+	}): SenderRuleIsland;
 	mountThreadListIsland(opts: {
 		container: Element;
+		onAddSenderRule: (senderEmail: string) => void;
 		onArchive: (threadId: string) => void;
 		onArchiveBundle: (bundleId: string) => void;
 		onCreateBundle: (threadIds: string[]) => void;
@@ -99,7 +119,7 @@ interface FrontendApi {
 		onOpenLabelPickerForBundle: (payload: { bundleId: string }) => void;
 		onOpenLaterPicker: (payload: { threadId: string; subject: string }) => void;
 		onOpenLaterPickerForBundle: (payload: { bundleId: string }) => void;
-		onOpenThread: (payload: { threadId: string; subject: string; snippet: string; sendersText: string; receiversText: string }) => void;
+		onOpenThread: (payload: ThreadOpenPayload) => void;
 		onUngroup: (bundleId: string) => void;
 	}): {
 		createBundleRow(bundleId: string, threadIds: string[]): void;
@@ -115,6 +135,7 @@ interface FrontendApi {
 		container: Element;
 		getEmailAddress: () => string | null;
 		hideModal: () => void;
+		onAddSenderRule: (senderEmail: string) => void;
 		onArchiveThread: (opts: { threadId: string | null; hideModal: () => void }) => Promise<void>;
 		onDeleteThread: (opts: { threadId: string | null; hideModal: () => void }) => Promise<void>;
 		onMarkThreadAsSpam: (opts: { threadId: string | null; hideModal: () => void }) => Promise<void>;
@@ -128,7 +149,7 @@ interface FrontendApi {
 	}): {
 		clear(): void;
 		getThreadId(): string | null;
-		open(threadSummary: { threadId?: string; subject?: string; snippet?: string; sendersText?: string; receiversText?: string }): ThreadViewerAdapter;
+		open(threadSummary: Partial<ThreadOpenPayload>): ThreadViewerAdapter;
 	};
 }
 
@@ -141,6 +162,7 @@ const frontendApi: FrontendApi = {
 	mountGroupingRulesSettings,
 	mountLabelPickerIsland,
 	mountLaterPickerIsland,
+	mountSenderRulePicker,
 	mountThreadListIsland,
 	mountThreadViewerIsland,
 };

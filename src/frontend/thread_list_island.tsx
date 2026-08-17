@@ -6,12 +6,15 @@ import {
 	getThreadMainDisplayedLabelIds,
 	getLabelName,
 } from './thread_list_presenter.js';
+import { AddSenderRuleButton } from './add_sender_rule_button.js';
+import { formatPerson } from './person_presenter.js';
 import {
 	groupThreads as regroupThreads,
 	type BundleSummary,
 	type BundleData,
 	type GroupingRulesConfig,
 	type ThreadGroup,
+	type ThreadOpenPayload,
 	type ThreadRowItem,
 	type ThreadSummary,
 } from './thread_grouping.js';
@@ -24,14 +27,6 @@ interface Person {
 interface LabelInfo {
 	id: string;
 	name: string;
-}
-
-interface ThreadOpenPayload {
-	threadId: string;
-	subject: string;
-	snippet: string;
-	sendersText: string;
-	receiversText: string;
 }
 
 interface LaterPickerPayload {
@@ -90,19 +85,28 @@ function renderParticipants(people: Person[]): string {
 	}).filter(Boolean).join(' ');
 }
 
-function renderPrimaryPerson(person: Person | undefined): string {
-	if (!person) return '';
-	const name = person.name || '';
-	const email = person.email || '';
-	if (!name && !email) return '';
-	if (!name) return email;
-	if (!email) return name;
-	return name + ' (' + email + ')';
-}
-
 function renderCountSuffix(items: unknown[], subtractAmount: number): string {
 	const count = Math.max((items || []).length - subtractAmount, 0);
 	return count <= 0 ? '' : ' (and ' + count + ' more)';
+}
+
+interface SenderSummaryProps {
+	senders: Person[];
+	title: string;
+	onAddSenderRule: (senderEmail: string) => void;
+}
+
+/** Shows the first sender, how many others there are, and the grouping-rule button. */
+function SenderSummary({ senders, title, onAddSenderRule }: SenderSummaryProps) {
+	return (
+		<React.Fragment>
+			<span className="senders" title={title}>
+				{formatPerson(senders[0])}
+				{senders.length > 1 ? renderCountSuffix(senders, 1) : ''}
+			</span>
+			<AddSenderRuleButton person={senders[0]} onAddSenderRule={onAddSenderRule} />
+		</React.Fragment>
+	);
 }
 
 interface ThreadRowProps {
@@ -111,6 +115,7 @@ interface ThreadRowProps {
 	isRemoving: boolean;
 	showCheckbox?: boolean;
 	isSelected?: boolean;
+	onAddSenderRule: (senderEmail: string) => void;
 	onArchive: (threadId: string) => void;
 	onDelete: (threadId: string) => void;
 	onMarkSpam: (threadId: string) => void;
@@ -121,7 +126,7 @@ interface ThreadRowProps {
 	onDebugGrouping: (item: ThreadRowItem) => void;
 }
 
-function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onArchive, onDelete, onMarkSpam, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onToggleSelect, onDebugGrouping }: ThreadRowProps) {
+function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onAddSenderRule, onArchive, onDelete, onMarkSpam, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onToggleSelect, onDebugGrouping }: ThreadRowProps) {
 	const rowRef = useRef<HTMLDivElement>(null);
 
 	useEffect(function() {
@@ -157,8 +162,8 @@ function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onArc
 			threadId: thread.threadId,
 			subject: thread.subject || '',
 			snippet: thread.snippet || '',
-			sendersText: renderParticipants(senders),
-			receiversText: renderParticipants(receivers),
+			senders: senders,
+			receivers: receivers,
 		});
 	}
 
@@ -181,10 +186,11 @@ function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onArc
 						/>
 					) : null}
 					<strong>From&nbsp;</strong>
-					<span className="senders" title={renderParticipants(senders)}>
-						{renderPrimaryPerson(senders[0])}
-						{senders.length > 1 ? renderCountSuffix(senders, 1) : ''}
-					</span>
+					<SenderSummary
+						senders={senders}
+						title={renderParticipants(senders)}
+						onAddSenderRule={onAddSenderRule}
+					/>
 					{receivers[0] && receivers[0].name ? (
 						<React.Fragment>
 							<strong>To&nbsp;</strong>
@@ -293,6 +299,7 @@ interface BundleRowProps {
 	children?: React.ReactNode;
 	showCheckbox?: boolean;
 	isSelected?: boolean;
+	onAddSenderRule: (senderEmail: string) => void;
 	onArchive: (bundleId: string) => void;
 	onEdit: (bundle: BundleSummary) => void;
 	onOpenLaterPicker: (payload: BundleLaterPickerPayload) => void;
@@ -303,7 +310,7 @@ interface BundleRowProps {
 	onDebugGrouping: (item: ThreadRowItem) => void;
 }
 
-function BundleRow({ bundle, isExpanded, isRemoving, children, showCheckbox, isSelected, onArchive, onEdit, onOpenLaterPicker, onOpenLabelPicker, onUngroup, onToggleExpand, onToggleSelectBundle, onDebugGrouping }: BundleRowProps) {
+function BundleRow({ bundle, isExpanded, isRemoving, children, showCheckbox, isSelected, onAddSenderRule, onArchive, onEdit, onOpenLaterPicker, onOpenLabelPicker, onUngroup, onToggleExpand, onToggleSelectBundle, onDebugGrouping }: BundleRowProps) {
 	const rowRef = useRef<HTMLDivElement>(null);
 
 	useEffect(function() {
@@ -354,10 +361,11 @@ function BundleRow({ bundle, isExpanded, isRemoving, children, showCheckbox, isS
 					) : null}
 					<span className="glyphicon glyphicon-duplicate" title="Bundle" style={{marginRight: '6px'}}></span>
 					<strong>From&nbsp;</strong>
-					<span className="senders" title={senders.map((p) => renderPrimaryPerson(p)).join(', ')}>
-						{renderPrimaryPerson(senders[0])}
-						{senders.length > 1 ? renderCountSuffix(senders, 1) : ''}
-					</span>
+					<SenderSummary
+						senders={senders}
+						title={senders.map(formatPerson).join(', ')}
+						onAddSenderRule={onAddSenderRule}
+					/>
 					<span className="badge" style={{marginLeft: '6px'}}>{bundle.threadCount} threads</span>
 				</div>
 				<div className="col-xs-2">
@@ -464,6 +472,7 @@ interface ThreadListAppProps {
 	labels: LabelInfo[];
 	removingThreadIds: Set<string>;
 	removingBundleIds: Set<string>;
+	onAddSenderRule: (senderEmail: string) => void;
 	onArchive: (threadId: string) => void;
 	onDelete: (threadId: string) => void;
 	onMarkSpam: (threadId: string) => void;
@@ -479,7 +488,7 @@ interface ThreadListAppProps {
 	onDebugGrouping: (item: ThreadRowItem) => void;
 }
 
-function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, onArchive, onDelete, onMarkSpam, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup, onDebugGrouping }: ThreadListAppProps) {
+function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, onAddSenderRule, onArchive, onDelete, onMarkSpam, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup, onDebugGrouping }: ThreadListAppProps) {
 	const [selectionMode, setSelectionMode] = useState(false);
 	const [selectedThreadIds, setSelectedThreadIds] = useState<Set<string>>(new Set());
 	const [selectedMergeBundleIds, setSelectedMergeBundleIds] = useState<Set<string>>(new Set());
@@ -581,6 +590,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 					isRemoving={removingBundleIds.has(bundle.bundleId)}
 					showCheckbox={selectionMode && editingBundleId !== null && editingBundleId !== bundle.bundleId}
 					isSelected={selectedMergeBundleIds.has(bundle.bundleId)}
+					onAddSenderRule={onAddSenderRule}
 					onArchive={onArchiveBundle}
 					onEdit={handleEditBundle}
 					onOpenLaterPicker={onOpenLaterPickerForBundle}
@@ -600,6 +610,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 								isRemoving={removingThreadIds.has(thread.threadId)}
 								showCheckbox={isEditingThisBundle}
 								isSelected={selectedThreadIds.has(thread.threadId)}
+								onAddSenderRule={onAddSenderRule}
 								onArchive={onArchive}
 								onDelete={onDelete}
 								onMarkSpam={onMarkSpam}
@@ -624,6 +635,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 				isRemoving={removingThreadIds.has(thread.threadId)}
 				showCheckbox={selectionMode && !isBundled}
 				isSelected={selectedThreadIds.has(thread.threadId)}
+				onAddSenderRule={onAddSenderRule}
 				onArchive={onArchive}
 				onDelete={onDelete}
 				onMarkSpam={onMarkSpam}
@@ -708,6 +720,7 @@ const REMOVE_ANIMATION_MS = 400;
 
 interface MountThreadListIslandDeps {
 	container: Element;
+	onAddSenderRule: (senderEmail: string) => void;
 	onArchive: (threadId: string) => void;
 	onDelete: (threadId: string) => void;
 	onMarkSpam: (threadId: string) => void;
@@ -723,7 +736,7 @@ interface MountThreadListIslandDeps {
 	onDebugGrouping: (item: ThreadRowItem) => void;
 }
 
-export function mountThreadListIsland({ container, onArchive, onDelete, onMarkSpam, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup, onDebugGrouping }: MountThreadListIslandDeps) {
+export function mountThreadListIsland({ container, onAddSenderRule, onArchive, onDelete, onMarkSpam, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup, onDebugGrouping }: MountThreadListIslandDeps) {
 	const root = createRoot(container);
 	let groups: ThreadGroup[] = [];
 	let labels: LabelInfo[] = [];
@@ -738,6 +751,7 @@ export function mountThreadListIsland({ container, onArchive, onDelete, onMarkSp
 				labels={labels}
 				removingThreadIds={removingThreadIds}
 				removingBundleIds={removingBundleIds}
+				onAddSenderRule={onAddSenderRule}
 				onArchive={onArchive}
 				onDelete={onDelete}
 				onMarkSpam={onMarkSpam}
