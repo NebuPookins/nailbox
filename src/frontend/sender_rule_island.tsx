@@ -1,8 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { GroupingRulesConfig } from './thread_grouping.js';
+import { CONDITION_TYPE_CONTAINS_LABELS } from './thread_grouping.js';
+import type { ConditionType, GroupingRulesConfig } from './thread_grouping.js';
 import type { JsonValue, Result } from './api.js';
-import { addSenderEmailCondition, describeSenderConditions } from './sender_rule_presenter.js';
+import { addCondition, describeConditions, resolvePattern } from './sender_rule_presenter.js';
+
+const CONDITION_TYPE_OPTIONS = Object.entries(CONDITION_TYPE_CONTAINS_LABELS) as Array<[ConditionType, string]>;
+
+const MODAL_TITLES: Record<ConditionType, string> = {
+	sender_email: 'Group emails from this sender',
+	sender_name: 'Group emails by sender name',
+	subject: 'Group emails by subject',
+};
+
+const CONDITION_TYPE_EXAMPLES: Record<ConditionType, React.ReactNode> = {
+	sender_email: <>e.g. <code>@example.com</code> matches every sender at that domain.</>,
+	sender_name: <>e.g. <code>acme</code> matches any sender name containing it.</>,
+	subject: <>e.g. <code>invoice</code> matches any subject containing it.</>,
+};
 
 interface SenderRuleApi {
 	loadRules(): Promise<Result<GroupingRulesConfig>>;
@@ -21,11 +36,13 @@ function toErrorMessage(error: unknown, fallback: string): string {
 }
 
 function SenderRuleApp({ api, senderEmail, onClose, onSaved }: SenderRuleAppProps) {
-	const [pattern, setPattern] = useState(senderEmail);
+	const [conditionType, setConditionType] = useState<ConditionType>('sender_email');
+	const [patternsByType, setPatternsByType] = useState<Partial<Record<ConditionType, string>>>({});
 	const [config, setConfig] = useState<GroupingRulesConfig | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [pendingRuleIndex, setPendingRuleIndex] = useState<number | null>(null);
 	const [errorMessage, setErrorMessage] = useState('');
+	const pattern = resolvePattern(patternsByType, conditionType, senderEmail);
 
 	useEffect(function() {
 		let isCancelled = false;
@@ -63,6 +80,12 @@ function SenderRuleApp({ api, senderEmail, onClose, onSaved }: SenderRuleAppProp
 
 	const trimmedPattern = pattern.trim();
 
+	function handlePatternChange(value: string) {
+		setPatternsByType(function(prev) {
+			return { ...prev, [conditionType]: value };
+		});
+	}
+
 	async function handleRuleClick(ruleIndex: number) {
 		if (!config || trimmedPattern.length === 0) {
 			return;
@@ -70,7 +93,7 @@ function SenderRuleApp({ api, senderEmail, onClose, onSaved }: SenderRuleAppProp
 		setPendingRuleIndex(ruleIndex);
 		setErrorMessage('');
 		try {
-			const result = await api.saveRules(addSenderEmailCondition(config, ruleIndex, trimmedPattern));
+			const result = await api.saveRules(addCondition(config, ruleIndex, conditionType, trimmedPattern));
 			if (!result.ok) {
 				setErrorMessage(result.error.message || 'Failed to save email grouping rules.');
 				return;
@@ -92,21 +115,33 @@ function SenderRuleApp({ api, senderEmail, onClose, onSaved }: SenderRuleAppProp
 				<button type="button" className="close" onClick={onClose} aria-label="Close">
 					<span aria-hidden="true">&times;</span>
 				</button>
-				<h4 className="modal-title">Group emails from this sender</h4>
+				<h4 className="modal-title">{MODAL_TITLES[conditionType]}</h4>
 			</div>
 			<div className="modal-body">
-				<label htmlFor="sender-rule-pattern">Match senders whose email contains</label>
+				<label htmlFor="sender-rule-condition-type">Match</label>
+				<select
+					className="form-control"
+					id="sender-rule-condition-type"
+					onChange={function(e) { setConditionType(e.target.value as ConditionType); }}
+					style={{ marginBottom: '10px' }}
+					value={conditionType}
+				>
+					{CONDITION_TYPE_OPTIONS.map(function([value, label]) {
+						return <option key={value} value={value}>{label}</option>;
+					})}
+				</select>
+				<label htmlFor="sender-rule-pattern">Value to match</label>
 				<input
 					autoFocus
 					className="form-control"
 					id="sender-rule-pattern"
-					onChange={function(e) { setPattern(e.target.value); }}
+					onChange={function(e) { handlePatternChange(e.target.value); }}
 					type="text"
 					value={pattern}
 				/>
 				<p className="text-muted" style={{ marginTop: '6px' }}>
-					This is a substring match, so shortening it widens it: <code>@example.com</code>{' '}
-					matches every sender at that domain.
+					This is a case-sensitive substring match, so shortening it widens what it matches.{' '}
+					{CONDITION_TYPE_EXAMPLES[conditionType]}
 				</p>
 				{errorMessage ? (
 					<div className="alert alert-danger">{errorMessage}</div>
@@ -128,14 +163,14 @@ function SenderRuleApp({ api, senderEmail, onClose, onSaved }: SenderRuleAppProp
 						<p>Add this condition to:</p>
 						<div className="sender-rule-grid">
 							{rules.map(function(rule, ruleIndex) {
-								const existing = describeSenderConditions(rule);
+								const existing = describeConditions(rule, conditionType);
 								return (
 									<button
 										className="btn btn-default sender-rule-choice"
 										disabled={trimmedPattern.length === 0 || pendingRuleIndex !== null}
 										key={ruleIndex}
 										onClick={function() { handleRuleClick(ruleIndex); }}
-										title={existing ? 'Sender conditions so far: ' + existing : 'No sender email conditions yet'}
+										title={existing ? 'Conditions so far: ' + existing : 'No matching conditions yet'}
 										type="button"
 									>
 										{pendingRuleIndex === ruleIndex ? 'Saving...' : (rule.name || '(unnamed)')}

@@ -1,3 +1,4 @@
+import { CONDITION_TYPE_CONTAINS_LABELS } from './thread_grouping.js';
 import type {
 	ConditionType,
 	GroupingCondition,
@@ -49,16 +50,7 @@ export interface GroupingTrace {
 const WHEN_I_HAVE_TIME_SUFFIX = ' - When I Have Time';
 
 function describeCondition(condition: GroupingCondition): string {
-	switch (condition.type) {
-		case 'sender_name':
-			return `Sender name contains "${condition.value}"`;
-		case 'sender_email':
-			return `Sender email contains "${condition.value}"`;
-		case 'subject':
-			return `Subject contains "${condition.value}"`;
-		default:
-			return `Unknown condition type`;
-	}
+	return `${CONDITION_TYPE_CONTAINS_LABELS[condition.type]} "${condition.value}"`;
 }
 
 function evaluateConditionAgainstThread(thread: ThreadSummary, condition: GroupingCondition): ConditionTrace {

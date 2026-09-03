@@ -4,6 +4,12 @@ type Visibility = 'updated' | 'visible' | 'when-i-have-time' | 'stale' | 'hidden
 export type SortType = 'mostRecent' | 'shortest';
 export type ConditionType = 'sender_name' | 'sender_email' | 'subject';
 
+export const CONDITION_TYPE_CONTAINS_LABELS: Record<ConditionType, string> = {
+	sender_name: 'Sender name contains',
+	sender_email: 'Sender email contains',
+	subject: 'Subject contains',
+};
+
 interface Person {
 	name: string;
 	email: string;
