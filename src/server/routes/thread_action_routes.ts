@@ -4,6 +4,7 @@ import _ from 'lodash';
 
 import type {Application, Request, Response} from 'express';
 
+import {removeThreadFromBundle} from '../../../models/bundle.js';
 import {refreshSingleThreadFromGmail, syncRecentThreadsFromGmail} from '../services/gmail_sync_service.js';
 import {
 	normalizeGmailMoveThreadDto,
@@ -23,18 +24,6 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 		withGmailApi,
 	} = dependencies;
 
-	async function cleanupBundleAfterThreadDeletion(threadId: string): Promise<void> {
-		const bundle = bundles?.getBundleForThread(threadId);
-		if (!bundle) return;
-		const remainingThreadIds = bundle.threadIds.filter((id: string) => id !== threadId);
-		if (remainingThreadIds.length < 2) {
-			bundles.deleteBundle(bundle.bundleId);
-		} else {
-			bundles.updateBundle(bundle.bundleId, remainingThreadIds);
-		}
-		await bundles.save();
-	}
-
 	/**
 	 * Runs a Gmail request that takes a thread out of the inbox, then drops the
 	 * thread from the local cache and from any bundle it belonged to. Responds
@@ -53,7 +42,7 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 		}
 		const isSuccessful = await threadRepository.deleteThread(threadId);
 		if (isSuccessful) {
-			await cleanupBundleAfterThreadDeletion(threadId);
+			await removeThreadFromBundle(bundles, threadId);
 			res.status(200).send(gmailResponse);
 			return;
 		}

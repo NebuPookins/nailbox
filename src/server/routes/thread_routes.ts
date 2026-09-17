@@ -3,6 +3,7 @@ import util from 'util';
 import type {Application, Request, Response} from 'express';
 
 import {getEmailGroupingRules, groupThreads} from '../domain/grouping_rules.js';
+import {removeThreadFromBundle} from '../../../models/bundle.js';
 import {
 	normalizeGroupingRulesConfig,
 	normalizeHideUntilDto,
@@ -11,6 +12,7 @@ import {
 
 export default function registerThreadRoutes(app: Application, dependencies: any): void {
 	const {
+		bundles,
 		config,
 		configRepository,
 		hideUntils,
@@ -102,6 +104,9 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 		logger.info(util.format('Receive request to delete thread %s.', threadId));
 		try {
 			const isSuccessful = await threadRepository.deleteThread(threadId);
+			if (isSuccessful) {
+				await removeThreadFromBundle(bundles, threadId);
+			}
 			res.sendStatus(isSuccessful ? 200 : 500);
 		} catch (error) {
 			logger.error(util.inspect(error));

@@ -5,6 +5,7 @@ import sanitizeHtml from 'sanitize-html';
 import {decode} from 'html-entities';
 import nebulog from 'nebulog';
 
+import {removeThreadFromBundle} from '../../../models/bundle.js';
 import {
 	makeValidationError,
 	normalizeThreadMessageDto,
@@ -59,16 +60,7 @@ export function createThreadService(dependencies: {
 			logger.info(`Deleting thread ${threadId} because all messages in thread are in trash.`);
 			const deleted = await repository.deleteThread(threadId);
 			if (deleted && bundles) {
-				const bundle = bundles.getBundleForThread(threadId);
-				if (bundle) {
-					const remainingThreadIds = bundle.threadIds.filter((id: string) => id !== threadId);
-					if (remainingThreadIds.length < 2) {
-						bundles.deleteBundle(bundle.bundleId);
-					} else {
-						bundles.updateBundle(bundle.bundleId, remainingThreadIds);
-					}
-					await bundles.save();
-				}
+				await removeThreadFromBundle(bundles, threadId);
 			}
 			return {
 				status: deleted ? 200 : 500,

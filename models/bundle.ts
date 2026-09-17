@@ -72,6 +72,23 @@ export class BundleData {
 }
 
 /**
+ * Removes threadId from whichever bundle it belongs to, dissolving the
+ * bundle if fewer than 2 threads would remain, and persists the change.
+ * No-op if bundles is absent or threadId isn't in any bundle.
+ */
+export async function removeThreadFromBundle(bundles: BundleData | undefined, threadId: string): Promise<void> {
+	const bundle = bundles?.getBundleForThread(threadId);
+	if (!bundles || !bundle) return;
+	const remainingThreadIds = bundle.threadIds.filter((id) => id !== threadId);
+	if (remainingThreadIds.length < 2) {
+		bundles.deleteBundle(bundle.bundleId);
+	} else {
+		bundles.updateBundle(bundle.bundleId, remainingThreadIds);
+	}
+	await bundles.save();
+}
+
+/**
  * @return [Promise<BundleData>]
  */
 export async function load(): Promise<BundleData> {
