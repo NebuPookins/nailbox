@@ -53,11 +53,11 @@ export function createThreadService(dependencies: {
 
 		const existingData = await repository.readThreadJson(threadId);
 
-		const allMessagesInTrash = threadPayload.messages.every(
-			(message: any) => message.labelIds.indexOf('TRASH') !== -1
+		const noMessageInInbox = threadPayload.messages.every(
+			(message: any) => message.labelIds.indexOf('INBOX') === -1
 		);
-		if (allMessagesInTrash) {
-			logger.info(`Deleting thread ${threadId} because all messages in thread are in trash.`);
+		if (noMessageInInbox) {
+			logger.info(`Deleting thread ${threadId} because no message in the thread is in the inbox.`);
 			const deleted = await repository.deleteThread(threadId);
 			if (deleted && bundles) {
 				await removeThreadFromBundle(bundles, threadId);
