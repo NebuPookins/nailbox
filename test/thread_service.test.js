@@ -77,3 +77,84 @@ test('getMostRelevantThreads tolerates repository threads and returns formatted 
 	assert.equal(results[0].threadId, 'thread-1');
 	assert.equal(results[0].recentMessageReadTimeSeconds, 30);
 });
+
+test('saveThreadPayload evicts a cached thread once no message has the INBOX label, even if only some messages are trashed', async () => {
+	// Regression test: a thread can have one message trashed (e.g. the user deleted a
+	// single message from within Gmail) while its other messages simply carry a
+	// non-INBOX label (e.g. after being filed into a category). Previously this only
+	// purged the local cache when *every* message was in TRASH, so the periodic Gmail
+	// sync kept re-fetching and re-saving such threads, making them reappear in the
+	// inbox even though Gmail no longer considered them inbox threads.
+	let deleteThreadCalled = false;
+	const threadService = createThreadService({
+		threadRepository: {
+			deleteThread: async (threadId) => {
+				deleteThreadCalled = true;
+				assert.equal(threadId, 'thread1');
+				return true;
+			},
+			readThreadJson: async () => ({id: 'thread1', messages: [{id: 'm1'}]}),
+			saveThreadJson: () => {
+				throw new Error('saveThreadJson should not be called for a thread with no INBOX message');
+			},
+		},
+	});
+
+	const result = await threadService.saveThreadPayload({
+		threadPayload: {
+			id: 'thread1',
+			messages: [
+				{id: 'm1', labelIds: ['TRASH', 'Label_30'], internalDate: '1', payload: {headers: []}},
+				{id: 'm2', labelIds: ['Label_30'], internalDate: '2', payload: {headers: []}},
+			],
+		},
+		lastRefresheds: {
+			markRefreshed() {
+				throw new Error('should not be called once the thread is deleted');
+			},
+		},
+	});
+
+	assert.equal(deleteThreadCalled, true);
+	assert.deepEqual(result, {status: 200, changed: true});
+});
+
+test('saveThreadPayload keeps a cached thread when at least one message still has the INBOX label', async () => {
+	let saveThreadJsonCalled = false;
+	class FakeMessage {
+		constructor(data) {
+			this._data = data;
+		}
+		bestBody() {
+			return 'body';
+		}
+	}
+	const threadService = createThreadService({
+		threadRepository: {
+			deleteThread: () => {
+				throw new Error('deleteThread should not be called while a message is still in the inbox');
+			},
+			readThreadJson: async () => ({}),
+			saveThreadJson: async () => {
+				saveThreadJsonCalled = true;
+			},
+		},
+		MessageClass: FakeMessage,
+	});
+
+	const result = await threadService.saveThreadPayload({
+		threadPayload: {
+			id: 'thread1',
+			messages: [
+				{id: 'm1', labelIds: ['TRASH', 'Label_30'], internalDate: '1', payload: {headers: []}},
+				{id: 'm2', labelIds: ['INBOX'], internalDate: '2', payload: {headers: []}},
+			],
+		},
+		lastRefresheds: {
+			markRefreshed: () => Promise.resolve(),
+		},
+	});
+
+	assert.equal(saveThreadJsonCalled, true);
+	assert.equal(result.status, 200);
+});
