@@ -94,6 +94,7 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 					lastRefresheds,
 					threadRepository,
 					threadService,
+					bundles,
 				});
 			});
 			if (syncResult == null) {
@@ -123,6 +124,7 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 					lastRefresheds,
 					threadRepository,
 					threadService,
+					bundles,
 				});
 			});
 			if (refreshResult == null) {
