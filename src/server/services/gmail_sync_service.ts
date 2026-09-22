@@ -1,5 +1,7 @@
 import _ from 'lodash';
 
+import {removeThreadFromBundle} from '../../../models/bundle.js';
+
 export async function listThreadIdsByLabel(gmailRequest: any, labelId: string): Promise<string[]> {
 	const response = await gmailRequest({
 		path: '/threads',
@@ -17,12 +19,14 @@ export async function refreshSingleThreadFromGmail({
 	lastRefresheds,
 	threadRepository,
 	threadService,
+	bundles,
 }: {
 	gmailRequest: any;
 	threadId: string;
 	lastRefresheds: any;
 	threadRepository: any;
 	threadService: any;
+	bundles?: any;
 }): Promise<{status: number; changed?: boolean}> {
 	try {
 		const gmailThread = await gmailRequest({
@@ -39,8 +43,12 @@ export async function refreshSingleThreadFromGmail({
 		const err = error as {status?: number};
 		if (err.status === 404) {
 			const existingThread = await threadRepository.readThreadJson(threadId);
+			const deleted = await threadRepository.deleteThread(threadId);
+			if (deleted && bundles) {
+				await removeThreadFromBundle(bundles, threadId);
+			}
 			return {
-				status: await threadRepository.deleteThread(threadId) ? 200 : 500,
+				status: deleted ? 200 : 500,
 				changed: Boolean(existingThread && Object.keys(existingThread).length > 0),
 			};
 		}
@@ -53,11 +61,13 @@ export async function syncRecentThreadsFromGmail({
 	lastRefresheds,
 	threadRepository,
 	threadService,
+	bundles,
 }: {
 	gmailRequest: any;
 	lastRefresheds: any;
 	threadRepository: any;
 	threadService: any;
+	bundles?: any;
 }) {
 	const [inboxThreadIds, trashThreadIds] = await Promise.all([
 		listThreadIdsByLabel(gmailRequest, 'INBOX'),
@@ -72,6 +82,7 @@ export async function syncRecentThreadsFromGmail({
 				lastRefresheds,
 				threadRepository,
 				threadService,
+				bundles,
 			});
 			return {
 				threadId,

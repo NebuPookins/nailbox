@@ -212,6 +212,7 @@ startGmailPoller({
 				lastRefresheds,
 				threadRepository,
 				threadService,
+				bundles,
 			});
 		});
 	},

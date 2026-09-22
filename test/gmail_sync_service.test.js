@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { syncRecentThreadsFromGmail } from '../src/server/services/gmail_sync_service.js';
+import { refreshSingleThreadFromGmail, syncRecentThreadsFromGmail } from '../src/server/services/gmail_sync_service.js';
 
 test('syncRecentThreadsFromGmail continues when one thread refresh fails', async () => {
 	const fakeThreadService = {
@@ -61,4 +61,43 @@ test('syncRecentThreadsFromGmail continues when one thread refresh fails', async
 		{ threadId: 'good-thread', status: 200, changed: true },
 		{ threadId: 'bad-thread', status: 500, error: 'bad thread payload' },
 	]);
+});
+
+test('refreshSingleThreadFromGmail removes a 404ed thread from its bundle', async () => {
+	const fakeThreadRepository = {
+		deleteThread: async () => true,
+		readThreadJson: async () => ({id: 'gone-thread', messages: [{id: 'm1'}]}),
+	};
+	const gmailRequest = async () => {
+		throw Object.assign(new Error('Not Found'), {status: 404});
+	};
+
+	let saved = false;
+	const bundle = {bundleId: 'bnd_1', threadIds: ['gone-thread', 'other-thread', 'third-thread']};
+	const fakeBundles = {
+		getBundleForThread: (threadId) => (threadId === 'gone-thread' ? bundle : null),
+		updateBundle(bundleId, threadIds) {
+			assert.equal(bundleId, 'bnd_1');
+			bundle.threadIds = threadIds;
+		},
+		deleteBundle() {
+			throw new Error('should not delete the bundle when 2+ threads remain');
+		},
+		save: async () => {
+			saved = true;
+		},
+	};
+
+	const result = await refreshSingleThreadFromGmail({
+		gmailRequest,
+		threadId: 'gone-thread',
+		lastRefresheds: {markRefreshed: () => Promise.resolve()},
+		threadRepository: fakeThreadRepository,
+		threadService: {saveThreadPayload: async () => { throw new Error('should not be called'); }},
+		bundles: fakeBundles,
+	});
+
+	assert.deepEqual(result, {status: 200, changed: true});
+	assert.deepEqual(bundle.threadIds, ['other-thread', 'third-thread']);
+	assert.ok(saved, 'expected bundles.save() to be called');
 });
