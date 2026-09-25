@@ -37,16 +37,38 @@ export async function ensureDirectoryExists(dir: string): Promise<string> {
 	return dir;
 }
 
-/**
- * Returns a promise. If the promise resolves successfully, then as a side
- * effect the data in json was serialized and saved to the provided path.
- */
-export async function saveJsonToFile(json: unknown, filePath: string): Promise<void> {
+const pendingWritesByPath = new Map<string, Promise<void>>();
+
+async function writeJsonAtomically(serializedJson: string, filePath: string): Promise<void> {
 	const directory = path.dirname(filePath);
 	const tempPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
 	await ensureDirectoryExists(directory);
-	await writeFile(tempPath, JSON.stringify(json));
+	await writeFile(tempPath, serializedJson);
 	await rename(tempPath, filePath);
+}
+
+/**
+ * Returns a promise. If the promise resolves successfully, then as a side
+ * effect the data in json was serialized and saved to the provided path.
+ *
+ * json is serialized immediately, and writes to the same path are applied in
+ * call order, so the file always ends up holding the most recently requested
+ * contents even when several saves overlap. (Ordering is per process only.)
+ */
+export async function saveJsonToFile(json: unknown, filePath: string): Promise<void> {
+	const serializedJson = JSON.stringify(json);
+	const key = path.resolve(filePath);
+	const previousWrite = pendingWritesByPath.get(key) ?? Promise.resolve();
+	const runWrite = () => writeJsonAtomically(serializedJson, filePath);
+	const write = previousWrite.then(runWrite, runWrite);
+	pendingWritesByPath.set(key, write);
+	const forgetIfLatest = () => {
+		if (pendingWritesByPath.get(key) === write) {
+			pendingWritesByPath.delete(key);
+		}
+	};
+	write.then(forgetIfLatest, forgetIfLatest);
+	return write;
 }
 
 export default {
