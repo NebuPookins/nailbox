@@ -3,7 +3,7 @@ import {readdir, rm} from 'node:fs/promises';
 import nebulog from 'nebulog';
 
 import fileio from '../../../helpers/fileio.js';
-import {validatePersistedThread} from '../validation/contracts.js';
+import {isThreadId, validatePersistedThread} from '../validation/contracts.js';
 import type {PersistedThread, ThreadModelLike, ThreadRepository} from '../types/thread.js';
 
 const logger = nebulog.make({filename: 'src/server/repositories/thread_repository.ts', level: 'info'});
@@ -40,7 +40,9 @@ export function createThreadRepository(dependencies: {
 	}
 
 	async function listThreadIds(): Promise<string[]> {
-		return readdir(threadsDirectory);
+		// Skips anything that isn't a cached thread, e.g. in-flight temp files.
+		const filenames = await readdir(threadsDirectory);
+		return filenames.filter(isThreadId);
 	}
 
 	async function readThread(threadId: string): Promise<ThreadModelLike> {

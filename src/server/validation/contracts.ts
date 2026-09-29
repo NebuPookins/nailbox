@@ -11,6 +11,14 @@ import type {
 	WordcountUpdateDto,
 } from '../types/thread.js';
 
+/**
+ * Whether value has the shape of a Gmail thread ID, which is also the file
+ * name a thread is cached under.
+ */
+export function isThreadId(value: string): boolean {
+	return /^[0-9a-z]+$/.test(value);
+}
+
 function makeValidationError(message: string): Error & {code: string} {
 	const error = new Error(message) as Error & {code: string};
 	error.code = 'INVALID_CONTRACT';

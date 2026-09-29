@@ -14,6 +14,7 @@ test('syncRecentThreadsFromGmail continues when one thread refresh fails', async
 	};
 	const fakeThreadRepository = {
 		deleteThread: async () => true,
+		listThreadIds: async () => [],
 		readThreadJson: async () => ({}),
 	};
 
@@ -61,6 +62,46 @@ test('syncRecentThreadsFromGmail continues when one thread refresh fails', async
 		{ threadId: 'good-thread', status: 200, changed: true },
 		{ threadId: 'bad-thread', status: 500, error: 'bad thread payload' },
 	]);
+});
+
+test('syncRecentThreadsFromGmail re-fetches cached threads that are no longer listed under INBOX or TRASH', async () => {
+	// The thread was archived from Gmail's own UI, so neither label listing
+	// returns it, but it is still sitting in the local cache.
+	const savedThreadIds = [];
+	const fakeThreadRepository = {
+		deleteThread: async () => true,
+		listThreadIds: async () => ['18c2f0a1b2c3d4e5'],
+		readThreadJson: async () => ({}),
+	};
+	const fakeThreadService = {
+		saveThreadPayload: async ({ threadPayload }) => {
+			savedThreadIds.push(threadPayload.id);
+			return { status: 200, changed: true };
+		},
+	};
+	const gmailRequest = async ({ path }) => {
+		if (path === '/threads') {
+			return { threads: [] };
+		}
+		if (path === '/threads/18c2f0a1b2c3d4e5') {
+			return {
+				id: '18c2f0a1b2c3d4e5',
+				messages: [{ id: 'm1', labelIds: ['Label_1'], internalDate: 1, payload: { headers: [] } }],
+			};
+		}
+		throw new Error(`Unexpected path: ${path}`);
+	};
+
+	const result = await syncRecentThreadsFromGmail({
+		gmailRequest,
+		lastRefresheds: { markRefreshed: () => Promise.resolve() },
+		threadRepository: fakeThreadRepository,
+		threadService: fakeThreadService,
+	});
+
+	assert.deepEqual(savedThreadIds, ['18c2f0a1b2c3d4e5']);
+	assert.deepEqual(result.threadIds, ['18c2f0a1b2c3d4e5']);
+	assert.deepEqual(result.changedThreadIds, ['18c2f0a1b2c3d4e5']);
 });
 
 test('refreshSingleThreadFromGmail removes a 404ed thread from its bundle', async () => {

@@ -1,6 +1,29 @@
 import _ from 'lodash';
 
 import {removeThreadFromBundle} from '../../../models/bundle.js';
+import type {ThreadRepository} from '../types/thread.js';
+
+// Bounds simultaneous Gmail thread fetches so a large cache doesn't trip the
+// per-user rate limit.
+const MAX_CONCURRENT_THREAD_REFRESHES = 5;
+
+async function mapWithConcurrency<T, R>(
+	items: readonly T[],
+	limit: number,
+	mapper: (item: T) => Promise<R>,
+): Promise<R[]> {
+	const results: R[] = new Array(items.length);
+	let nextIndex = 0;
+	const worker = async (): Promise<void> => {
+		while (nextIndex < items.length) {
+			const index = nextIndex;
+			nextIndex += 1;
+			results[index] = await mapper(items[index]);
+		}
+	};
+	await Promise.all(Array.from({length: Math.min(limit, items.length)}, worker));
+	return results;
+}
 
 export async function listThreadIdsByLabel(gmailRequest: any, labelId: string): Promise<string[]> {
 	const response = await gmailRequest({
@@ -24,7 +47,7 @@ export async function refreshSingleThreadFromGmail({
 	gmailRequest: any;
 	threadId: string;
 	lastRefresheds: any;
-	threadRepository: any;
+	threadRepository: Pick<ThreadRepository, 'deleteThread' | 'readThreadJson'>;
 	threadService: any;
 	bundles?: any;
 }): Promise<{status: number; changed?: boolean}> {
@@ -65,16 +88,20 @@ export async function syncRecentThreadsFromGmail({
 }: {
 	gmailRequest: any;
 	lastRefresheds: any;
-	threadRepository: any;
+	threadRepository: Pick<ThreadRepository, 'deleteThread' | 'listThreadIds' | 'readThreadJson'>;
 	threadService: any;
 	bundles?: any;
 }) {
-	const [inboxThreadIds, trashThreadIds] = await Promise.all([
+	const [inboxThreadIds, trashThreadIds, cachedThreadIds] = await Promise.all([
 		listThreadIdsByLabel(gmailRequest, 'INBOX'),
 		listThreadIdsByLabel(gmailRequest, 'TRASH'),
+		threadRepository.listThreadIds(),
 	]);
-	const uniqueThreadIds = _.uniq(inboxThreadIds.concat(trashThreadIds));
-	const threadSaveResults = await Promise.all(uniqueThreadIds.map(async (threadId) => {
+	// Cached threads are refreshed too: a thread archived or relabeled from
+	// another client shows up in neither label listing, so it would otherwise
+	// linger in the local cache forever.
+	const uniqueThreadIds = _.uniq([...inboxThreadIds, ...trashThreadIds, ...cachedThreadIds]);
+	const threadSaveResults = await mapWithConcurrency(uniqueThreadIds, MAX_CONCURRENT_THREAD_REFRESHES, async (threadId) => {
 		try {
 			const saveResult = await refreshSingleThreadFromGmail({
 				gmailRequest,
@@ -97,7 +124,7 @@ export async function syncRecentThreadsFromGmail({
 				error: err.message,
 			};
 		}
-	}));
+	});
 	const changedThreadIds = threadSaveResults
 		.filter((result) => result.status < 400 && result.changed)
 		.map((result) => result.threadId);

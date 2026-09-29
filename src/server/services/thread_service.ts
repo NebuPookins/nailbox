@@ -7,6 +7,7 @@ import nebulog from 'nebulog';
 
 import {removeThreadFromBundle} from '../../../models/bundle.js';
 import {
+	isThreadId,
 	makeValidationError,
 	normalizeThreadMessageDto,
 	normalizeThreadSummaryDto,
@@ -44,7 +45,7 @@ export function createThreadService(dependencies: {
 		}
 
 		const threadId: string = threadPayload.id;
-		if (!threadId.match(/^[0-9a-z]+$/)) {
+		if (!isThreadId(threadId)) {
 			return {
 				status: 400,
 				body: {humanErrorMessage: 'invalid threadId'},
