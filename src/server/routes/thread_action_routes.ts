@@ -271,6 +271,10 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 				res.status(400).send({humanErrorMessage: err.message});
 				return;
 			}
+			if (err.code === 'ENOENT') {
+				res.sendStatus(404);
+				return;
+			}
 			if (err.status && err.message) {
 				res.status(err.status).send(err.message);
 				return;

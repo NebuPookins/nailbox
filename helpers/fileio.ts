@@ -8,21 +8,34 @@ const logger = nebulog.make({filename: 'helpers/fileio.ts', level: 'info'});
 
 /**
  * Returns a promise of a JSON structure representing the parsed contents of
+ * the file at the specified path. Rejects with an ENOENT error if the file
+ * does not exist.
+ */
+export async function readJsonFromFile(filePath: string): Promise<unknown> {
+	const fileContents = await readFile(filePath, 'utf8');
+	try {
+		return JSON.parse(fileContents);
+	} catch (error) {
+		if (error instanceof SyntaxError) {
+			logger.warn(`Failed parsing JSON at ${filePath}: ${error.message}`);
+		}
+		throw error;
+	}
+}
+
+/**
+ * Returns a promise of a JSON structure representing the parsed contents of
  * the file at the specified path. If the file does not exist, {} is returned.
  */
 export async function readJsonFromOptionalFile(filePath: string): Promise<unknown> {
 	logger.info(`Reading optional JSON from ${filePath}.`);
 	try {
-		const fileContents = await readFile(filePath, 'utf8');
-		return JSON.parse(fileContents);
+		return await readJsonFromFile(filePath);
 	} catch (error) {
 		const err = error as NodeJS.ErrnoException;
 		if (err.code === 'ENOENT') {
 			logger.info(`No file found at ${filePath}, using empty json by default.`);
 			return {};
-		}
-		if (error instanceof SyntaxError) {
-			logger.warn(`Failed parsing JSON at ${filePath}: ${error.message}`);
 		}
 		throw error;
 	}
@@ -72,6 +85,7 @@ export async function saveJsonToFile(json: unknown, filePath: string): Promise<v
 }
 
 export default {
+	readJsonFromFile,
 	readJsonFromOptionalFile,
 	ensureDirectoryExists,
 	saveJsonToFile,

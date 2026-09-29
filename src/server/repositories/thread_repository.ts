@@ -20,8 +20,10 @@ export function createThreadRepository(dependencies: {
 		threadsDirectory = THREADS_DIRECTORY,
 	} = dependencies;
 
+	const threadPath = (threadId: string): string => `${threadsDirectory}/${threadId}`;
+
 	async function deleteThread(threadId: string): Promise<boolean> {
-		const pathToDelete = `${threadsDirectory}/${threadId}`;
+		const pathToDelete = threadPath(threadId);
 		try {
 			await rm(pathToDelete);
 			logger.info(`Deleted file ${pathToDelete}`);
@@ -43,12 +45,13 @@ export function createThreadRepository(dependencies: {
 
 	async function readThread(threadId: string): Promise<ThreadModelLike> {
 		if (!threadModelModule) throw new Error('threadModelModule is required to readThread');
-		const threadJson = await readThreadJson(threadId);
+		// Unlike readThreadJson, a missing file rejects with ENOENT so callers can report 404.
+		const threadJson = await fileioImpl.readJsonFromFile(threadPath(threadId));
 		return new threadModelModule.Thread(validatePersistedThread(threadJson));
 	}
 
 	async function readThreadJson(threadId: string): Promise<Partial<PersistedThread>> {
-		const threadJson = await fileioImpl.readJsonFromOptionalFile(`${threadsDirectory}/${threadId}`);
+		const threadJson = await fileioImpl.readJsonFromOptionalFile(threadPath(threadId));
 		const partial = threadJson as Partial<PersistedThread>;
 		if (!partial.id && !partial.messages) {
 			return partial;
@@ -58,7 +61,7 @@ export function createThreadRepository(dependencies: {
 
 	async function saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<void> {
 		validatePersistedThread(threadPayload);
-		await fileioImpl.saveJsonToFile(threadPayload, `${threadsDirectory}/${threadId}`);
+		await fileioImpl.saveJsonToFile(threadPayload, threadPath(threadId));
 	}
 
 	return {

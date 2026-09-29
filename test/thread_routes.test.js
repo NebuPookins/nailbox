@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import registerThreadRoutes from '../src/server/routes/thread_routes.js';
+import { createThreadRepository } from '../src/server/repositories/thread_repository.js';
+import { createThreadService } from '../src/server/services/thread_service.js';
 
 function createFakeApp() {
 	const routes = [];
@@ -46,9 +52,9 @@ function createFakeResponse() {
 	};
 }
 
-function findDeleteHandler(app, patternText) {
+function findHandler(app, method, patternText) {
 	const route = app.routes.find((entry) => (
-		entry.method === 'DELETE' &&
+		entry.method === method &&
 		entry.path instanceof RegExp &&
 		String(entry.path) === patternText
 	));
@@ -87,7 +93,7 @@ test('thread delete route removes the deleted thread from its bundle', async () 
 		},
 	});
 
-	const handler = findDeleteHandler(app, '/^\\/api\\/threads\\/([a-z0-9]+)$/');
+	const handler = findHandler(app, 'DELETE', '/^\\/api\\/threads\\/([a-z0-9]+)$/');
 	const res = createFakeResponse();
 
 	await handler({ params: ['abc123'] }, res);
@@ -131,7 +137,7 @@ test('thread delete route dissolves the bundle when deleting leaves fewer than t
 		},
 	});
 
-	const handler = findDeleteHandler(app, '/^\\/api\\/threads\\/([a-z0-9]+)$/');
+	const handler = findHandler(app, 'DELETE', '/^\\/api\\/threads\\/([a-z0-9]+)$/');
 	const res = createFakeResponse();
 
 	await handler({ params: ['abc123'] }, res);
@@ -157,10 +163,62 @@ test('thread delete route does not touch bundles when the deletion fails', async
 		},
 	});
 
-	const handler = findDeleteHandler(app, '/^\\/api\\/threads\\/([a-z0-9]+)$/');
+	const handler = findHandler(app, 'DELETE', '/^\\/api\\/threads\\/([a-z0-9]+)$/');
 	const res = createFakeResponse();
 
 	await handler({ params: ['abc123'] }, res);
 
 	assert.equal(res.sentStatus, 500);
+});
+
+async function withMissingThreadRoutes(callback) {
+	const threadsDirectory = await mkdtemp(path.join(tmpdir(), 'nailbox-threads-'));
+	try {
+		const threadRepository = createThreadRepository({
+			threadsDirectory,
+			threadModelModule: {
+				Thread: class {
+					constructor() {
+						throw new Error('should not construct a thread for a missing file');
+					}
+				},
+			},
+		});
+		const app = createFakeApp();
+		registerThreadRoutes(app, {
+			logger: { info() {}, error() {} },
+			threadRepository,
+			threadService: createThreadService({ threadRepository }),
+		});
+		await callback(app);
+	} finally {
+		await rm(threadsDirectory, { recursive: true, force: true });
+	}
+}
+
+test('thread messages route responds 404 for a thread that is not cached', async () => {
+	await withMissingThreadRoutes(async (app) => {
+		const handler = findHandler(app, 'GET', String(/^\/api\/threads\/([a-z0-9]+)\/messages$/));
+		const res = createFakeResponse();
+		await handler({ params: ['abc123'] }, res);
+		assert.equal(res.statusCode, 404);
+	});
+});
+
+test('single message route responds 404 for a thread that is not cached', async () => {
+	await withMissingThreadRoutes(async (app) => {
+		const handler = findHandler(app, 'GET', String(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)$/));
+		const res = createFakeResponse();
+		await handler({ params: ['abc123', 'def456'] }, res);
+		assert.equal(res.statusCode, 404);
+	});
+});
+
+test('wordcount route responds 404 for a thread that is not cached', async () => {
+	await withMissingThreadRoutes(async (app) => {
+		const handler = findHandler(app, 'POST', String(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/));
+		const res = createFakeResponse();
+		await handler({ params: ['abc123', 'def456'], body: { wordcount: 42 } }, res);
+		assert.equal(res.statusCode, 404);
+	});
 });
