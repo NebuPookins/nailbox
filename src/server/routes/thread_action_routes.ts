@@ -5,7 +5,7 @@ import _ from 'lodash';
 import type {Application, Request, Response} from 'express';
 
 import {removeThreadFromBundle} from '../../../models/bundle.js';
-import {refreshSingleThreadFromGmail, syncRecentThreadsFromGmail} from '../services/gmail_sync_service.js';
+import {refreshSingleThreadFromGmail} from '../services/gmail_sync_service.js';
 import {
 	normalizeGmailMoveThreadDto,
 	normalizeGmailSendMessageDto,
@@ -15,6 +15,7 @@ import {
 export default function registerThreadActionRoutes(app: Application, dependencies: any): void {
 	const {
 		bundles,
+		gmailSyncer,
 		lastRefresheds,
 		logger,
 		notifyThreadsChanged,
@@ -88,15 +89,7 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 
 	app.post('/api/threads/sync', async function(req: Request, res: Response) {
 		try {
-			const syncResult = await withGmailApi(res, async (gmailRequest: any) => {
-				return syncRecentThreadsFromGmail({
-					gmailRequest,
-					lastRefresheds,
-					threadRepository,
-					threadService,
-					bundles,
-				});
-			});
+			const syncResult = await withGmailApi(res, (gmailRequest: any) => gmailSyncer.sync(gmailRequest));
 			if (syncResult == null) {
 				return;
 			}

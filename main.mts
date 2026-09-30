@@ -33,7 +33,9 @@ import registerBundleRoutes from './src/server/routes/bundle_routes.js';
 import frontendAssetService from './src/server/services/frontend_asset_service.js';
 import { createThreadUpdatesNotifier } from './src/server/services/thread_updates_notifier.js';
 import { startGmailPoller } from './src/server/services/gmail_poller.js';
-import { syncRecentThreadsFromGmail } from './src/server/services/gmail_sync_service.js';
+import { createGmailQuotaLimiter, gmailRequestCost } from './src/server/services/gmail_quota_limiter.js';
+import { createGmailSyncer } from './src/server/services/gmail_sync_service.js';
+import { createGmailSyncStateRepository } from './src/server/repositories/gmail_sync_state_repository.js';
 
 const DEFAULT_CONFIG: {port: number} = {
 	port: 3000,
@@ -64,6 +66,19 @@ function makeGoogleAuthErrorResponse(res: Response, code: string, message: strin
 
 type GmailRequest = (options: GmailApiRequestOptions) => Promise<unknown>;
 
+// Every Gmail call goes through one limiter so all traffic together stays
+// under the per-user quota.
+const gmailQuotaLimiter = createGmailQuotaLimiter();
+
+async function requestGmail(options: GmailApiRequestOptions): Promise<unknown> {
+	await gmailQuotaLimiter.acquire(gmailRequestCost(options));
+	const gmailResult = await gmailApiRequest(config, options);
+	if (gmailResult.didUpdateCredentials) {
+		await saveConfig();
+	}
+	return gmailResult.data;
+}
+
 async function withGmailApi<T>(
 	res: Response,
 	fnCallback: (gmailRequest: GmailRequest) => Promise<T>,
@@ -78,13 +93,7 @@ async function withGmailApi<T>(
 		return null;
 	}
 	try {
-		const result = await fnCallback(async (options) => {
-			const gmailResult = await gmailApiRequest(config, options);
-			if (gmailResult.didUpdateCredentials) {
-				await saveConfig();
-			}
-			return gmailResult.data;
-		});
+		const result = await fnCallback(requestGmail);
 		return result;
 	} catch (error) {
 		const err = error as Error & {code?: string; status?: number};
@@ -113,13 +122,7 @@ async function withBackgroundGmailApi<T>(
 		return null;
 	}
 	try {
-		const result = await fnCallback(async (options) => {
-			const gmailResult = await gmailApiRequest(config, options);
-			if (gmailResult.didUpdateCredentials) {
-				await saveConfig();
-			}
-			return gmailResult.data;
-		});
+		const result = await fnCallback(requestGmail);
 		return result;
 	} catch (error) {
 		const err = error as Error & {code?: string; status?: number};
@@ -145,6 +148,16 @@ const threadRepository = createThreadRepository({ threadModelModule: threadModel
 const threadService = createThreadService({ threadRepository, MessageClass: Message, bundles });
 const rfc2822Service = createRfc2822Service({ threadRepository });
 const threadUpdatesNotifier = createThreadUpdatesNotifier({ logger });
+// Shared by the background poller and the manual sync route: both resume from
+// the same Gmail history checkpoint, and a sync already running is joined
+// rather than started twice.
+const gmailSyncer = createGmailSyncer({
+	bundles,
+	lastRefresheds,
+	stateRepository: createGmailSyncStateRepository(),
+	threadRepository,
+	threadService,
+});
 
 const app = express();
 app.set('views', path.join(process.cwd(), 'views'));
@@ -170,6 +183,7 @@ const routeDependencies = {
 	configRepository,
 	saveConfig,
 	rfc2822Service,
+	gmailSyncer,
 	threadRepository,
 	threadService,
 	withGmailApi,
@@ -206,14 +220,6 @@ startGmailPoller({
 	logger,
 	notifyThreadsChanged: (reason: string) => threadUpdatesNotifier.notifyThreadsChanged(reason),
 	async pollGmail() {
-		return withBackgroundGmailApi(async (gmailRequest) => {
-			return syncRecentThreadsFromGmail({
-				gmailRequest,
-				lastRefresheds,
-				threadRepository,
-				threadService,
-				bundles,
-			});
-		});
+		return withBackgroundGmailApi((gmailRequest) => gmailSyncer.sync(gmailRequest));
 	},
 });

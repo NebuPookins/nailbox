@@ -19,6 +19,15 @@ export function isThreadId(value: string): boolean {
 	return /^[0-9a-z]+$/.test(value);
 }
 
+/**
+ * Whether a Gmail message (from a thread payload or a history record) carries
+ * the INBOX label. A thread belongs in the local cache while any of its
+ * messages does.
+ */
+export function isInInbox(message: {labelIds?: unknown}): boolean {
+	return Array.isArray(message.labelIds) && message.labelIds.includes('INBOX');
+}
+
 function makeValidationError(message: string): Error & {code: string} {
 	const error = new Error(message) as Error & {code: string};
 	error.code = 'INVALID_CONTRACT';

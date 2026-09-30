@@ -22,6 +22,7 @@ export interface PersistedMessage {
 
 export interface PersistedThread {
 	id: string;
+	historyId?: string;
 	messages: PersistedMessage[];
 }
 
@@ -123,6 +124,7 @@ export interface ThreadModelLike {
 export interface ThreadRepository {
 	deleteThread(threadId: string): Promise<boolean>;
 	listThreadIds(): Promise<string[]>;
+	readHistoryId(threadId: string): Promise<string | undefined>;
 	readThread(threadId: string): Promise<ThreadModelLike>;
 	readThreadJson(threadId: string): Promise<Partial<PersistedThread>>;
 	saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<void>;

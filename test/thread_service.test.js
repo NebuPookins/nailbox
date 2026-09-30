@@ -158,3 +158,34 @@ test('saveThreadPayload keeps a cached thread when at least one message still ha
 	assert.equal(saveThreadJsonCalled, true);
 	assert.equal(result.status, 200);
 });
+
+test('saveThreadPayload skips reading and rewriting a cached thread whose historyId is unchanged', async () => {
+	let markedRefreshed = false;
+	const threadService = createThreadService({
+		threadRepository: {
+			readHistoryId: async (threadId) => (threadId === 'thread1' ? '500' : undefined),
+			readThreadJson: async () => {
+				throw new Error('readThreadJson should not be called for an unchanged thread');
+			},
+			saveThreadJson: async () => {
+				throw new Error('saveThreadJson should not be called for an unchanged thread');
+			},
+		},
+	});
+
+	const result = await threadService.saveThreadPayload({
+		threadPayload: {
+			id: 'thread1',
+			historyId: '500',
+			messages: [{id: 'm1', labelIds: ['INBOX'], internalDate: '1', payload: {headers: []}}],
+		},
+		lastRefresheds: {
+			markRefreshed: async () => {
+				markedRefreshed = true;
+			},
+		},
+	});
+
+	assert.deepEqual(result, {status: 200, changed: false});
+	assert.equal(markedRefreshed, true);
+});

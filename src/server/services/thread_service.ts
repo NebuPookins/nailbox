@@ -7,6 +7,7 @@ import nebulog from 'nebulog';
 
 import {removeThreadFromBundle} from '../../../models/bundle.js';
 import {
+	isInInbox,
 	isThreadId,
 	makeValidationError,
 	normalizeThreadMessageDto,
@@ -23,6 +24,12 @@ export function createThreadService(dependencies: {
 	bundles?: any;
 } = {}) {
 	const {threadRepository: repository, MessageClass, bundles} = dependencies;
+
+	function markRefreshed(lastRefresheds: any, threadId: string): void {
+		lastRefresheds.markRefreshed(threadId).catch((saveError: any) => {
+			logger.error(util.format('Failed to save last refreshed for %s: %s', threadId, util.inspect(saveError)));
+		});
+	}
 
 	async function saveThreadPayload({
 		threadPayload,
@@ -52,12 +59,9 @@ export function createThreadService(dependencies: {
 			};
 		}
 
-		const existingData = await repository.readThreadJson(threadId);
-
-		const noMessageInInbox = threadPayload.messages.every(
-			(message: any) => message.labelIds.indexOf('INBOX') === -1
-		);
+		const noMessageInInbox = !threadPayload.messages.some(isInInbox);
 		if (noMessageInInbox) {
+			const existingData = await repository.readThreadJson(threadId);
 			logger.info(`Deleting thread ${threadId} because no message in the thread is in the inbox.`);
 			const deleted = await repository.deleteThread(threadId);
 			if (deleted && bundles) {
@@ -68,6 +72,15 @@ export function createThreadService(dependencies: {
 				changed: deleted && Boolean(existingData && Object.keys(existingData).length > 0),
 			};
 		}
+
+		// Gmail bumps a thread's historyId on every change, so a matching one
+		// means the cached copy is current and needn't be re-read or rewritten.
+		if (threadPayload.historyId && await repository.readHistoryId(threadId) === threadPayload.historyId) {
+			markRefreshed(lastRefresheds, threadId);
+			return {status: 200, changed: false};
+		}
+
+		const existingData = await repository.readThreadJson(threadId);
 
 		threadPayload.messages.forEach((messageData: any) => {
 			const messageInstance = new MessageClass(messageData);
@@ -93,9 +106,7 @@ export function createThreadService(dependencies: {
 		if (didChange) {
 			await repository.saveThreadJson(threadId, newData);
 		}
-		lastRefresheds.markRefreshed(threadId).catch((saveError: any) => {
-			logger.error(util.format('Failed to save last refreshed for %s: %s', threadId, util.inspect(saveError)));
-		});
+		markRefreshed(lastRefresheds, threadId);
 		return {
 			status: 200,
 			changed: didChange,
