@@ -5,7 +5,6 @@ import mailcomposer from 'mailcomposer';
 import {marked} from 'marked';
 import hljs from 'highlight.js';
 import posthtml from 'posthtml';
-import Optional from 'optional-js';
 
 function renderHighlightedCode(code: string, lang: string): string {
 	const htmlWithClasses = lang ?
@@ -109,6 +108,22 @@ function collectReplyRecipients({thread, replyMessage, myEmail}: {
 	);
 }
 
+// Per RFC 5322 section 3.6.4, a reply's References is the parent's References
+// (or, lacking that, its In-Reply-To) followed by the parent's Message-ID.
+// Gmail and most clients need both headers to file the reply in its thread.
+function replyThreadingHeaders(replyMessage: any): {inReplyTo?: string; references?: string[]} {
+	const messageId: string | undefined = replyMessage.header('Message-ID')?.value;
+	if (!messageId) {
+		return {};
+	}
+	const parentReferences: string | undefined =
+		(replyMessage.header('References') ?? replyMessage.header('In-Reply-To'))?.value;
+	return {
+		inReplyTo: messageId,
+		references: parentReferences ? [parentReferences, messageId] : [messageId],
+	};
+}
+
 function buildMail({thread, htmlizedMarkdown, bodyPlusSignature, myEmail, replyMessage}: {
 	thread: any;
 	htmlizedMarkdown: string;
@@ -124,13 +139,10 @@ function buildMail({thread, htmlizedMarkdown, bodyPlusSignature, myEmail, replyM
 		};
 	}
 	const toLine = recipients.map((person: any) => util.format('%s <%s>', person.name, person.email));
-	const inReplyToId = Optional.ofNullable(replyMessage.header('Message-ID'))
-		.map((header: any) => header.value)
-		.orElse(null);
 	return mailcomposer({
 		from: myEmail,
 		to: toLine,
-		inReplyTo: inReplyToId,
+		...replyThreadingHeaders(replyMessage),
 		subject: thread.subject(),
 		text: bodyPlusSignature,
 		html: util.format(

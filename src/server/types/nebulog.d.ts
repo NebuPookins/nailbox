@@ -25,11 +25,6 @@ declare module 'mimelib' {
   export = mimelib;
 }
 
-declare module 'optional-js' {
-  const Optional: any;
-  export default Optional;
-}
-
 declare module 'posthtml' {
   interface Result {
     html: string;

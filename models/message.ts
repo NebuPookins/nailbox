@@ -299,6 +299,12 @@ function getAttachments(messagePart: GmailMessagePart): Attachment[] {
 	return retVal;
 }
 
+// Header names are case-insensitive (RFC 5322), e.g. Message-ID vs Message-Id.
+function isHeaderNamed(headerName: string): (header: GmailHeader) => boolean {
+	const lowerCaseHeaderName = headerName.toLowerCase();
+	return header => header.name.toLowerCase() === lowerCaseHeaderName;
+}
+
 export class Message {
 	private _data: GmailMessageData;
 
@@ -330,7 +336,7 @@ export class Message {
 	 * representing the sender of this message. Returns null if there was no sender
 	 */
 	sender(): EmailAddress | null {
-		const senders = this.emailAddresses(header => ['From', 'from'].some(expectedHeaderName => header.name === expectedHeaderName));
+		const senders = this.emailAddresses(isHeaderNamed('From'));
 		if (senders.length !== 1) {
 			logger.warn(`Expected to have exactly 1 sender, but found ${senders.length} senders. Data was ${util.inspect(this._data)} and senders were ${senders}. Headers where ${util.inspect(this._data.payload.headers)}`);
 		}
@@ -344,7 +350,7 @@ export class Message {
 	 * that address is used. Otherwise, null is returned.
 	 */
 	replyTo(): EmailAddress | null {
-		const replyToAddr = this.emailAddresses(header => header.name === 'Reply-To');
+		const replyToAddr = this.emailAddresses(isHeaderNamed('Reply-To'));
 		if (replyToAddr.length === 0) {
 			return this.sender();
 		} else if (replyToAddr.length === 1) {
@@ -364,7 +370,7 @@ export class Message {
 	 * representing the recipients of this message.
 	 */
 	recipients(): EmailAddress[] {
-		return this.emailAddresses(header => header.name === 'To');
+		return this.emailAddresses(isHeaderNamed('To'));
 	}
 
 	/**
@@ -377,8 +383,7 @@ export class Message {
 	 * null if there is no header with the specified name.
 	 */
 	header(headerName: string): GmailHeader | null {
-		const matchingHeader = this._data.payload.headers
-			.filter(header => header.name === headerName);
+		const matchingHeader = this._data.payload.headers.filter(isHeaderNamed(headerName));
 		if (matchingHeader.length === 0) {
 			return null;
 		}
