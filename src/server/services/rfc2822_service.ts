@@ -6,8 +6,10 @@ import {marked} from 'marked';
 import hljs from 'highlight.js';
 import posthtml from 'posthtml';
 
+// A fence's language tag is free text, and hljs.highlight throws on names it
+// doesn't know, so anything unrecognized falls back to auto-detection.
 function renderHighlightedCode(code: string, lang: string): string {
-	const htmlWithClasses = lang ?
+	const htmlWithClasses = hljs.getLanguage(lang) ?
 		hljs.highlight(code, {language: lang, ignoreIllegals: true}).value :
 		hljs.highlightAuto(code).value;
 	return posthtml()
@@ -63,7 +65,7 @@ marked.use({
 	renderer: {
 		code({text, lang}: {text: string; lang?: string}): string {
 			const highlighted = renderHighlightedCode(text, lang ?? '');
-			const langClass = lang ? ` class="language-${lang}"` : '';
+			const langClass = lang ? ` class="language-${_.escape(lang)}"` : '';
 			return `<pre><code${langClass}>${highlighted}</code></pre>`;
 		},
 	},

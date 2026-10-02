@@ -102,7 +102,7 @@ test('buildRfc2822Message rejects replies with no recipient other than myself', 
 	});
 });
 
-async function buildReplyMimeText(headers) {
+async function buildReplyMimeText(headers, body = 'Hello world') {
 	const replyMessage = new Message({
 		id: 'message-2',
 		threadId: 'thread-1',
@@ -138,7 +138,7 @@ async function buildReplyMimeText(headers) {
 	});
 	const encoded = await service.buildRfc2822Message({
 		threadId: 'thread-1',
-		body: 'Hello world',
+		body,
 		inReplyTo: 'message-2',
 		myEmail: 'me@example.com',
 		logger: createLogger(),
@@ -188,4 +188,16 @@ test('buildRfc2822Message omits threading headers when the parent has no Message
 
 	assert.doesNotMatch(mimeText, /In-Reply-To:/);
 	assert.doesNotMatch(mimeText, /References:/);
+});
+
+test('buildRfc2822Message accepts code fences tagged with a language highlight.js does not know', async () => {
+	const mimeText = await buildReplyMimeText([], '```notalanguage\nconst x = 1;\n```');
+
+	assert.match(mimeText, /const x = 1;/);
+});
+
+test('buildRfc2822Message escapes a code fence language tag in the HTML body', async () => {
+	const mimeText = await buildReplyMimeText([], '```a"onmouseover="x\ncode\n```');
+
+	assert.doesNotMatch(mimeText, /language-a"onmouseover/);
 });
