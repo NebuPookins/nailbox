@@ -18,14 +18,6 @@ declare const saveAs: (blob: Blob, name: string) => void;
 
 // String.prototype.hashCode is declared in string_extensions.d.ts
 
-function fitMessageBody(mb: HTMLElement): void {
-	mb.style.zoom = '';
-	const ratio = mb.scrollWidth / mb.clientWidth;
-	if (ratio > 1.01) {
-		mb.style.zoom = (1 / ratio).toFixed(3);
-	}
-}
-
 interface AuthStatus {
 	configured: boolean;
 	connected: boolean;
@@ -517,13 +509,20 @@ function renderSetupNeededState(message?: string): void {
 	});
 	var threadViewerIsland = frontendApi.mountThreadViewerIsland({
 		container: threadViewerRoot,
-		showModal: function() {
-				showModal(threadViewer);
-				// Fit after the modal's CSS transition finishes (300 ms).
-				setTimeout(function() {
-					threadViewer.querySelectorAll<HTMLElement>('.message-body').forEach(fitMessageBody);
-				}, 300);
-			},
+		showModal: function() { showModal(threadViewer); },
+		loadSenderRenderModes: async function() {
+			const result = await appApi.loadSenderRenderModes();
+			if (!result.ok) {
+				throw result.error;
+			}
+			return result.value;
+		},
+		saveSenderRenderMode: async function(senderEmail, mode) {
+			const result = await appApi.saveSenderRenderMode(senderEmail, mode);
+			if (!result.ok) {
+				throw result.error;
+			}
+		},
 		hideModal: function() { hideModal(threadViewer); },
 		getEmailAddress: function() { return authStatus.emailAddress; },
 		reportError: function(error: unknown) {
@@ -640,14 +639,6 @@ function renderSetupNeededState(message?: string): void {
 		reportAsyncError: function(error: unknown) {
 			messengerGetter().error(error instanceof Error ? error.message : String(error));
 		},
-	});
-
-	let resizeTimer: ReturnType<typeof setTimeout> | null = null;
-	window.addEventListener('resize', function() {
-		if (resizeTimer !== null) clearTimeout(resizeTimer);
-		resizeTimer = setTimeout(function() {
-			threadViewer.querySelectorAll<HTMLElement>('.message-body').forEach(fitMessageBody);
-		}, 100);
 	});
 
 	appShellController.initialize().then(result => {

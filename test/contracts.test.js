@@ -121,7 +121,7 @@ test('normalizeThreadMessageDto validates attachment shape', () => {
 		date: 1,
 		body: {
 			original: '<p>Hello</p>',
-			sanitized: '<p>Hello</p>',
+			html: '<p>Hello</p>',
 			plainText: 'Hello',
 		},
 		wordcount: 1,

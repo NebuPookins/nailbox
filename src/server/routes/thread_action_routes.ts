@@ -227,6 +227,24 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 		}
 	});
 
+	/**
+	 * Fetches an attachment's base64url data from Gmail. Responds with an error and
+	 * returns null if that is not possible, so callers should just stop in that case.
+	 */
+	async function fetchAttachmentData(res: Response, messageId: string, attachmentId: string | undefined): Promise<string | null> {
+		if (attachmentId === undefined) {
+			res.sendStatus(404);
+			return null;
+		}
+		const attachment = await withGmailApi(res, async (gmailRequest: any) => {
+			return gmailRequest({path: `/messages/${messageId}/attachments/${attachmentId}`});
+		});
+		if (attachment == null) {
+			return null;
+		}
+		return attachment.data;
+	}
+
 	app.get(/^\/api\/threads\/messages\/([a-z0-9]+)\/attachments\/([a-zA-Z0-9_-]+)$/, async function(req: Request, res: Response) {
 		const messageId = req.params[0];
 		const attachmentId = req.params[1];
@@ -241,6 +259,45 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 			}
 			res.status(200).send(attachment);
 		} catch (error) {
+			logger.error(util.inspect(error));
+			res.sendStatus(500);
+		}
+	});
+
+	/**
+	 * Serves the bytes of an inline image that an email references as `cid:<contentId>`.
+	 * Only images are served, and with headers that keep the response inert should it
+	 * be opened directly (an SVG, say), because it is delivered from our own origin.
+	 */
+	app.get(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/cid\/(.+)$/, async function(req: Request, res: Response) {
+		const [threadId, messageId, contentId] = [req.params[0], req.params[1], req.params[2]];
+		try {
+			const message = (await threadRepository.readThread(threadId)).message(messageId);
+			const part = message ? message.findPartByContentId(contentId) : null;
+			if (!part || !/^image\/[a-z0-9.+-]+$/i.test(part.mimeType)) {
+				res.sendStatus(404);
+				return;
+			}
+			const base64Data = part.body.data !== undefined
+				? part.body.data
+				: await fetchAttachmentData(res, messageId, part.body.attachmentId);
+			if (base64Data == null) {
+				return;
+			}
+			res.status(200)
+				.type(part.mimeType)
+				.set({
+					'Cache-Control': 'private, max-age=86400',
+					'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+					'X-Content-Type-Options': 'nosniff',
+				})
+				.send(Buffer.from(base64Data, 'base64url'));
+		} catch (error) {
+			const err = error as Error & {code?: string};
+			if (err.code === 'ENOENT') {
+				res.sendStatus(404);
+				return;
+			}
 			logger.error(util.inspect(error));
 			res.sendStatus(500);
 		}

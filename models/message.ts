@@ -26,6 +26,7 @@ export interface GmailMessageBody {
 export interface GmailMessagePart {
 	mimeType: string;
 	filename?: string;
+	headers?: GmailHeader[];
 	body: GmailMessageBody;
 	parts?: GmailMessagePart[];
 }
@@ -282,6 +283,41 @@ function selectedBestPart(messagePart: GmailMessagePart, threadId: string): Gmai
 	})();
 })();
 
+function isInlineTextPart(part: GmailMessagePart): boolean {
+	return part.mimeType === 'text/plain' && !part.filename && !part.body.attachmentId;
+}
+
+/**
+ * The text/plain part that carries the same body as the message's main part,
+ * or null if there is none. Only a multipart/alternative offers a choice of
+ * representations; in any other multipart (mixed, related, ...) the first
+ * part is the body and the rest are extras such as attachments, forwarded
+ * messages or mailing-list footers, so they are never mistaken for it.
+ */
+function bodyPlainTextPart(messagePart: GmailMessagePart): GmailMessagePart | null {
+	const children = messagePart.parts ?? [];
+	if (children.length === 0) {
+		return isInlineTextPart(messagePart) ? messagePart : null;
+	}
+	if (messagePart.mimeType === 'multipart/alternative') {
+		return children.map(bodyPlainTextPart).find(part => part !== null) ?? null;
+	}
+	return bodyPlainTextPart(children[0]);
+}
+
+function flattenParts(messagePart: GmailMessagePart): GmailMessagePart[] {
+	return [messagePart, ...(messagePart.parts ?? []).flatMap(flattenParts)];
+}
+
+/**
+ * The Content-ID of a part, without the surrounding angle brackets, or
+ * undefined if the part has none.
+ */
+function contentIdOf(part: GmailMessagePart): string | undefined {
+	const header = (part.headers ?? []).find(isHeaderNamed('Content-ID'));
+	return header?.value.trim().replace(/^<|>$/g, '');
+}
+
 function getAttachments(messagePart: GmailMessagePart): Attachment[] {
 	let retVal: Attachment[] = [];
 	if (messagePart.body.attachmentId) {
@@ -433,6 +469,30 @@ export class Message {
 		assert(this._data.payload, util.inspect(this._data));
 		const bestPart = selectedBestPart(this._data.payload, this._data.threadId);
 		return formatPartAsHtml(bestPart, this._data.threadId);
+	}
+
+	/**
+	 * @return the decoded plain-text version of this message's body, or null if
+	 * the sender didn't include one.
+	 */
+	plainTextAlternative(): string | null {
+		const part = bodyPlainTextPart(this._data.payload);
+		return part ? mimelib.decodeBase64(part.body.data ?? '') : null;
+	}
+
+	/**
+	 * @return the Gmail thread id this message belongs to.
+	 */
+	threadId(): string {
+		return this._data.threadId;
+	}
+
+	/**
+	 * @param contentId the Content-ID a `cid:` URL refers to, without angle brackets.
+	 * @return the part of this message carrying that Content-ID, or null.
+	 */
+	findPartByContentId(contentId: string): GmailMessagePart | null {
+		return flattenParts(this._data.payload).find(part => contentIdOf(part) === contentId) ?? null;
 	}
 
 	/**

@@ -1,5 +1,6 @@
 import type { GroupingRulesConfig, ThreadGroup } from './thread_grouping.js';
 import { z } from 'zod';
+import { RENDER_MODES, type RenderMode } from '../server/types/config.js';
 
 interface ApiError extends Error {
 	code?: string;
@@ -144,6 +145,8 @@ const groupingRulesConfigSchema = z.object({
 	})),
 });
 
+const senderRenderModesSchema = z.record(z.string(), z.enum(RENDER_MODES));
+
 const createBundleResponseSchema = z.object({
 	bundleId: z.string().optional(),
 });
@@ -190,7 +193,7 @@ const threadMessageSchema = z.object({
 	date: z.number(),
 	body: z.object({
 		original: z.string(),
-		sanitized: z.string(),
+		html: z.string(),
 		plainText: z.string(),
 	}),
 	wordcount: z.number(),
@@ -206,6 +209,7 @@ const threadDataResponseSchema = z.object({
 	messages: z.array(threadMessageSchema),
 });
 
+export type SenderRenderModesResponse = z.infer<typeof senderRenderModesSchema>;
 type CreateBundleResponse = z.infer<typeof createBundleResponseSchema>;
 type Rfc2822Response = z.infer<typeof rfc2822ResponseSchema>;
 type AttachmentResponse = z.infer<typeof attachmentResponseSchema>;
@@ -379,6 +383,25 @@ export function createAppApi() {
 				} else {
 					return { ok: false, error: new Error(parseResult.error.message) };
 				}
+			});
+		},
+		loadSenderRenderModes(): Promise<Result<SenderRenderModesResponse>> {
+			return request('/api/sender-render-modes', {
+				method: 'GET',
+			}).then(result => {
+				if (!result.ok) return result;
+				const parseResult = senderRenderModesSchema.safeParse(result.value);
+				if (parseResult.success) {
+					return { ok: true, value: parseResult.data };
+				} else {
+					return { ok: false, error: new Error(parseResult.error.message) };
+				}
+			});
+		},
+		saveSenderRenderMode(senderEmail: string, mode: RenderMode): Promise<Result<JsonValue>> {
+			return request('/api/sender-render-modes', {
+				body: JSON.stringify({senderEmail, mode}),
+				method: 'PUT',
 			});
 		},
 		loadLabels(): Promise<Result<LabelsResponse>> {

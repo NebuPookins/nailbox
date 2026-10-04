@@ -222,3 +222,65 @@ test('wordcount route responds 404 for a thread that is not cached', async () =>
 		assert.equal(res.statusCode, 404);
 	});
 });
+
+function findStringRoute(app, method, path) {
+	const route = app.routes.find((entry) => entry.method === method && entry.path === path);
+	assert.ok(route, `Expected route ${path} to be registered`);
+	return route.handler;
+}
+
+function registerRenderModeRoutes(initialModes) {
+	const app = createFakeApp();
+	const config = {senderRenderModes: initialModes};
+	const savedConfigs = [];
+	registerThreadRoutes(app, {
+		config,
+		configRepository: {
+			async saveConfig(savedConfig) {
+				savedConfigs.push(savedConfig);
+				return savedConfig;
+			},
+		},
+		logger: { error() {}, info() {}, warn() {} },
+	});
+	return {app, config, savedConfigs};
+}
+
+test('GET sender render modes returns the saved modes', async () => {
+	const {app} = registerRenderModeRoutes({'al@example.com': 'reader'});
+	const res = createFakeResponse();
+
+	await findStringRoute(app, 'GET', '/api/sender-render-modes')({}, res);
+
+	assert.equal(res.statusCode, 200);
+	assert.deepEqual(res.body, {'al@example.com': 'reader'});
+});
+
+test('PUT sender render modes saves the mode for the sender and responds with all modes', async () => {
+	const {app, savedConfigs} = registerRenderModeRoutes({'bo@example.com': 'plain'});
+	const res = createFakeResponse();
+
+	await findStringRoute(app, 'PUT', '/api/sender-render-modes')(
+		{body: {senderEmail: 'Al@Example.com', mode: 'reader'}},
+		res,
+	);
+
+	const expected = {'bo@example.com': 'plain', 'al@example.com': 'reader'};
+	assert.equal(res.statusCode, 200);
+	assert.deepEqual(res.body, expected);
+	assert.equal(savedConfigs.length, 1);
+	assert.deepEqual(savedConfigs[0].senderRenderModes, expected);
+});
+
+test('PUT sender render modes rejects an invalid mode without saving', async () => {
+	const {app, savedConfigs} = registerRenderModeRoutes({});
+	const res = createFakeResponse();
+
+	await findStringRoute(app, 'PUT', '/api/sender-render-modes')(
+		{body: {senderEmail: 'al@example.com', mode: 'sparkly'}},
+		res,
+	);
+
+	assert.equal(res.statusCode, 400);
+	assert.equal(savedConfigs.length, 0);
+});

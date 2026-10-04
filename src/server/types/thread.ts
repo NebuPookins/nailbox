@@ -83,7 +83,7 @@ export interface ThreadMessageDto {
 	date: number;
 	body: {
 		original: string;
-		sanitized: string;
+		html: string;
 		plainText: string;
 	};
 	wordcount: number;

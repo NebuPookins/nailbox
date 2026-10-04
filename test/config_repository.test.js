@@ -52,3 +52,54 @@ test('config repository validates and persists normalized config on save', async
 	assert.equal(result.googleOAuth.clientId, 'abc');
 	assert.deepEqual(result.emailGroupingRules, {rules: []});
 });
+
+test('config repository defaults to no sender render modes', async () => {
+	const repository = createConfigRepository({
+		fileioImpl: {
+			async readJsonFromOptionalFile() {
+				return {};
+			},
+			async saveJsonToFile() {},
+		},
+		pathToConfig: 'ignored.json',
+	});
+
+	assert.deepEqual((await repository.readConfig()).senderRenderModes, {});
+});
+
+test('config repository persists sender render modes, normalizing the email key', async () => {
+	let savedConfig = null;
+	const repository = createConfigRepository({
+		fileioImpl: {
+			async readJsonFromOptionalFile() {
+				return savedConfig;
+			},
+			async saveJsonToFile(json) {
+				savedConfig = json;
+			},
+		},
+		pathToConfig: 'ignored.json',
+	});
+
+	await repository.saveConfig({senderRenderModes: {' Al@Example.com ': 'reader', 'bo@example.com': 'plain'}});
+	const config = await repository.readConfig();
+
+	assert.deepEqual(config.senderRenderModes, {'al@example.com': 'reader', 'bo@example.com': 'plain'});
+});
+
+test('config repository rejects an unknown render mode', async () => {
+	const repository = createConfigRepository({
+		fileioImpl: {
+			async readJsonFromOptionalFile() {
+				return {};
+			},
+			async saveJsonToFile() {},
+		},
+		pathToConfig: 'ignored.json',
+	});
+
+	await assert.rejects(
+		repository.saveConfig({senderRenderModes: {'al@example.com': 'sparkly'}}),
+		{code: 'INVALID_CONTRACT'},
+	);
+});

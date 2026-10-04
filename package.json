@@ -20,6 +20,7 @@
   "author": "Nebu Pookins <nebupookins@gmail.com>",
   "private": true,
   "dependencies": {
+    "@mozilla/readability": "^0.6.0",
     "express": "^5.2.1",
     "highlight.js": "^11.11.1",
     "html-entities": "^2.6.0",
@@ -38,6 +39,7 @@
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "@types/sanitize-html": "^2.16.2",
     "esbuild": "^0.28.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

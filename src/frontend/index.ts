@@ -9,6 +9,7 @@ import { mountSenderRuleIsland, type SenderRuleIsland } from './sender_rule_isla
 import { mountThreadListIsland } from './thread_list_island.js';
 import { mountThreadViewerIsland } from './thread_viewer_island.js';
 import type { ThreadViewerAdapter } from './thread_viewer_island.js';
+import type { RenderMode, SenderRenderModes } from '../server/types/config.js';
 import type { Notify } from './island_manager.js';
 import type { GroupingRulesConfig, ThreadGroup, ThreadOpenPayload, ThreadRowItem } from './thread_grouping.js';
 import type { GroupingRulesDebugIsland } from './grouping_rules_debug_island.js';
@@ -144,6 +145,8 @@ interface FrontendApi {
 		onOpenLaterPicker: (opts: { threadId: string | null; subject: string; hideModal: () => void }) => void;
 		onReplyAll: (opts: { body: string; threadId: string | null; inReplyTo: string | null; emailAddress: string | null; clearReply: () => void; hideModal: () => void }) => Promise<void>;
 		onViewOnGmail: (opts: { threadId: string | null }) => void;
+		loadSenderRenderModes: () => Promise<SenderRenderModes>;
+		saveSenderRenderMode: (senderEmail: string, mode: RenderMode) => Promise<void>;
 		reportError: (error: Error) => void;
 		showModal: () => void;
 	}): {

@@ -1,9 +1,22 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ThreadMessageDto, PersonDto } from '../server/types/thread.js';
 import type { ThreadOpenPayload } from './thread_grouping.js';
 import { AddSenderRuleButton } from './add_sender_rule_button.js';
 import { formatPerson } from './person_presenter.js';
+import {
+	buildEmailSrcdoc,
+	buildReaderSrcdoc,
+	EMAIL_FRAME_SANDBOX,
+	mayReferenceRemoteContent,
+	type RemoteContent,
+} from './email_srcdoc.js';
+import { observeContentHeight } from './iframe_autosize.js';
+import { linkifySegments } from './linkify.js';
+import { parseWithReadability } from './readability_parser.js';
+import { readerViewFor } from './reader_view.js';
+import { RENDER_MODES, type RenderMode, type SenderRenderModes } from '../server/types/config.js';
+import { renderModeFor, senderKeyOf } from './render_mode.js';
 
 type ThreadMessage = ThreadMessageDto & { duration?: string };
 
@@ -22,6 +35,30 @@ interface ThreadViewerState {
 	messages: ThreadMessage[];
 	deletedMessages: DeletedMessagesPayload | null;
 	replyText: string;
+	/** Saved render mode per sender; null until first loaded. Kept across threads. */
+	senderRenderModes: SenderRenderModes | null;
+	/** Modes picked for messages that have no sender to remember them by. */
+	messageRenderModes: Readonly<Record<string, RenderMode>>;
+	/** Messages whose remote images the user chose to load. */
+	remoteContentAllowedFor: ReadonlySet<string>;
+}
+
+/** The state with no thread shown, keeping only what outlives a thread. */
+function emptyThreadState(senderRenderModes: SenderRenderModes | null): ThreadViewerState {
+	return {
+		threadId: null,
+		subject: '',
+		senders: [],
+		receivers: [],
+		loadingText: '',
+		isLoading: false,
+		messages: [],
+		deletedMessages: null,
+		replyText: '',
+		senderRenderModes,
+		messageRenderModes: {},
+		remoteContentAllowedFor: new Set(),
+	};
 }
 
 function pluralize(n: number, singular: string, plural: string): string {
@@ -111,13 +148,159 @@ function DeletedMessagesNotice({ num, threadId }: DeletedMessagesNoticeProps) {
 	);
 }
 
-interface MessagePanelProps {
-	message: ThreadMessage;
-	onAddSenderRule: (senderEmail: string) => void;
-	onDownloadAttachment: (opts: { messageId: string; attachmentId: string; attachmentName: string }) => void;
+const RENDER_MODE_LABELS: Readonly<Record<RenderMode, string>> = {
+	original: 'Original',
+	reader: 'Reader',
+	plain: 'Plain',
+};
+
+const MIN_FRAME_HEIGHT_PX = 24;
+
+interface SandboxedFrameProps {
+	srcdoc: string;
+	title: string;
 }
 
-function MessagePanel({ message, onAddSenderRule, onDownloadAttachment }: MessagePanelProps) {
+/** Shows an HTML document in a script-less sandboxed iframe that grows to fit its content. */
+function SandboxedFrame({ srcdoc, title }: SandboxedFrameProps) {
+	const [frame, setFrame] = useState<HTMLIFrameElement | null>(null);
+	const [loadCount, setLoadCount] = useState(0);
+	const [height, setHeight] = useState(MIN_FRAME_HEIGHT_PX);
+	useEffect(function() {
+		return frame ? observeContentHeight(frame, setHeight) : undefined;
+	}, [frame, loadCount]);
+	return (
+		<iframe
+			ref={setFrame}
+			title={title}
+			sandbox={EMAIL_FRAME_SANDBOX}
+			srcDoc={srcdoc}
+			onLoad={function() { setLoadCount(function(count) { return count + 1; }); }}
+			style={{ width: '100%', height: height + 'px', border: 0, display: 'block' }}
+		/>
+	);
+}
+
+function PlainTextBody({ text }: { text: string }) {
+	return (
+		<pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: 'inherit', background: 'none', border: 0, padding: 0 }}>
+			{linkifySegments(text).map(function(segment, index) {
+				return segment.kind === 'link'
+					? <a key={index} href={segment.url} target="_blank" rel="noopener noreferrer">{segment.url}</a>
+					: <React.Fragment key={index}>{segment.text}</React.Fragment>;
+			})}
+		</pre>
+	);
+}
+
+interface RemoteImagesBarProps {
+	onLoadImages: () => void;
+}
+
+function RemoteImagesBar({ onLoadImages }: RemoteImagesBarProps) {
+	return (
+		<div className="small text-muted" style={{ padding: '2px 8px', background: '#fcf8e3' }}>
+			Remote images blocked &mdash;{' '}
+			<button type="button" className="btn btn-link btn-xs" style={{ padding: 0 }} onClick={onLoadImages}>
+				Load images
+			</button>
+		</div>
+	);
+}
+
+interface MessageBodyProps {
+	message: ThreadMessage;
+	mode: RenderMode;
+	remoteContent: RemoteContent;
+	onLoadImages: () => void;
+}
+
+function MessageBody({ message, mode, remoteContent, onLoadImages }: MessageBodyProps) {
+	const html = message.body.html;
+	// Memoized because the whole thread re-renders on every keystroke in the reply box.
+	const frame = useMemo(function() {
+		return mode === 'plain' ? null : framedBodyFor(html, mode, remoteContent);
+	}, [mode, html, remoteContent]);
+	if (frame === null) {
+		return <PlainTextBody text={message.body.plainText} />;
+	}
+	return (
+		<>
+			{frame.readerUnavailable && (
+				<div className="small text-muted">Reader view unavailable for this message</div>
+			)}
+			{remoteContent === 'blocked' && frame.mayReferenceRemoteContent && (
+				<RemoteImagesBar onLoadImages={onLoadImages} />
+			)}
+			<SandboxedFrame srcdoc={frame.srcdoc} title={'Message from ' + formatSenderForTitle(message)} />
+		</>
+	);
+}
+
+interface FramedBody {
+	srcdoc: string;
+	mayReferenceRemoteContent: boolean;
+	readerUnavailable: boolean;
+}
+
+function framedBodyFor(html: string, mode: Exclude<RenderMode, 'plain'>, remoteContent: RemoteContent): FramedBody {
+	const origin = window.location.origin;
+	const readerView = mode === 'reader' ? readerViewFor(html, parseWithReadability) : null;
+	if (readerView !== null && readerView.kind === 'article') {
+		return {
+			srcdoc: buildReaderSrcdoc({ html: readerView.html, remoteContent, origin }),
+			mayReferenceRemoteContent: mayReferenceRemoteContent(readerView.html),
+			readerUnavailable: false,
+		};
+	}
+	return {
+		srcdoc: buildEmailSrcdoc({ html, remoteContent, origin }),
+		mayReferenceRemoteContent: mayReferenceRemoteContent(html),
+		readerUnavailable: readerView !== null,
+	};
+}
+
+function formatSenderForTitle(message: ThreadMessage): string {
+	const sender = message.from.find(function(person) { return person !== null; });
+	return sender ? formatPerson(sender) : 'unknown sender';
+}
+
+interface RenderModeSwitchProps {
+	mode: RenderMode;
+	onChange: (mode: RenderMode) => void;
+}
+
+function RenderModeSwitch({ mode, onChange }: RenderModeSwitchProps) {
+	return (
+		<div className="btn-group btn-group-xs pull-right" role="group" aria-label="Render mode">
+			{RENDER_MODES.map(function(candidate) {
+				return (
+					<button
+						key={candidate}
+						type="button"
+						className={'btn btn-default' + (candidate === mode ? ' active' : '')}
+						aria-pressed={candidate === mode}
+						onClick={function() { onChange(candidate); }}
+					>
+						{RENDER_MODE_LABELS[candidate]}
+					</button>
+				);
+			})}
+		</div>
+	);
+}
+
+interface MessagePanelProps {
+	message: ThreadMessage;
+	renderMode: RenderMode | null;
+	remoteContent: RemoteContent;
+	onAddSenderRule: (senderEmail: string) => void;
+	onDownloadAttachment: (opts: { messageId: string; attachmentId: string; attachmentName: string }) => void;
+	onRenderModeChange: (mode: RenderMode) => void;
+	onLoadImages: () => void;
+}
+
+function MessagePanel({ message, renderMode, remoteContent, onAddSenderRule, onDownloadAttachment, onRenderModeChange, onLoadImages }: MessagePanelProps) {
 	return (
 		<div className="message panel panel-default" data-message-id={message.messageId}>
 			<div className="panel-heading">
@@ -131,16 +314,20 @@ function MessagePanel({ message, onAddSenderRule, onDownloadAttachment }: Messag
 								: null}
 						</div>
 						<div className="col-xs-2">{formatPrettyTimestamp(message.date)}</div>
-						<div className="col-xs-4">{message.wordcount} words: {message.duration || ''}</div>
+						<div className="col-xs-4">
+							{message.wordcount} words: {message.duration || ''}
+							{renderMode !== null && <RenderModeSwitch mode={renderMode} onChange={onRenderModeChange} />}
+						</div>
 					</div>
 				</div>
 			</div>
 			<div className="panel-body">
 				<div className="row">
-					<div
-						className="col-xs-12 message-body"
-						dangerouslySetInnerHTML={{ __html: (message.body && message.body.sanitized) ? message.body.sanitized : '' }}
-					/>
+					<div className="col-xs-12 message-body">
+						{renderMode !== null && (
+							<MessageBody message={message} mode={renderMode} remoteContent={remoteContent} onLoadImages={onLoadImages} />
+						)}
+					</div>
 				</div>
 			</div>
 			<div className="panel-footer">
@@ -171,6 +358,30 @@ function MessagePanel({ message, onAddSenderRule, onDownloadAttachment }: Messag
 	);
 }
 
+interface ThreadIdLabelProps {
+	threadId: string | null;
+}
+
+/** The thread's ID as small muted text, selectable and copied to the clipboard on click. */
+function ThreadIdLabel({ threadId }: ThreadIdLabelProps) {
+	if (!threadId) {
+		return null;
+	}
+	return (
+		<span
+			className="thread-id"
+			title="Click to copy thread ID"
+			style={{ float: 'left', color: '#999', fontFamily: 'monospace', fontSize: '11px', lineHeight: '30px', cursor: 'copy', userSelect: 'text' }}
+			onClick={function() {
+				// Best-effort: the clipboard API is missing in insecure contexts and can reject.
+				navigator.clipboard?.writeText(threadId).catch(function() {});
+			}}
+		>
+			{threadId}
+		</span>
+	);
+}
+
 interface ThreadViewerAppProps {
 	subject: string;
 	senders: PersonDto[];
@@ -181,6 +392,11 @@ interface ThreadViewerAppProps {
 	deletedMessages: DeletedMessagesPayload | null;
 	replyText: string;
 	lastMessageId: string | null;
+	threadId: string | null;
+	renderModeFor: (message: ThreadMessage) => RenderMode | null;
+	remoteContentFor: (message: ThreadMessage) => RemoteContent;
+	onRenderModeChange: (message: ThreadMessage, mode: RenderMode) => void;
+	onLoadImages: (message: ThreadMessage) => void;
 	onAddSenderRule: (senderEmail: string) => void;
 	onReplyTextChange: (text: string) => void;
 	onReplyAll: (body: string, inReplyTo: string | null) => void;
@@ -204,6 +420,11 @@ function ThreadViewerApp({
 	deletedMessages,
 	replyText,
 	lastMessageId,
+	threadId,
+	renderModeFor,
+	remoteContentFor,
+	onRenderModeChange,
+	onLoadImages,
 	onAddSenderRule,
 	onReplyTextChange,
 	onReplyAll,
@@ -257,8 +478,12 @@ function ThreadViewerApp({
 							<MessagePanel
 								key={message.messageId || i}
 								message={message}
+								renderMode={renderModeFor(message)}
+								remoteContent={remoteContentFor(message)}
 								onAddSenderRule={onAddSenderRule}
 								onDownloadAttachment={onDownloadAttachment}
+								onRenderModeChange={function(mode) { onRenderModeChange(message, mode); }}
+								onLoadImages={function() { onLoadImages(message); }}
 							/>
 						);
 					})}
@@ -280,6 +505,7 @@ function ThreadViewerApp({
 				</div>
 			</div>
 			<div className="modal-footer">
+				<ThreadIdLabel threadId={threadId} />
 				<button className="btn btn-sm btn-success archive-thread" title="Done" onClick={onArchive}>
 					<span className="glyphicon glyphicon-ok"></span>
 				</button>
@@ -358,6 +584,8 @@ interface MountThreadViewerIslandDeps {
 	onOpenLaterPicker: (opts: LaterPickerOpts) => void;
 	onOpenLabelPicker: (opts: LabelPickerOpts) => void;
 	onViewOnGmail: (opts: ViewOnGmailOpts) => void;
+	loadSenderRenderModes: () => Promise<SenderRenderModes>;
+	saveSenderRenderMode: (senderEmail: string, mode: RenderMode) => Promise<void>;
 }
 
 export interface ThreadViewerAdapter {
@@ -395,20 +623,12 @@ export function mountThreadViewerIsland({
 	onOpenLaterPicker,
 	onOpenLabelPicker,
 	onViewOnGmail,
+	loadSenderRenderModes,
+	saveSenderRenderMode,
 }: MountThreadViewerIslandDeps) {
 	const root = createRoot(container);
 
-	let state: ThreadViewerState = {
-		threadId: null,
-		subject: '',
-		senders: [],
-		receivers: [],
-		loadingText: '',
-		isLoading: false,
-		messages: [],
-		deletedMessages: null,
-		replyText: '',
-	};
+	let state: ThreadViewerState = emptyThreadState(null);
 
 	function render() {
 		const lastMessageId = state.messages.length > 0
@@ -425,6 +645,31 @@ export function mountThreadViewerIsland({
 				deletedMessages={state.deletedMessages}
 				replyText={state.replyText}
 				lastMessageId={lastMessageId}
+				threadId={state.threadId}
+				renderModeFor={function(message) {
+					const override = state.messageRenderModes[message.messageId];
+					if (override !== undefined) {
+						return override;
+					}
+					return state.senderRenderModes === null ? null : renderModeFor(state.senderRenderModes, message.from);
+				}}
+				remoteContentFor={function(message) {
+					return state.remoteContentAllowedFor.has(message.messageId) ? 'allowed' : 'blocked';
+				}}
+				onRenderModeChange={function(message, mode) {
+					const senderKey = senderKeyOf(message.from);
+					if (senderKey === undefined) {
+						state.messageRenderModes = { ...state.messageRenderModes, [message.messageId]: mode };
+					} else {
+						state.senderRenderModes = { ...state.senderRenderModes, [senderKey]: mode };
+						saveSenderRenderMode(senderKey, mode).catch(reportError);
+					}
+					render();
+				}}
+				onLoadImages={function(message) {
+					state.remoteContentAllowedFor = new Set([...state.remoteContentAllowedFor, message.messageId]);
+					render();
+				}}
 				onAddSenderRule={onAddSenderRule}
 				onReplyTextChange={function(text) {
 					state.replyText = text;
@@ -490,17 +735,24 @@ export function mountThreadViewerIsland({
 
 	function open(threadSummary: ThreadSummaryInput): ThreadViewerAdapter {
 		state = {
-			threadId: null,
+			...emptyThreadState(state.senderRenderModes),
 			subject: threadSummary.subject || '',
 			senders: threadSummary.senders || [],
 			receivers: threadSummary.receivers || [],
 			loadingText: threadSummary.snippet || '',
-			isLoading: false,
-			messages: [],
-			deletedMessages: null,
-			replyText: '',
 		};
 		render();
+		// Loaded once; afterwards this island's own copy is kept current as modes are picked.
+		if (state.senderRenderModes === null) {
+			loadSenderRenderModes().then(function(modes) {
+				state.senderRenderModes = modes;
+				render();
+			}).catch(function(error: Error) {
+				state.senderRenderModes = {};
+				render();
+				reportError(error);
+			});
+		}
 		return {
 			appendDeletedMessages: function(payload) {
 				state.deletedMessages = { num: payload.num, threadId: payload.threadId };
@@ -560,17 +812,7 @@ export function mountThreadViewerIsland({
 	}
 
 	function clear() {
-		state = {
-			threadId: null,
-			subject: '',
-			senders: [],
-			receivers: [],
-			loadingText: '',
-			isLoading: false,
-			messages: [],
-			deletedMessages: null,
-			replyText: '',
-		};
+		state = emptyThreadState(state.senderRenderModes);
 		render();
 	}
 

@@ -1,5 +1,5 @@
 import type {GroupingCondition, GroupingRule, GroupingRulesConfig} from '../types/grouping_rules.js';
-import type {AppConfig, GoogleOAuthSetupDto} from '../types/config.js';
+import {RENDER_MODES, senderKeyFor, type AppConfig, type GoogleOAuthSetupDto, type RenderMode, type SenderRenderModeDto, type SenderRenderModes} from '../types/config.js';
 import type {GoogleOAuthConfig, GmailMoveThreadDto, GmailSendMessageDto, Rfc2822RequestDto} from '../types/auth.js';
 import type {
 	PersistedMessage,
@@ -119,6 +119,47 @@ export function normalizeGroupingRulesConfig(value: unknown): GroupingRulesConfi
 	};
 }
 
+function isRenderMode(value: unknown): value is RenderMode {
+	return RENDER_MODES.some((mode) => mode === value);
+}
+
+function normalizeRenderMode(value: unknown, name: string): RenderMode {
+	if (!isRenderMode(value)) {
+		throw makeValidationError(`${name} must be one of ${RENDER_MODES.join(', ')}`);
+	}
+	return value;
+}
+
+function normalizeSenderEmail(value: unknown, name: string): string {
+	assertString(value, name);
+	const email = senderKeyFor(value);
+	if (email.length === 0) {
+		throw makeValidationError(`${name} is required`);
+	}
+	return email;
+}
+
+export function normalizeSenderRenderModes(value: unknown): SenderRenderModes {
+	if (value === undefined || value === null) {
+		return {};
+	}
+	assertObject(value, 'senderRenderModes');
+	return Object.fromEntries(
+		Object.entries(value).map(([email, mode]) => [
+			normalizeSenderEmail(email, 'senderRenderModes key'),
+			normalizeRenderMode(mode, `senderRenderModes[${JSON.stringify(email)}]`),
+		]),
+	);
+}
+
+export function normalizeSenderRenderModeDto(value: unknown): SenderRenderModeDto {
+	assertObject(value, 'senderRenderMode');
+	return {
+		senderEmail: normalizeSenderEmail(value['senderEmail'], 'senderRenderMode.senderEmail'),
+		mode: normalizeRenderMode(value['mode'], 'senderRenderMode.mode'),
+	};
+}
+
 function normalizeGoogleOAuthConfig(value: unknown): GoogleOAuthConfig {
 	if (value === undefined || value === null) {
 		return {};
@@ -151,6 +192,7 @@ export function normalizeAppConfig(value: unknown): AppConfig {
 		return {
 			googleOAuth: {},
 			emailGroupingRules: {rules: []},
+			senderRenderModes: {},
 		};
 	}
 	assertObject(value, 'config');
@@ -163,6 +205,7 @@ export function normalizeAppConfig(value: unknown): AppConfig {
 	const result: AppConfig = {
 		googleOAuth: normalizeGoogleOAuthConfig(value['googleOAuth']),
 		emailGroupingRules: normalizeGroupingRulesConfig(value['emailGroupingRules']),
+		senderRenderModes: normalizeSenderRenderModes(value['senderRenderModes']),
 	};
 	if (rawPort !== undefined) {
 		result.port = rawPort as number;
@@ -306,8 +349,8 @@ export function normalizeThreadMessageDto(value: unknown): ThreadMessageDto {
 	assertObject(body, 'threadMessage.body');
 	const bodyOriginal = body['original'];
 	assertString(bodyOriginal, 'threadMessage.body.original');
-	const bodySanitized = body['sanitized'];
-	assertString(bodySanitized, 'threadMessage.body.sanitized');
+	const bodyHtml = body['html'];
+	assertString(bodyHtml, 'threadMessage.body.html');
 	const bodyPlainText = body['plainText'];
 	assertString(bodyPlainText, 'threadMessage.body.plainText');
 	const wordcount = value['wordcount'];
@@ -329,7 +372,7 @@ export function normalizeThreadMessageDto(value: unknown): ThreadMessageDto {
 		date,
 		body: {
 			original: bodyOriginal,
-			sanitized: bodySanitized,
+			html: bodyHtml,
 			plainText: bodyPlainText,
 		},
 		wordcount,

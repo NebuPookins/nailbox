@@ -1,11 +1,11 @@
 import assert from 'assert';
 import util from 'util';
 
-import sanitizeHtml from 'sanitize-html';
 import {decode} from 'html-entities';
 import nebulog from 'nebulog';
 
 import {removeThreadFromBundle} from '../../../models/bundle.js';
+import {countWords, htmlToPlainText, sanitizeEmailHtml} from './email_html.js';
 import {
 	isInInbox,
 	isThreadId,
@@ -84,9 +84,7 @@ export function createThreadService(dependencies: {
 
 		threadPayload.messages.forEach((messageData: any) => {
 			const messageInstance = new MessageClass(messageData);
-			const originalBody = messageInstance.bestBody();
-			const plainTextBody = sanitizeHtml(originalBody, {allowedTags: [], allowedAttributes: {}});
-			const wordCount = plainTextBody.split(' ').filter((word: string) => word.length > 0).length;
+			const wordCount = countWords(plainTextOf(messageInstance));
 			const timeToReadSeconds = Math.round((wordCount * 60) / 200);
 			messageData.calculatedWordCount = wordCount;
 			messageData.calculatedTimeToReadSeconds = timeToReadSeconds;
@@ -227,59 +225,24 @@ export function createThreadService(dependencies: {
 	};
 }
 
+/** `htmlBody` saves re-deriving the message's best body when the caller already has it. */
+function plainTextOf(objMessage: any, htmlBody?: string): string {
+	return objMessage.plainTextAlternative() ?? htmlToPlainText(htmlBody ?? objMessage.bestBody());
+}
+
+/** The URL serving the inline attachment that a `cid:` reference in the given message points at. */
+export function cidUrlFor(threadId: string, messageId: string, contentId: string): string {
+	return `/api/threads/${threadId}/messages/${messageId}/cid/${encodeURIComponent(contentId)}`;
+}
+
 export function loadRelevantDataFromMessage(objMessage: any): ThreadMessageDto {
 	const originalBody = objMessage.bestBody();
 	const attachments = objMessage.getAttachments();
-	const plainTextBody = sanitizeHtml(originalBody, {
-		allowedTags: [],
-		allowedAttributes: {},
-	});
-	const wordCount = plainTextBody.split(' ').length;
+	const plainTextBody = plainTextOf(objMessage, originalBody);
+	const wordCount = countWords(plainTextBody);
 	const timeToReadSeconds = wordCount * 60 / 200;
-	const sanitizedBody = sanitizeHtml(originalBody, {
-		transformTags: {
-			'body': 'div',
-			'a': function(tagName: any, attribs: any) {
-				if (attribs.href) {
-					attribs.target = '_blank';
-				}
-				return {
-					tagName: 'a',
-					attribs: attribs,
-				};
-			},
-			'*': function(tagName: any, attribs: any) {
-				if ((typeof attribs.style) === 'string') {
-					attribs.style = attribs.style.replace(/position: *absolute;/, '');
-					return {
-						tagName: tagName,
-						attribs: attribs,
-					};
-				}
-				return {
-					tagName: tagName,
-					attribs: attribs,
-				};
-			},
-		},
-		allowedTags: [
-			'a', 'area', 'b', 'blockquote', 'br', 'caption', 'center', 'code',
-			'div', 'em',
-			'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-			'hr', 'i', 'img', 'li', 'map', 'nl', 'ol', 'p', 'pre', 'span',
-			'strike', 'strong', 'table', 'tbody', 'td', 'th', 'thead', 'tr', 'ul'],
-		allowedAttributes: {
-			a: ['href', 'name', 'style', 'target'],
-			area: ['href', 'shape', 'coords', 'style', 'target'],
-			div: ['style'],
-			img: ['alt', 'border', 'height', 'src', 'style', 'usemap', 'width'],
-			map: ['name'],
-			p: ['style'],
-			span: ['style'],
-			table: ['align', 'bgcolor', 'border', 'cellpadding', 'cellspacing', 'style', 'width'],
-			td: ['align', 'background', 'bgcolor', 'colspan', 'height', 'rowspan', 'style', 'valign', 'width'],
-		},
-		nonTextTags: ['style', 'script', 'textarea', 'title'],
+	const html = sanitizeEmailHtml(originalBody, {
+		cidUrl: (contentId) => cidUrlFor(objMessage.threadId(), objMessage.id(), contentId),
 	});
 	return normalizeThreadMessageDto({
 		deleted: objMessage.labelIds().indexOf('TRASH') !== -1,
@@ -289,10 +252,10 @@ export function loadRelevantDataFromMessage(objMessage: any): ThreadMessageDto {
 		date: objMessage.timestamp(),
 		body: {
 			original: originalBody,
-			sanitized: sanitizedBody,
+			html,
 			plainText: plainTextBody,
 		},
-		wordcount: plainTextBody.split(' ').length,
+		wordcount: wordCount,
 		timeToReadSeconds: timeToReadSeconds,
 		attachments: attachments,
 	});

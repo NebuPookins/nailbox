@@ -7,6 +7,7 @@ import {removeThreadFromBundle} from '../../../models/bundle.js';
 import {
 	normalizeGroupingRulesConfig,
 	normalizeHideUntilDto,
+	normalizeSenderRenderModeDto,
 	normalizeWordcountUpdateDto,
 } from '../validation/contracts.js';
 
@@ -68,6 +69,28 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 			config.emailGroupingRules = normalizeGroupingRulesConfig(req.body);
 			await configRepository.saveConfig(config);
 			res.sendStatus(200);
+		} catch (error) {
+			const err = error as Error & {code?: string};
+			if (err.code === 'INVALID_CONTRACT') {
+				res.status(400).send({humanErrorMessage: err.message});
+				return;
+			}
+			logger.error(util.inspect(error));
+			res.sendStatus(500);
+		}
+	});
+
+	app.get('/api/sender-render-modes', function(req: Request, res: Response) {
+		res.status(200).type('application/json').send(config.senderRenderModes ?? {});
+	});
+
+	app.put('/api/sender-render-modes', async function(req: Request, res: Response) {
+		try {
+			const {senderEmail, mode} = normalizeSenderRenderModeDto(req.body);
+			logger.info(`Setting render mode for ${senderEmail} to ${mode}`);
+			config.senderRenderModes = {...config.senderRenderModes, [senderEmail]: mode};
+			await configRepository.saveConfig(config);
+			res.status(200).type('application/json').send(config.senderRenderModes);
 		} catch (error) {
 			const err = error as Error & {code?: string};
 			if (err.code === 'INVALID_CONTRACT') {

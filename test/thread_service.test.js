@@ -128,6 +128,9 @@ test('saveThreadPayload keeps a cached thread when at least one message still ha
 		bestBody() {
 			return 'body';
 		}
+		plainTextAlternative() {
+			return null;
+		}
 	}
 	const threadService = createThreadService({
 		threadRepository: {
