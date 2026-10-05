@@ -11,7 +11,7 @@ import {
 	mayReferenceRemoteContent,
 	type RemoteContent,
 } from './email_srcdoc.js';
-import { observeContentHeight } from './iframe_autosize.js';
+import { forwardKeydownToParent, observeContentHeight } from './iframe_autosize.js';
 import { linkifySegments } from './linkify.js';
 import { parseWithReadability } from './readability_parser.js';
 import { readerViewFor } from './reader_view.js';
@@ -171,7 +171,15 @@ function SandboxedFrame({ srcdoc, title }: SandboxedFrameProps) {
 	const [loadCount, setLoadCount] = useState(0);
 	const [height, setHeight] = useState(MIN_FRAME_HEIGHT_PX);
 	useEffect(function() {
-		return frame ? observeContentHeight(frame, setHeight) : undefined;
+		if (!frame) {
+			return undefined;
+		}
+		const stopObserving = observeContentHeight(frame, setHeight);
+		const stopForwarding = forwardKeydownToParent(frame);
+		return function() {
+			stopObserving();
+			stopForwarding();
+		};
 	}, [frame, loadCount]);
 	return (
 		<iframe

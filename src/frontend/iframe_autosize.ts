@@ -34,3 +34,34 @@ export function observeContentHeight(
 		doc.removeEventListener('load', measure, true);
 	};
 }
+
+/**
+ * Key presses inside an iframe never bubble to the parent document, so app-level
+ * shortcuts (Delete, Escape) would die whenever the frame has focus. Re-dispatches
+ * them from the frame element so they bubble through the parent as usual. Relies on
+ * the frame being same-origin. Returns a function that stops forwarding.
+ */
+export function forwardKeydownToParent(frame: HTMLIFrameElement): () => void {
+	const doc = frame.contentDocument;
+	if (!doc) {
+		return () => {};
+	}
+	const forward = (event: KeyboardEvent) => {
+		const forwarded = new KeyboardEvent('keydown', {
+			key: event.key,
+			code: event.code,
+			ctrlKey: event.ctrlKey,
+			shiftKey: event.shiftKey,
+			altKey: event.altKey,
+			metaKey: event.metaKey,
+			repeat: event.repeat,
+			bubbles: true,
+			cancelable: true,
+		});
+		if (!frame.dispatchEvent(forwarded) || forwarded.defaultPrevented) {
+			event.preventDefault();
+		}
+	};
+	doc.addEventListener('keydown', forward);
+	return () => doc.removeEventListener('keydown', forward);
+}
