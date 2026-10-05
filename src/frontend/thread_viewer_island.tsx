@@ -211,17 +211,29 @@ interface RemoteImagesBarProps {
 	onAlwaysLoadImages?: () => void;
 }
 
+/**
+ * Wraps a click handler for a button that disappears once clicked. Removing the focused
+ * button drops focus to <body>, outside the modal, so keyboard shortcuts (Delete, Escape)
+ * would stop reaching the thread viewer. Hand focus back to the modal first.
+ */
+function keepingModalFocus(handler: () => void): (event: React.MouseEvent<HTMLButtonElement>) => void {
+	return function(event) {
+		event.currentTarget.closest<HTMLElement>('.modal')?.focus();
+		handler();
+	};
+}
+
 function RemoteImagesBar({ onLoadImages, onAlwaysLoadImages }: RemoteImagesBarProps) {
 	return (
 		<div className="small text-muted" style={{ padding: '2px 8px', background: '#fcf8e3' }}>
 			Remote images blocked &mdash;{' '}
-			<button type="button" className="btn btn-link btn-xs" style={{ padding: 0 }} onClick={onLoadImages}>
+			<button type="button" className="btn btn-link btn-xs" style={{ padding: 0 }} onClick={keepingModalFocus(onLoadImages)}>
 				Load images
 			</button>
 			{onAlwaysLoadImages !== undefined && (
 				<>
 					{' '}&middot;{' '}
-					<button type="button" className="btn btn-link btn-xs" style={{ padding: 0 }} onClick={onAlwaysLoadImages}>
+					<button type="button" className="btn btn-link btn-xs" style={{ padding: 0 }} onClick={keepingModalFocus(onAlwaysLoadImages)}>
 						Always load images from this sender
 					</button>
 				</>
