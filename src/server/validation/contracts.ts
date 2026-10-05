@@ -1,5 +1,5 @@
 import type {GroupingCondition, GroupingRule, GroupingRulesConfig} from '../types/grouping_rules.js';
-import {RENDER_MODES, senderKeyFor, type AppConfig, type GoogleOAuthSetupDto, type RenderMode, type SenderRenderModeDto, type SenderRenderModes} from '../types/config.js';
+import {RENDER_MODES, senderKeyFor, type AppConfig, type GoogleOAuthSetupDto, type RenderMode, type SenderRenderModeDto, type SenderRenderModes, type TrustedImageSenderDto, type TrustedImageSenders} from '../types/config.js';
 import type {GoogleOAuthConfig, GmailMoveThreadDto, GmailSendMessageDto, Rfc2822RequestDto} from '../types/auth.js';
 import type {
 	PersistedMessage,
@@ -160,6 +160,19 @@ export function normalizeSenderRenderModeDto(value: unknown): SenderRenderModeDt
 	};
 }
 
+export function normalizeTrustedImageSenders(value: unknown): TrustedImageSenders {
+	if (value === undefined || value === null) {
+		return [];
+	}
+	assertArray(value, 'trustedImageSenders');
+	return [...new Set(value.map((email) => normalizeSenderEmail(email, 'trustedImageSenders entry')))];
+}
+
+export function normalizeTrustedImageSenderDto(value: unknown): TrustedImageSenderDto {
+	assertObject(value, 'trustedImageSender');
+	return {senderEmail: normalizeSenderEmail(value['senderEmail'], 'trustedImageSender.senderEmail')};
+}
+
 function normalizeGoogleOAuthConfig(value: unknown): GoogleOAuthConfig {
 	if (value === undefined || value === null) {
 		return {};
@@ -193,6 +206,7 @@ export function normalizeAppConfig(value: unknown): AppConfig {
 			googleOAuth: {},
 			emailGroupingRules: {rules: []},
 			senderRenderModes: {},
+			trustedImageSenders: [],
 		};
 	}
 	assertObject(value, 'config');
@@ -206,6 +220,7 @@ export function normalizeAppConfig(value: unknown): AppConfig {
 		googleOAuth: normalizeGoogleOAuthConfig(value['googleOAuth']),
 		emailGroupingRules: normalizeGroupingRulesConfig(value['emailGroupingRules']),
 		senderRenderModes: normalizeSenderRenderModes(value['senderRenderModes']),
+		trustedImageSenders: normalizeTrustedImageSenders(value['trustedImageSenders']),
 	};
 	if (rawPort !== undefined) {
 		result.port = rawPort as number;
@@ -341,6 +356,10 @@ export function normalizeThreadMessageDto(value: unknown): ThreadMessageDto {
 	assertString(messageId, 'threadMessage.messageId');
 	const from = value['from'];
 	assertArray(from, 'threadMessage.from');
+	const senderVerification = value['senderVerification'];
+	if (senderVerification !== 'verified' && senderVerification !== 'unverified') {
+		throw makeValidationError("threadMessage.senderVerification must be 'verified' or 'unverified'");
+	}
 	const to = value['to'];
 	assertArray(to, 'threadMessage.to');
 	const date = value['date'];
@@ -368,6 +387,7 @@ export function normalizeThreadMessageDto(value: unknown): ThreadMessageDto {
 			}
 			return normalizePerson(person, `threadMessage.from[${index}]`);
 		}),
+		senderVerification,
 		to: to.map((person, index) => normalizePerson(person, `threadMessage.to[${index}]`)),
 		date,
 		body: {

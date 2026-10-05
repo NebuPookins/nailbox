@@ -523,6 +523,19 @@ function renderSetupNeededState(message?: string): void {
 				throw result.error;
 			}
 		},
+		loadTrustedImageSenders: async function() {
+			const result = await appApi.loadTrustedImageSenders();
+			if (!result.ok) {
+				throw result.error;
+			}
+			return result.value;
+		},
+		saveTrustedImageSender: async function(senderEmail) {
+			const result = await appApi.saveTrustedImageSender(senderEmail);
+			if (!result.ok) {
+				throw result.error;
+			}
+		},
 		hideModal: function() { hideModal(threadViewer); },
 		getEmailAddress: function() { return authStatus.emailAddress; },
 		reportError: function(error: unknown) {

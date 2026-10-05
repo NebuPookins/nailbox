@@ -103,3 +103,36 @@ test('config repository rejects an unknown render mode', async () => {
 		{code: 'INVALID_CONTRACT'},
 	);
 });
+
+test('config repository persists trusted image senders, lower-casing and de-duplicating them', async () => {
+	let savedConfig = null;
+	const repository = createConfigRepository({
+		fileioImpl: {
+			async readJsonFromOptionalFile() {
+				return savedConfig;
+			},
+			async saveJsonToFile(json) {
+				savedConfig = json;
+			},
+		},
+		pathToConfig: 'ignored.json',
+	});
+
+	await repository.saveConfig({trustedImageSenders: [' Al@Example.com ', 'al@example.com', 'bo@example.com']});
+
+	assert.deepEqual((await repository.readConfig()).trustedImageSenders, ['al@example.com', 'bo@example.com']);
+});
+
+test('config repository defaults to no trusted image senders', async () => {
+	const repository = createConfigRepository({
+		fileioImpl: {
+			async readJsonFromOptionalFile() {
+				return {};
+			},
+			async saveJsonToFile() {},
+		},
+		pathToConfig: 'ignored.json',
+	});
+
+	assert.deepEqual((await repository.readConfig()).trustedImageSenders, []);
+});

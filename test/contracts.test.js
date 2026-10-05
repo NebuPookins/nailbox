@@ -117,6 +117,7 @@ test('normalizeThreadMessageDto validates attachment shape', () => {
 		deleted: false,
 		messageId: 'm1',
 		from: [{name: 'Alice', email: 'alice@example.com'}],
+		senderVerification: 'verified',
 		to: [{name: 'Bob', email: 'bob@example.com'}],
 		date: 1,
 		body: {
@@ -136,4 +137,22 @@ test('makeValidationError marks the error code', () => {
 	const error = makeValidationError('bad');
 	assert.equal(error.code, 'INVALID_CONTRACT');
 	assert.equal(error.message, 'bad');
+});
+
+test('normalizeThreadMessageDto rejects an unknown sender verification', () => {
+	assert.throws(
+		() => normalizeThreadMessageDto({
+			deleted: false,
+			messageId: 'm1',
+			from: [],
+			senderVerification: 'maybe',
+			to: [],
+			date: 1,
+			body: {original: '', html: '', plainText: ''},
+			wordcount: 0,
+			timeToReadSeconds: 0,
+			attachments: [],
+		}),
+		/senderVerification/,
+	);
 });

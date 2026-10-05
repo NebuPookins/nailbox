@@ -47,3 +47,23 @@ test('message DTO derives plainText from HTML when there is no text/plain altern
 	assert.equal(dto.body.plainText, 'First\n\nSecond\nthird');
 	assert.equal(dto.wordcount, 3);
 });
+
+test('message DTO marks the sender verified when Gmail reports an aligned DMARC pass', () => {
+	const dto = loadRelevantDataFromMessage(message({
+		headers: [
+			{name: 'Authentication-Results', value: 'mx.google.com; dmarc=pass (p=NONE) header.from=example.com'},
+			{name: 'From', value: 'Al <al@example.com>'},
+		],
+		mimeType: 'text/plain',
+		body: {size: 2, data: base64('hi')},
+	}));
+	assert.equal(dto.senderVerification, 'verified');
+});
+
+test('message DTO marks the sender unverified when Gmail gave no verdict', () => {
+	const dto = loadRelevantDataFromMessage(message({
+		mimeType: 'text/plain',
+		body: {size: 2, data: base64('hi')},
+	}));
+	assert.equal(dto.senderVerification, 'unverified');
+});

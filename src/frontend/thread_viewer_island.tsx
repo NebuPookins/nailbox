@@ -15,7 +15,8 @@ import { observeContentHeight } from './iframe_autosize.js';
 import { linkifySegments } from './linkify.js';
 import { parseWithReadability } from './readability_parser.js';
 import { readerViewFor } from './reader_view.js';
-import { RENDER_MODES, type RenderMode, type SenderRenderModes } from '../server/types/config.js';
+import { remoteContentFor as remoteContentForMessage, senderToTrustFor } from './image_trust.js';
+import { RENDER_MODES, type RenderMode, type SenderRenderModes, type TrustedImageSenders } from '../server/types/config.js';
 import { renderModeFor, senderKeyOf } from './render_mode.js';
 
 type ThreadMessage = ThreadMessageDto & { duration?: string };
@@ -39,12 +40,14 @@ interface ThreadViewerState {
 	senderRenderModes: SenderRenderModes | null;
 	/** Modes picked for messages that have no sender to remember them by. */
 	messageRenderModes: Readonly<Record<string, RenderMode>>;
+	/** Senders whose remote images always load (when verified); kept across threads. */
+	trustedImageSenders: TrustedImageSenders;
 	/** Messages whose remote images the user chose to load. */
 	remoteContentAllowedFor: ReadonlySet<string>;
 }
 
 /** The state with no thread shown, keeping only what outlives a thread. */
-function emptyThreadState(senderRenderModes: SenderRenderModes | null): ThreadViewerState {
+function emptyThreadState({ senderRenderModes, trustedImageSenders }: Pick<ThreadViewerState, 'senderRenderModes' | 'trustedImageSenders'>): ThreadViewerState {
 	return {
 		threadId: null,
 		subject: '',
@@ -57,6 +60,7 @@ function emptyThreadState(senderRenderModes: SenderRenderModes | null): ThreadVi
 		replyText: '',
 		senderRenderModes,
 		messageRenderModes: {},
+		trustedImageSenders,
 		remoteContentAllowedFor: new Set(),
 	};
 }
@@ -195,15 +199,25 @@ function PlainTextBody({ text }: { text: string }) {
 
 interface RemoteImagesBarProps {
 	onLoadImages: () => void;
+	/** Present only when the sender is verified, so "always" is never offered for a possibly forged one. */
+	onAlwaysLoadImages?: () => void;
 }
 
-function RemoteImagesBar({ onLoadImages }: RemoteImagesBarProps) {
+function RemoteImagesBar({ onLoadImages, onAlwaysLoadImages }: RemoteImagesBarProps) {
 	return (
 		<div className="small text-muted" style={{ padding: '2px 8px', background: '#fcf8e3' }}>
 			Remote images blocked &mdash;{' '}
 			<button type="button" className="btn btn-link btn-xs" style={{ padding: 0 }} onClick={onLoadImages}>
 				Load images
 			</button>
+			{onAlwaysLoadImages !== undefined && (
+				<>
+					{' '}&middot;{' '}
+					<button type="button" className="btn btn-link btn-xs" style={{ padding: 0 }} onClick={onAlwaysLoadImages}>
+						Always load images from this sender
+					</button>
+				</>
+			)}
 		</div>
 	);
 }
@@ -213,14 +227,16 @@ interface MessageBodyProps {
 	mode: RenderMode;
 	remoteContent: RemoteContent;
 	onLoadImages: () => void;
+	onAlwaysLoadImages: (senderKey: string) => void;
 }
 
-function MessageBody({ message, mode, remoteContent, onLoadImages }: MessageBodyProps) {
+function MessageBody({ message, mode, remoteContent, onLoadImages, onAlwaysLoadImages }: MessageBodyProps) {
 	const html = message.body.html;
 	// Memoized because the whole thread re-renders on every keystroke in the reply box.
 	const frame = useMemo(function() {
 		return mode === 'plain' ? null : framedBodyFor(html, mode, remoteContent);
 	}, [mode, html, remoteContent]);
+	const trustKey = senderToTrustFor(message);
 	if (frame === null) {
 		return <PlainTextBody text={message.body.plainText} />;
 	}
@@ -230,7 +246,10 @@ function MessageBody({ message, mode, remoteContent, onLoadImages }: MessageBody
 				<div className="small text-muted">Reader view unavailable for this message</div>
 			)}
 			{remoteContent === 'blocked' && frame.mayReferenceRemoteContent && (
-				<RemoteImagesBar onLoadImages={onLoadImages} />
+				<RemoteImagesBar
+					onLoadImages={onLoadImages}
+					onAlwaysLoadImages={trustKey === undefined ? undefined : function() { onAlwaysLoadImages(trustKey); }}
+				/>
 			)}
 			<SandboxedFrame srcdoc={frame.srcdoc} title={'Message from ' + formatSenderForTitle(message)} />
 		</>
@@ -298,9 +317,10 @@ interface MessagePanelProps {
 	onDownloadAttachment: (opts: { messageId: string; attachmentId: string; attachmentName: string }) => void;
 	onRenderModeChange: (mode: RenderMode) => void;
 	onLoadImages: () => void;
+	onAlwaysLoadImages: (senderKey: string) => void;
 }
 
-function MessagePanel({ message, renderMode, remoteContent, onAddSenderRule, onDownloadAttachment, onRenderModeChange, onLoadImages }: MessagePanelProps) {
+function MessagePanel({ message, renderMode, remoteContent, onAddSenderRule, onDownloadAttachment, onRenderModeChange, onLoadImages, onAlwaysLoadImages }: MessagePanelProps) {
 	return (
 		<div className="message panel panel-default" data-message-id={message.messageId}>
 			<div className="panel-heading">
@@ -309,6 +329,9 @@ function MessagePanel({ message, renderMode, remoteContent, onAddSenderRule, onD
 						<div className="col-xs-6">
 							<strong>From</strong>{' '}
 							<PeopleList people={message.from} onAddSenderRule={onAddSenderRule} />
+							{message.senderVerification === 'unverified' && (
+								<>{' '}<span className="glyphicon glyphicon-warning-sign text-warning" title="Gmail couldn't verify this sender" aria-label="Sender not verified" /></>
+							)}
 							{displayablePeople(message.to).length > 0
 								? <>{' '}<strong>To</strong>{' '}<PeopleList people={message.to} /></>
 								: null}
@@ -325,7 +348,7 @@ function MessagePanel({ message, renderMode, remoteContent, onAddSenderRule, onD
 				<div className="row">
 					<div className="col-xs-12 message-body">
 						{renderMode !== null && (
-							<MessageBody message={message} mode={renderMode} remoteContent={remoteContent} onLoadImages={onLoadImages} />
+							<MessageBody message={message} mode={renderMode} remoteContent={remoteContent} onLoadImages={onLoadImages} onAlwaysLoadImages={onAlwaysLoadImages} />
 						)}
 					</div>
 				</div>
@@ -397,6 +420,7 @@ interface ThreadViewerAppProps {
 	remoteContentFor: (message: ThreadMessage) => RemoteContent;
 	onRenderModeChange: (message: ThreadMessage, mode: RenderMode) => void;
 	onLoadImages: (message: ThreadMessage) => void;
+	onAlwaysLoadImages: (senderKey: string) => void;
 	onAddSenderRule: (senderEmail: string) => void;
 	onReplyTextChange: (text: string) => void;
 	onReplyAll: (body: string, inReplyTo: string | null) => void;
@@ -425,6 +449,7 @@ function ThreadViewerApp({
 	remoteContentFor,
 	onRenderModeChange,
 	onLoadImages,
+	onAlwaysLoadImages,
 	onAddSenderRule,
 	onReplyTextChange,
 	onReplyAll,
@@ -484,6 +509,7 @@ function ThreadViewerApp({
 								onDownloadAttachment={onDownloadAttachment}
 								onRenderModeChange={function(mode) { onRenderModeChange(message, mode); }}
 								onLoadImages={function() { onLoadImages(message); }}
+								onAlwaysLoadImages={onAlwaysLoadImages}
 							/>
 						);
 					})}
@@ -586,6 +612,8 @@ interface MountThreadViewerIslandDeps {
 	onViewOnGmail: (opts: ViewOnGmailOpts) => void;
 	loadSenderRenderModes: () => Promise<SenderRenderModes>;
 	saveSenderRenderMode: (senderEmail: string, mode: RenderMode) => Promise<void>;
+	loadTrustedImageSenders: () => Promise<TrustedImageSenders>;
+	saveTrustedImageSender: (senderEmail: string) => Promise<void>;
 }
 
 export interface ThreadViewerAdapter {
@@ -625,10 +653,12 @@ export function mountThreadViewerIsland({
 	onViewOnGmail,
 	loadSenderRenderModes,
 	saveSenderRenderMode,
+	loadTrustedImageSenders,
+	saveTrustedImageSender,
 }: MountThreadViewerIslandDeps) {
 	const root = createRoot(container);
 
-	let state: ThreadViewerState = emptyThreadState(null);
+	let state: ThreadViewerState = emptyThreadState({ senderRenderModes: null, trustedImageSenders: [] });
 
 	function render() {
 		const lastMessageId = state.messages.length > 0
@@ -654,7 +684,7 @@ export function mountThreadViewerIsland({
 					return state.senderRenderModes === null ? null : renderModeFor(state.senderRenderModes, message.from);
 				}}
 				remoteContentFor={function(message) {
-					return state.remoteContentAllowedFor.has(message.messageId) ? 'allowed' : 'blocked';
+					return remoteContentForMessage(state.trustedImageSenders, state.remoteContentAllowedFor, message);
 				}}
 				onRenderModeChange={function(message, mode) {
 					const senderKey = senderKeyOf(message.from);
@@ -668,6 +698,11 @@ export function mountThreadViewerIsland({
 				}}
 				onLoadImages={function(message) {
 					state.remoteContentAllowedFor = new Set([...state.remoteContentAllowedFor, message.messageId]);
+					render();
+				}}
+				onAlwaysLoadImages={function(senderKey) {
+					state.trustedImageSenders = [...state.trustedImageSenders, senderKey];
+					saveTrustedImageSender(senderKey).catch(reportError);
 					render();
 				}}
 				onAddSenderRule={onAddSenderRule}
@@ -733,9 +768,16 @@ export function mountThreadViewerIsland({
 
 	render();
 
+	// Loaded once; afterwards this island's own copy is kept current. Failure just leaves images blocked.
+	loadTrustedImageSenders().then(function(senders) {
+		// Merged, not assigned: the user may have trusted a sender while this was loading.
+		state.trustedImageSenders = [...new Set([...senders, ...state.trustedImageSenders])];
+		render();
+	}).catch(reportError);
+
 	function open(threadSummary: ThreadSummaryInput): ThreadViewerAdapter {
 		state = {
-			...emptyThreadState(state.senderRenderModes),
+			...emptyThreadState(state),
 			subject: threadSummary.subject || '',
 			senders: threadSummary.senders || [],
 			receivers: threadSummary.receivers || [],
@@ -812,7 +854,7 @@ export function mountThreadViewerIsland({
 	}
 
 	function clear() {
-		state = emptyThreadState(state.senderRenderModes);
+		state = emptyThreadState(state);
 		render();
 	}
 

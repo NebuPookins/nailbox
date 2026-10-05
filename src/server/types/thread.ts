@@ -3,6 +3,9 @@ export interface PersonDto {
 	email?: string;
 }
 
+/** Whether Gmail vouched that a message really came from its From address's domain. */
+export type SenderVerification = 'verified' | 'unverified';
+
 export interface PersistedMessage {
 	id: string;
 	threadId?: string;
@@ -79,6 +82,7 @@ export interface ThreadMessageDto {
 	deleted: boolean;
 	messageId: string;
 	from: Array<PersonDto | null>;
+	senderVerification: SenderVerification;
 	to: PersonDto[];
 	date: number;
 	body: {

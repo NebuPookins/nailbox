@@ -6,6 +6,7 @@ import nebulog from 'nebulog';
 
 import {removeThreadFromBundle} from '../../../models/bundle.js';
 import {countWords, htmlToPlainText, sanitizeEmailHtml} from './email_html.js';
+import {verifySender} from './sender_verification.js';
 import {
 	isInInbox,
 	isThreadId,
@@ -248,6 +249,7 @@ export function loadRelevantDataFromMessage(objMessage: any): ThreadMessageDto {
 		deleted: objMessage.labelIds().indexOf('TRASH') !== -1,
 		messageId: objMessage.id(),
 		from: [objMessage.sender()],
+		senderVerification: verifySender(objMessage.headers(), objMessage.sender()?.email),
 		to: objMessage.recipients(),
 		date: objMessage.timestamp(),
 		body: {

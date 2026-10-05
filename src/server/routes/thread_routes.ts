@@ -8,6 +8,7 @@ import {
 	normalizeGroupingRulesConfig,
 	normalizeHideUntilDto,
 	normalizeSenderRenderModeDto,
+	normalizeTrustedImageSenderDto,
 	normalizeWordcountUpdateDto,
 } from '../validation/contracts.js';
 
@@ -91,6 +92,32 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 			config.senderRenderModes = {...config.senderRenderModes, [senderEmail]: mode};
 			await configRepository.saveConfig(config);
 			res.status(200).type('application/json').send(config.senderRenderModes);
+		} catch (error) {
+			const err = error as Error & {code?: string};
+			if (err.code === 'INVALID_CONTRACT') {
+				res.status(400).send({humanErrorMessage: err.message});
+				return;
+			}
+			logger.error(util.inspect(error));
+			res.sendStatus(500);
+		}
+	});
+
+	app.get('/api/trusted-image-senders', function(req: Request, res: Response) {
+		res.status(200).type('application/json').send(config.trustedImageSenders ?? []);
+	});
+
+	app.put('/api/trusted-image-senders', async function(req: Request, res: Response) {
+		try {
+			const {senderEmail} = normalizeTrustedImageSenderDto(req.body);
+			logger.info(`Always loading images from ${senderEmail}`);
+			const existing = config.trustedImageSenders ?? [];
+			if (!existing.includes(senderEmail)) {
+				const trustedImageSenders = [...existing, senderEmail];
+				await configRepository.saveConfig({...config, trustedImageSenders});
+				config.trustedImageSenders = trustedImageSenders;
+			}
+			res.status(200).type('application/json').send(config.trustedImageSenders);
 		} catch (error) {
 			const err = error as Error & {code?: string};
 			if (err.code === 'INVALID_CONTRACT') {

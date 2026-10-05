@@ -14,6 +14,13 @@ export function senderKeyFor(email: string): string {
 	return email.trim().toLowerCase();
 }
 
+/** Lower-cased sender addresses whose remote images load without asking (when Gmail verifies the sender). */
+export type TrustedImageSenders = ReadonlyArray<string>;
+
+export interface TrustedImageSenderDto {
+	senderEmail: string;
+}
+
 export interface SenderRenderModeDto {
 	senderEmail: string;
 	mode: RenderMode;
@@ -25,6 +32,7 @@ export interface AppConfig {
 	googleOAuth?: GoogleOAuthConfig;
 	emailGroupingRules?: GroupingRulesConfig;
 	senderRenderModes?: SenderRenderModes;
+	trustedImageSenders?: TrustedImageSenders;
 }
 
 export interface GoogleOAuthSetupDto {

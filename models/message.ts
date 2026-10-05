@@ -336,7 +336,7 @@ function getAttachments(messagePart: GmailMessagePart): Attachment[] {
 }
 
 // Header names are case-insensitive (RFC 5322), e.g. Message-ID vs Message-Id.
-function isHeaderNamed(headerName: string): (header: GmailHeader) => boolean {
+export function isHeaderNamed(headerName: string): (header: GmailHeader) => boolean {
 	const lowerCaseHeaderName = headerName.toLowerCase();
 	return header => header.name.toLowerCase() === lowerCaseHeaderName;
 }
@@ -407,6 +407,11 @@ export class Message {
 	 */
 	recipients(): EmailAddress[] {
 		return this.emailAddresses(isHeaderNamed('To'));
+	}
+
+	/** All of this message's headers, in the order they appear (Gmail's own are topmost). */
+	headers(): GmailHeader[] {
+		return this._data.payload.headers;
 	}
 
 	/**

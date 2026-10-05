@@ -145,6 +145,8 @@ const groupingRulesConfigSchema = z.object({
 	})),
 });
 
+const trustedImageSendersSchema = z.array(z.string());
+
 const senderRenderModesSchema = z.record(z.string(), z.enum(RENDER_MODES));
 
 const createBundleResponseSchema = z.object({
@@ -189,6 +191,7 @@ const threadMessageSchema = z.object({
 	deleted: z.boolean(),
 	messageId: z.string(),
 	from: z.array(personSchema.nullable()),
+	senderVerification: z.enum(['verified', 'unverified']),
 	to: z.array(personSchema),
 	date: z.number(),
 	body: z.object({
@@ -209,6 +212,7 @@ const threadDataResponseSchema = z.object({
 	messages: z.array(threadMessageSchema),
 });
 
+export type TrustedImageSendersResponse = z.infer<typeof trustedImageSendersSchema>;
 export type SenderRenderModesResponse = z.infer<typeof senderRenderModesSchema>;
 type CreateBundleResponse = z.infer<typeof createBundleResponseSchema>;
 type Rfc2822Response = z.infer<typeof rfc2822ResponseSchema>;
@@ -401,6 +405,25 @@ export function createAppApi() {
 		saveSenderRenderMode(senderEmail: string, mode: RenderMode): Promise<Result<JsonValue>> {
 			return request('/api/sender-render-modes', {
 				body: JSON.stringify({senderEmail, mode}),
+				method: 'PUT',
+			});
+		},
+		loadTrustedImageSenders(): Promise<Result<TrustedImageSendersResponse>> {
+			return request('/api/trusted-image-senders', {
+				method: 'GET',
+			}).then(result => {
+				if (!result.ok) return result;
+				const parseResult = trustedImageSendersSchema.safeParse(result.value);
+				if (parseResult.success) {
+					return { ok: true, value: parseResult.data };
+				} else {
+					return { ok: false, error: new Error(parseResult.error.message) };
+				}
+			});
+		},
+		saveTrustedImageSender(senderEmail: string): Promise<Result<JsonValue>> {
+			return request('/api/trusted-image-senders', {
+				body: JSON.stringify({senderEmail}),
 				method: 'PUT',
 			});
 		},

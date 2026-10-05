@@ -284,3 +284,72 @@ test('PUT sender render modes rejects an invalid mode without saving', async () 
 	assert.equal(res.statusCode, 400);
 	assert.equal(savedConfigs.length, 0);
 });
+
+function registerTrustedImageSenderRoutes(initialSenders) {
+	const app = createFakeApp();
+	const savedConfigs = [];
+	registerThreadRoutes(app, {
+		config: {trustedImageSenders: initialSenders},
+		configRepository: {
+			async saveConfig(savedConfig) {
+				savedConfigs.push(savedConfig);
+				return savedConfig;
+			},
+		},
+		logger: { error() {}, info() {}, warn() {} },
+	});
+	return {app, savedConfigs};
+}
+
+test('GET trusted image senders returns the saved senders', async () => {
+	const {app} = registerTrustedImageSenderRoutes(['al@example.com']);
+	const res = createFakeResponse();
+
+	await findStringRoute(app, 'GET', '/api/trusted-image-senders')({}, res);
+
+	assert.equal(res.statusCode, 200);
+	assert.deepEqual(res.body, ['al@example.com']);
+});
+
+test('PUT trusted image senders adds the sender once and saves', async () => {
+	const {app, savedConfigs} = registerTrustedImageSenderRoutes(['bo@example.com']);
+	const handler = findStringRoute(app, 'PUT', '/api/trusted-image-senders');
+	const res = createFakeResponse();
+
+	await handler({body: {senderEmail: 'Al@Example.com'}}, res);
+	await handler({body: {senderEmail: 'al@example.com'}}, createFakeResponse());
+
+	assert.equal(res.statusCode, 200);
+	assert.deepEqual(res.body, ['bo@example.com', 'al@example.com']);
+	assert.deepEqual(savedConfigs.at(-1).trustedImageSenders, ['bo@example.com', 'al@example.com']);
+});
+
+test('PUT trusted image senders rejects a missing sender without saving', async () => {
+	const {app, savedConfigs} = registerTrustedImageSenderRoutes([]);
+	const res = createFakeResponse();
+
+	await findStringRoute(app, 'PUT', '/api/trusted-image-senders')({body: {senderEmail: '  '}}, res);
+
+	assert.equal(res.statusCode, 400);
+	assert.equal(savedConfigs.length, 0);
+});
+
+test('PUT trusted image senders leaves the trusted senders unchanged when saving fails', async () => {
+	const app = createFakeApp();
+	const config = {trustedImageSenders: ['bo@example.com']};
+	registerThreadRoutes(app, {
+		config,
+		configRepository: {
+			async saveConfig() {
+				throw new Error('disk full');
+			},
+		},
+		logger: { error() {}, info() {}, warn() {} },
+	});
+	const res = createFakeResponse();
+
+	await findStringRoute(app, 'PUT', '/api/trusted-image-senders')({body: {senderEmail: 'al@example.com'}}, res);
+
+	assert.equal(res.statusCode, 500);
+	assert.deepEqual(config.trustedImageSenders, ['bo@example.com']);
+});
