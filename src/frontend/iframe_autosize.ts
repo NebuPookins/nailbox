@@ -13,6 +13,10 @@ export function observeContentHeight(
 		return () => {};
 	}
 	const root = doc.documentElement;
+	// Resizing the frame can itself change the measurement (scrollbars, multi-column
+	// balancing, media queries), which would make the frame flip between sizes
+	// forever. So within one document the height only ever grows.
+	let tallest = 0;
 	const measure = () => {
 		// A horizontal scrollbar (for content wider than the frame) eats into the viewport height.
 		const scrollbarHeight = Math.max(0, win.innerHeight - root.clientHeight);
@@ -21,7 +25,11 @@ export function observeContentHeight(
 		const contentHeight = root.scrollHeight > root.clientHeight
 			? root.scrollHeight
 			: root.getBoundingClientRect().height;
-		onHeight(Math.ceil(contentHeight) + scrollbarHeight);
+		const height = Math.ceil(contentHeight) + scrollbarHeight;
+		if (height > tallest) {
+			tallest = height;
+			onHeight(height);
+		}
 	};
 	const observer = new ResizeObserver(measure);
 	// The root alone may not resize when content grows (see above), so watch the body's children too.
