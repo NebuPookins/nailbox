@@ -1,3 +1,4 @@
+import type {ThreadSortInfo} from '../../../models/hide_until.js';
 import type {AppConfig} from '../types/config.js';
 import type {GroupingRule, GroupingRulesConfig} from '../types/grouping_rules.js';
 import type {ThreadSummaryDto, BundleSummaryDto, ThreadRowItem, ThreadGroupDto} from '../types/thread.js';
@@ -16,14 +17,19 @@ const VISIBILITY_PRIORITY: Record<ThreadSummaryDto['visibility'], number> = {
 	'hidden': 1,
 };
 
+/**
+ * The member a bundle stands in for: the most recently updated of those with
+ * the most prominent visibility. memberThreads must not be empty.
+ */
+function representativeMember(memberThreads: ThreadSummaryDto[]): ThreadSummaryDto {
+	return memberThreads.reduce((best, thread) => {
+		const priorityDifference = VISIBILITY_PRIORITY[thread.visibility] - VISIBILITY_PRIORITY[best.visibility];
+		return priorityDifference > 0 || (priorityDifference === 0 && thread.lastUpdated > best.lastUpdated) ? thread : best;
+	});
+}
+
 export function computeBundleVisibility(memberThreads: ThreadSummaryDto[]): ThreadSummaryDto['visibility'] {
-	let best: ThreadSummaryDto['visibility'] = 'hidden';
-	for (const thread of memberThreads) {
-		if (VISIBILITY_PRIORITY[thread.visibility] > VISIBILITY_PRIORITY[best]) {
-			best = thread.visibility;
-		}
-	}
-	return best;
+	return representativeMember(memberThreads).visibility;
 }
 
 export function buildBundleSummary(bundle: BundleDto, memberThreads: ThreadSummaryDto[]): BundleSummaryDto {
@@ -83,23 +89,23 @@ function itemMatchesRule(item: ThreadRowItem, rule: GroupingRule): boolean {
 	return item.memberThreads.some((thread) => threadMatchesRule(thread, rule));
 }
 
+/**
+ * What the hide-until comparator ranks an item by. Hide-untils are recorded
+ * per thread, never per bundle, so a bundle ranks as its representative member.
+ */
+function sortKeyOf(item: ThreadRowItem): ThreadSortInfo {
+	const {threadId, lastUpdated} = item.type === 'bundle' ? representativeMember(item.memberThreads) : item;
+	return {threadId, lastUpdated};
+}
+
 export function groupThreads(
 	threads: ThreadSummaryDto[],
 	bundles: BundleDto[] = [],
 	groupingRules: GroupingRulesConfig,
-	hideUntilComparator: (a: {threadId: string; lastUpdated: number}, b: {threadId: string; lastUpdated: number}) => number,
+	hideUntilComparator: (a: ThreadSortInfo, b: ThreadSortInfo) => number,
 ): ThreadGroupDto[] {
-	// Wrap the comparator to handle bundles (project bundleId as threadId for sorting)
 	function itemComparator(a: ThreadRowItem, b: ThreadRowItem): number {
-		const aProxy = {
-			threadId: a.type === 'bundle' ? a.bundleId : a.threadId,
-			lastUpdated: a.lastUpdated,
-		};
-		const bProxy = {
-			threadId: b.type === 'bundle' ? b.bundleId : b.threadId,
-			lastUpdated: b.lastUpdated,
-		};
-		return hideUntilComparator(aProxy, bProxy);
+		return hideUntilComparator(sortKeyOf(a), sortKeyOf(b));
 	}
 	const groupedItems: Record<string, ThreadRowItem[]> = {};
 	const whenIHaveTimeSuffix = ' - When I Have Time';
@@ -168,11 +174,7 @@ export function groupThreads(
 
 		const sortedItems = [...groupedItems[group]];
 		if (sortType === 'shortest') {
-			sortedItems.sort((a, b) => {
-				const aTime = a.type !== 'bundle' ? a.totalTimeToReadSeconds : 0;
-				const bTime = b.type !== 'bundle' ? b.totalTimeToReadSeconds : 0;
-				return aTime - bTime;
-			});
+			sortedItems.sort((a, b) => a.totalTimeToReadSeconds - b.totalTimeToReadSeconds);
 		} else {
 			sortedItems.sort(itemComparator);
 		}

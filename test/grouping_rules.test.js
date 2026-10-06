@@ -166,3 +166,57 @@ test('groupThreads groups matching threads and preserves shortest-first sorting'
 	assert.equal(groups[0].label, 'Important');
 	assert.deepEqual(groups[0].items.filter((item) => item.type !== 'bundle').map((item) => item.threadId), ['2', '1']);
 });
+
+function thread(overrides) {
+	return {
+		type: 'thread',
+		senders: [],
+		subject: 'quick',
+		visibility: 'updated',
+		totalTimeToReadSeconds: 0,
+		lastUpdated: 0,
+		...overrides,
+	};
+}
+
+function itemIdsOf(group) {
+	return group.items.map((item) => item.type === 'bundle' ? item.bundleId : item.threadId);
+}
+
+test('groupThreads sorts bundles by their total read time in shortest-first groups', () => {
+	const quickRule = {rules: [{name: 'Quick', priority: 10, sortType: 'shortest', conditions: [{type: 'subject', value: 'quick'}]}]};
+	const groups = groupThreads(
+		[
+			thread({threadId: 'short', totalTimeToReadSeconds: 30}),
+			thread({threadId: 'a', totalTimeToReadSeconds: 60}),
+			thread({threadId: 'b', totalTimeToReadSeconds: 60}),
+		],
+		[{bundleId: 'long-bundle', threadIds: ['a', 'b']}],
+		quickRule,
+		() => 0,
+	);
+
+	assert.deepEqual(itemIdsOf(groups[0]), ['short', 'long-bundle']);
+});
+
+test('groupThreads ranks a bundle by the hide-untils of its member threads', () => {
+	// Hide-untils are keyed by thread; 'hidden-a' and 'hidden-b' were hidden and
+	// their snooze expired, so they rank below threads that were never hidden.
+	const hiddenThreadIds = new Set(['hidden-a', 'hidden-b']);
+	const comparator = (a, b) => {
+		const rank = (key) => hiddenThreadIds.has(key.threadId) ? 1 : 0;
+		return rank(a) - rank(b) || b.lastUpdated - a.lastUpdated;
+	};
+	const groups = groupThreads(
+		[
+			thread({threadId: 'hidden-a', visibility: 'visible', lastUpdated: 30}),
+			thread({threadId: 'hidden-b', visibility: 'visible', lastUpdated: 20}),
+			thread({threadId: 'fresh', lastUpdated: 10}),
+		],
+		[{bundleId: 'snoozed-bundle', threadIds: ['hidden-a', 'hidden-b']}],
+		{rules: []},
+		comparator,
+	);
+
+	assert.deepEqual(itemIdsOf(groups[0]), ['fresh', 'snoozed-bundle']);
+});
