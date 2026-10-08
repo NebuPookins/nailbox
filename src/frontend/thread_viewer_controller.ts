@@ -89,7 +89,6 @@ interface AppApi {
 	buildRfc2822(payload: Rfc2822Payload): Promise<Result<string>>;
 	sendMessage(payload: { threadId: string; raw: string }): Promise<Result<{id?: string}>>;
 	getAttachment(messageId: string, attachmentId: string): Promise<Result<{data: string}>>;
-	updateMessageWordcount(threadId: string, messageId: string, wordcount: number): Promise<unknown>;
 }
 
 function updateMessenger(actionMessenger: MsgHandle | null | undefined, type: string, message: string): void {
@@ -127,13 +126,11 @@ export function createThreadViewerController({
 	appApi,
 	getThreadData,
 	messengerGetter,
-	onUpdateMessageWordcount,
 	threadActionController,
 }: {
 	appApi: AppApi;
 	getThreadData(threadId: string, attempt: number, messenger: MsgHandle): Promise<Result<ThreadDataResponse>>;
 	messengerGetter(): Messenger;
-	onUpdateMessageWordcount(threadId: string, messageId: string, wordcount: number | undefined): Promise<unknown>; //TODO: Check API design here.
 	threadActionController: ThreadActionController;
 }) {
 	function showError(error: unknown): void {
@@ -202,7 +199,6 @@ export function createThreadViewerController({
 						duration: moment.duration(message.timeToReadSeconds ?? 0, 'seconds').humanize(),
 					};
 					options.appendMessage(renderedMessage);
-					onUpdateMessageWordcount(threadId, message.messageId, message.wordcount).catch(showError);
 				});
 				updateMessenger(actionMessenger, 'success', 'Successfully downloaded thread data for ' + threadId + '.');
 			} catch (error) {

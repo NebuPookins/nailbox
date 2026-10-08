@@ -49,7 +49,7 @@ test('getMostRelevantThreads tolerates repository threads and returns formatted 
 			id: () => 'thread-1',
 			snippet: () => 'Hello',
 			messages: () => [{
-				getBestReadTimeSeconds: () => 30,
+				getReadTimeSeconds: () => 30,
 				getInternalDate: () => '10',
 			}],
 			senders: () => [{name: 'Alice', email: 'alice@example.com'}],
@@ -137,9 +137,9 @@ test('saveThreadPayload keeps a cached thread when at least one message still ha
 			deleteThread: () => {
 				throw new Error('deleteThread should not be called while a message is still in the inbox');
 			},
-			readThreadJson: async () => ({}),
 			saveThreadJson: async () => {
 				saveThreadJsonCalled = true;
+				return true;
 			},
 		},
 		MessageClass: FakeMessage,

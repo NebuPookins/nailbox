@@ -1,8 +1,10 @@
 import {open, readdir, rm} from 'node:fs/promises';
+import util from 'node:util';
 
 import nebulog from 'nebulog';
 
 import fileio from '../../../helpers/fileio.js';
+import {createKeyedSerializer} from '../../../helpers/keyed_serializer.js';
 import {isThreadId, validatePersistedThread} from '../validation/contracts.js';
 import type {PersistedThread, ThreadModelLike, ThreadRepository} from '../types/thread.js';
 
@@ -27,8 +29,15 @@ export function createThreadRepository(dependencies: {
 	// threads changed without re-parsing every cached file on every poll. Kept
 	// current by saveThreadJson and deleteThread, the only writers of the cache.
 	const historyIds = new Map<string, string | undefined>();
+	// Writes to one thread's file run one at a time, so a save's compare
+	// against the cached copy can't race another save or a delete.
+	const serializeWrite = createKeyedSerializer();
 
-	async function deleteThread(threadId: string): Promise<boolean> {
+	function deleteThread(threadId: string): Promise<boolean> {
+		return serializeWrite(threadId, () => deleteThreadFile(threadId));
+	}
+
+	async function deleteThreadFile(threadId: string): Promise<boolean> {
 		const pathToDelete = threadPath(threadId);
 		// Recorded as "no cached copy" rather than forgotten, so a read already
 		// in flight can't put the deleted file's historyId back. If the rm
@@ -99,18 +108,45 @@ export function createThreadRepository(dependencies: {
 	}
 
 	async function readThreadJson(threadId: string): Promise<Partial<PersistedThread>> {
+		return (await readCachedThread(threadId)) ?? {};
+	}
+
+	// A missing file, or leftover JSON with neither an id nor messages, counts
+	// as uncached so the next save simply overwrites it.
+	async function readCachedThread(threadId: string): Promise<PersistedThread | undefined> {
 		const threadJson = await fileioImpl.readJsonFromOptionalFile(threadPath(threadId));
-		const partial = threadJson as Partial<PersistedThread>;
-		if (!partial.id && !partial.messages) {
-			return partial;
+		if (typeof threadJson !== 'object' || threadJson === null || !('id' in threadJson || 'messages' in threadJson)) {
+			return undefined;
 		}
 		return validatePersistedThread(threadJson);
 	}
 
-	async function saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<void> {
-		validatePersistedThread(threadPayload);
-		await fileioImpl.saveJsonToFile(threadPayload, threadPath(threadId));
-		historyIds.set(threadId, threadPayload.historyId);
+	function saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<boolean> {
+		return serializeWrite(threadId, async () => {
+			validatePersistedThread(threadPayload);
+			if (await isCachedCopy(threadId, threadPayload)) {
+				return false;
+			}
+			await fileioImpl.saveJsonToFile(threadPayload, threadPath(threadId));
+			historyIds.set(threadId, threadPayload.historyId);
+			return true;
+		});
+	}
+
+	// Checks the historyId first, so the usual save of a changed thread
+	// needn't parse the old file. A cached copy that is unreadable or fails
+	// validation doesn't match, so the save replaces it.
+	async function isCachedCopy(threadId: string, threadPayload: PersistedThread): Promise<boolean> {
+		try {
+			return await readHistoryId(threadId) === threadPayload.historyId
+				&& util.isDeepStrictEqual(await readCachedThread(threadId), threadPayload);
+		} catch (error) {
+			if (error instanceof SyntaxError || (error as {code?: string}).code === 'INVALID_CONTRACT') {
+				logger.warn(`Replacing unreadable cached copy of thread ${threadId}: ${(error as Error).message}`);
+				return false;
+			}
+			throw error;
+		}
 	}
 
 	return {

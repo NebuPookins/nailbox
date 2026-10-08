@@ -8,7 +8,6 @@ import type {
 	HideUntilDto,
 	ThreadSummaryDto,
 	ThreadMessageDto,
-	WordcountUpdateDto,
 } from '../types/thread.js';
 
 /**
@@ -434,15 +433,6 @@ export function normalizeHideUntilDto(value: unknown): HideUntilDto {
 		default:
 			throw makeValidationError('hideUntil.type is invalid');
 	}
-}
-
-export function normalizeWordcountUpdateDto(value: unknown): WordcountUpdateDto {
-	assertObject(value, 'wordcountUpdate');
-	const wordcount = Number(value['wordcount']);
-	if (Number.isNaN(wordcount)) {
-		throw makeValidationError('wordcountUpdate.wordcount must be numeric');
-	}
-	return {wordcount};
 }
 
 export function normalizeGmailMoveThreadDto(value: unknown): GmailMoveThreadDto {

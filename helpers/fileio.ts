@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 
 import nebulog from 'nebulog';
 
+import {createKeyedSerializer} from './keyed_serializer.js';
+
 const logger = nebulog.make({filename: 'helpers/fileio.ts', level: 'info'});
 
 /**
@@ -50,7 +52,7 @@ export async function ensureDirectoryExists(dir: string): Promise<string> {
 	return dir;
 }
 
-const pendingWritesByPath = new Map<string, Promise<void>>();
+const serializeWritesByPath = createKeyedSerializer();
 
 async function writeJsonAtomically(serializedJson: string, filePath: string): Promise<void> {
 	const directory = path.dirname(filePath);
@@ -70,18 +72,7 @@ async function writeJsonAtomically(serializedJson: string, filePath: string): Pr
  */
 export async function saveJsonToFile(json: unknown, filePath: string): Promise<void> {
 	const serializedJson = JSON.stringify(json);
-	const key = path.resolve(filePath);
-	const previousWrite = pendingWritesByPath.get(key) ?? Promise.resolve();
-	const runWrite = () => writeJsonAtomically(serializedJson, filePath);
-	const write = previousWrite.then(runWrite, runWrite);
-	pendingWritesByPath.set(key, write);
-	const forgetIfLatest = () => {
-		if (pendingWritesByPath.get(key) === write) {
-			pendingWritesByPath.delete(key);
-		}
-	};
-	write.then(forgetIfLatest, forgetIfLatest);
-	return write;
+	return serializeWritesByPath(path.resolve(filePath), () => writeJsonAtomically(serializedJson, filePath));
 }
 
 export default {

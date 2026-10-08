@@ -9,7 +9,6 @@ import {
 	normalizeHideUntilDto,
 	normalizeSenderRenderModeDto,
 	normalizeTrustedImageSenderDto,
-	normalizeWordcountUpdateDto,
 } from '../validation/contracts.js';
 
 export default function registerThreadRoutes(app: Application, dependencies: any): void {
@@ -203,36 +202,6 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 			res.status(200).send(result.data);
 		} catch (error) {
 			const err = error as Error & {code?: string};
-			if (err.code === 'ENOENT') {
-				res.sendStatus(404);
-				return;
-			}
-			logger.error(util.format('Failed to read thread data: %s', util.inspect(error)));
-			res.sendStatus(500);
-		}
-	});
-
-	app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/, async function(req: Request, res: Response) {
-		const threadId = req.params[0];
-		const messageId = req.params[1];
-		try {
-			const {wordcount} = normalizeWordcountUpdateDto(req.body);
-			const result = await threadService.updateMessageWordCount({
-				threadId,
-				messageId,
-				wordcount,
-			});
-			if (result.status === 404) {
-				res.sendStatus(404);
-				return;
-			}
-			res.sendStatus(200);
-		} catch (error) {
-			const err = error as Error & {code?: string};
-			if (err.code === 'INVALID_CONTRACT') {
-				res.status(400).send({humanErrorMessage: err.message});
-				return;
-			}
 			if (err.code === 'ENOENT') {
 				res.sendStatus(404);
 				return;

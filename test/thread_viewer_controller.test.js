@@ -50,7 +50,6 @@ function createMessengerGetter() {
 
 function createController(overrides = {}) {
 	const { events, messengerGetter } = createMessengerGetter();
-	const wordcountUpdates = [];
 	const controller = createThreadViewerController({
 		appApi: overrides.appApi || {
 			async buildRfc2822() {
@@ -80,10 +79,6 @@ function createController(overrides = {}) {
 			],
 		}})),
 		messengerGetter,
-		onUpdateMessageWordcount(threadId, messageId, wordcount) {
-			wordcountUpdates.push({ threadId, messageId, wordcount });
-			return Promise.resolve();
-		},
 		threadActionController: overrides.threadActionController || {
 			async archiveThread(threadId) {
 				return { ok: Boolean(threadId) };
@@ -96,7 +91,6 @@ function createController(overrides = {}) {
 	return {
 		controller,
 		events,
-		wordcountUpdates,
 	};
 }
 
@@ -106,7 +100,7 @@ test('normalizeBase64AttachmentData converts Gmail-safe alphabet to standard bas
 
 test('openThread renders deleted-message notice and non-deleted messages', async () => {
 	const rendered = [];
-	const { controller, events, wordcountUpdates } = createController();
+	const { controller, events } = createController();
 	let currentThreadId = null;
 
 	await controller.openThread({
@@ -172,9 +166,6 @@ test('openThread renders deleted-message notice and non-deleted messages', async
 			timeToReadSeconds: 90,
 			wordcount: 123,
 		}],
-	]);
-	assert.deepEqual(wordcountUpdates, [
-		{ threadId: 'thread-1', messageId: 'msg-1', wordcount: 123 },
 	]);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Downloading thread data for thread-1...' },

@@ -484,9 +484,6 @@ function renderSetupNeededState(message?: string): void {
 		appApi: appApi,
 		getThreadData: getThreadData,
 		messengerGetter: messengerGetter,
-		onUpdateMessageWordcount: function(threadId, messageId, wordcount) {
-			return appApi.updateMessageWordcount(threadId, messageId, wordcount ?? 0);
-		},
 		threadActionController: threadActionController
 	});
 	var appShellController = createAppShellController({

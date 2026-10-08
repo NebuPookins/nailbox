@@ -42,7 +42,6 @@ export interface GmailMessageData {
 	snippet: string;
 	internalDate: string;
 	payload: GmailPayload;
-	fullBodyWordCount?: number;
 	calculatedTimeToReadSeconds?: number;
 }
 
@@ -508,12 +507,8 @@ export class Message {
 		return getAttachments(this._data.payload);
 	}
 
-	getBestReadTimeSeconds(): number {
-		if (this._data.fullBodyWordCount) {
-			return Math.round((this._data.fullBodyWordCount * 60) / 200);
-		} else {
-			return this._data.calculatedTimeToReadSeconds ?? 0;
-		}
+	getReadTimeSeconds(): number {
+		return this._data.calculatedTimeToReadSeconds ?? 0;
 	}
 
 	getInternalDate(): string {

@@ -483,12 +483,6 @@ export function createAppApi() {
 				}
 			});
 		},
-		updateMessageWordcount(threadId: string, messageId: string, wordcount: number): Promise<Result<JsonValue>> {
-			return request(`/api/threads/${threadId}/messages/${messageId}/wordcount`, {
-				body: JSON.stringify({wordcount}),
-				method: 'POST',
-			});
-		},
 	};
 }
 

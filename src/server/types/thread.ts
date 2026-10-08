@@ -18,9 +18,7 @@ export interface PersistedMessage {
 		body?: {data?: string; size?: number};
 		parts?: Array<{mimeType?: string; filename?: string; body?: {data?: string; size?: number}; parts?: unknown[]}>;
 	};
-	calculatedWordCount?: number;
 	calculatedTimeToReadSeconds?: number;
-	fullBodyWordCount?: number;
 }
 
 export interface PersistedThread {
@@ -39,10 +37,6 @@ export interface WhenIHaveTimeRequestDto {
 }
 
 export type HideUntilDto = HideUntilRequestDto | WhenIHaveTimeRequestDto;
-
-export interface WordcountUpdateDto {
-	wordcount: number;
-}
 
 export interface ThreadSummaryDto {
 	type: 'thread';
@@ -111,7 +105,7 @@ export interface ThreadModelLike {
 	id(): string;
 	snippet(): string;
 	messages(): Array<{
-		getBestReadTimeSeconds(): number;
+		getReadTimeSeconds(): number;
 		getInternalDate(): string | number;
 	}>;
 	senders(): PersonDto[];
@@ -131,5 +125,9 @@ export interface ThreadRepository {
 	readHistoryId(threadId: string): Promise<string | undefined>;
 	readThread(threadId: string): Promise<ThreadModelLike>;
 	readThreadJson(threadId: string): Promise<Partial<PersistedThread>>;
-	saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<void>;
+	/**
+	 * Caches threadPayload unless it equals the cached copy, serialized with
+	 * every other write to that thread. Resolves to whether it was saved.
+	 */
+	saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<boolean>;
 }

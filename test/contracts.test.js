@@ -12,7 +12,6 @@ import {
 	normalizeRfc2822RequestDto,
 	normalizeThreadMessageDto,
 	normalizeThreadSummaryDto,
-	normalizeWordcountUpdateDto,
 	validateThreadPayload,
 } from '../src/server/validation/contracts.js';
 
@@ -48,10 +47,6 @@ test('normalizeHideUntilDto coerces timestamps and rejects invalid values', () =
 	assert.throws(() => {
 		normalizeHideUntilDto({type: 'timestamp', value: 'nope'});
 	}, (error) => error.code === 'INVALID_CONTRACT');
-});
-
-test('normalizeWordcountUpdateDto coerces numeric strings', () => {
-	assert.deepEqual(normalizeWordcountUpdateDto({wordcount: '123'}), {wordcount: 123});
 });
 
 test('normalizeGoogleOAuthSetupDto trims values and falls back to the default redirect uri', () => {

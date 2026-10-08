@@ -135,3 +135,9 @@ export function htmlToPlainText(html: string): string {
 export function countWords(text: string): number {
 	return text.split(/\s+/).filter(word => word.length > 0).length;
 }
+
+const READING_WORDS_PER_MINUTE = 200;
+
+export function readTimeSecondsFor(wordCount: number): number {
+	return Math.round((wordCount * 60) / READING_WORDS_PER_MINUTE);
+}

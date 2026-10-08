@@ -214,15 +214,6 @@ test('single message route responds 404 for a thread that is not cached', async 
 	});
 });
 
-test('wordcount route responds 404 for a thread that is not cached', async () => {
-	await withMissingThreadRoutes(async (app) => {
-		const handler = findHandler(app, 'POST', String(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/wordcount$/));
-		const res = createFakeResponse();
-		await handler({ params: ['abc123', 'def456'], body: { wordcount: 42 } }, res);
-		assert.equal(res.statusCode, 404);
-	});
-});
-
 function findStringRoute(app, method, path) {
 	const route = app.routes.find((entry) => entry.method === method && entry.path === path);
 	assert.ok(route, `Expected route ${path} to be registered`);

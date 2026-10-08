@@ -5,17 +5,16 @@ import {decode} from 'html-entities';
 import nebulog from 'nebulog';
 
 import {removeThreadFromBundle} from '../../../models/bundle.js';
-import {countWords, htmlToPlainText, sanitizeEmailHtml} from './email_html.js';
+import {countWords, htmlToPlainText, readTimeSecondsFor, sanitizeEmailHtml} from './email_html.js';
 import {verifySender} from './sender_verification.js';
 import {
 	isInInbox,
 	isThreadId,
-	makeValidationError,
 	normalizeThreadMessageDto,
 	normalizeThreadSummaryDto,
 	validateThreadPayload,
 } from '../validation/contracts.js';
-import type {ThreadSummaryDto, ThreadMessageDto} from '../types/thread.js';
+import type {PersistedMessage, PersistedThread, ThreadSummaryDto, ThreadMessageDto} from '../types/thread.js';
 
 const logger = nebulog.make({filename: 'src/server/services/thread_service.js', level: 'info'});
 
@@ -81,30 +80,14 @@ export function createThreadService(dependencies: {
 			return {status: 200, changed: false};
 		}
 
-		const existingData = await repository.readThreadJson(threadId);
-
-		threadPayload.messages.forEach((messageData: any) => {
-			const messageInstance = new MessageClass(messageData);
-			const wordCount = countWords(plainTextOf(messageInstance));
-			const timeToReadSeconds = Math.round((wordCount * 60) / 200);
-			messageData.calculatedWordCount = wordCount;
-			messageData.calculatedTimeToReadSeconds = timeToReadSeconds;
-		});
-
-		const newData = threadPayload;
-		if (existingData && existingData.messages) {
-			newData.messages.forEach((newMessage: any) => {
-				const existingMessage = existingData.messages.find((message: any) => message.id === newMessage.id);
-				if (existingMessage && existingMessage.fullBodyWordCount) {
-					newMessage.fullBodyWordCount = existingMessage.fullBodyWordCount;
-				}
-			});
-		}
-
-		const didChange = !util.isDeepStrictEqual(existingData, newData);
-		if (didChange) {
-			await repository.saveThreadJson(threadId, newData);
-		}
+		const newThread: PersistedThread = {
+			...threadPayload,
+			messages: threadPayload.messages.map((messageData: PersistedMessage) => ({
+				...messageData,
+				calculatedTimeToReadSeconds: readTimeSecondsFor(countWords(plainTextOf(new MessageClass(messageData)))),
+			})),
+		};
+		const didChange = await repository.saveThreadJson(threadId, newThread);
 		markRefreshed(lastRefresheds, threadId);
 		return {
 			status: 200,
@@ -130,7 +113,7 @@ export function createThreadService(dependencies: {
 				let totalTimeToReadSecondsForThread = 0;
 				const messagesInThread = thread.messages();
 				messagesInThread.forEach((message: any) => {
-					totalTimeToReadSecondsForThread += message.getBestReadTimeSeconds();
+					totalTimeToReadSecondsForThread += message.getReadTimeSeconds();
 				});
 
 				let recentMessageReadTime = 0;
@@ -141,7 +124,7 @@ export function createThreadService(dependencies: {
 							mostRecentMessage = messagesInThread[i];
 						}
 					}
-					recentMessageReadTime = mostRecentMessage.getBestReadTimeSeconds();
+					recentMessageReadTime = mostRecentMessage.getReadTimeSeconds();
 				}
 
 				return normalizeThreadSummaryDto({
@@ -182,28 +165,6 @@ export function createThreadService(dependencies: {
 		};
 	}
 
-	async function updateMessageWordCount({
-		threadId,
-		messageId,
-		wordcount,
-	}: {
-		threadId: string;
-		messageId: string;
-		wordcount: number;
-	}): Promise<{status: number}> {
-		if (!(typeof threadId === 'string' && typeof messageId === 'string')) {
-			throw makeValidationError('threadId and messageId must be strings');
-		}
-		const thread = await repository.readThread(threadId);
-		const message = thread.message(messageId);
-		if (!message) {
-			return {status: 404};
-		}
-		message._data.fullBodyWordCount = parseInt(String(wordcount), 10);
-		await repository.saveThreadJson(threadId, thread._data);
-		return {status: 200};
-	}
-
 	async function getThreadMessage(threadId: string, messageId: string): Promise<{status: number; data?: ThreadMessageDto}> {
 		const thread = await repository.readThread(threadId);
 		const matchingMessage = thread.message(messageId);
@@ -222,7 +183,6 @@ export function createThreadService(dependencies: {
 		getThreadMessages,
 		loadRelevantDataFromMessage,
 		saveThreadPayload,
-		updateMessageWordCount,
 	};
 }
 
@@ -241,7 +201,7 @@ export function loadRelevantDataFromMessage(objMessage: any): ThreadMessageDto {
 	const attachments = objMessage.getAttachments();
 	const plainTextBody = plainTextOf(objMessage, originalBody);
 	const wordCount = countWords(plainTextBody);
-	const timeToReadSeconds = wordCount * 60 / 200;
+	const timeToReadSeconds = readTimeSecondsFor(wordCount);
 	const html = sanitizeEmailHtml(originalBody, {
 		cidUrl: (contentId) => cidUrlFor(objMessage.threadId(), objMessage.id(), contentId),
 	});
