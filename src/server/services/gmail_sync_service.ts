@@ -77,10 +77,11 @@ export async function refreshSingleThreadFromGmail({
 	gmailRequest: any;
 	threadId: string;
 	lastRefresheds: any;
-	threadRepository: Pick<ThreadRepository, 'deleteThread' | 'readThreadJson'>;
+	threadRepository: Pick<ThreadRepository, 'deleteThread' | 'readDeletionCount' | 'readThreadJson'>;
 	threadService: any;
 	bundles?: any;
 }): Promise<{status: number; changed?: boolean}> {
+	const deletionCountAtFetch = threadRepository.readDeletionCount(threadId);
 	try {
 		const gmailThread = await gmailRequest({
 			path: `/threads/${threadId}`,
@@ -91,6 +92,7 @@ export async function refreshSingleThreadFromGmail({
 		return threadService.saveThreadPayload({
 			threadPayload: gmailThread,
 			lastRefresheds,
+			deletionCountAtFetch,
 		});
 	} catch (error) {
 		const err = error as {status?: number};
@@ -206,7 +208,7 @@ export async function syncRecentThreadsFromGmail({
 }: {
 	gmailRequest: any;
 	lastRefresheds: any;
-	threadRepository: Pick<ThreadRepository, 'deleteThread' | 'listThreadIds' | 'readHistoryId' | 'readThreadJson'>;
+	threadRepository: Pick<ThreadRepository, 'deleteThread' | 'listThreadIds' | 'readDeletionCount' | 'readHistoryId' | 'readThreadJson'>;
 	threadService: any;
 	bundles?: any;
 	// Shared by every caller, so all syncs resume from one history checkpoint.
@@ -314,7 +316,7 @@ export function createGmailSyncer({
 	bundles?: any;
 	lastRefresheds: any;
 	stateRepository: GmailSyncStateRepository;
-	threadRepository: Pick<ThreadRepository, 'deleteThread' | 'listThreadIds' | 'readHistoryId' | 'readThreadJson'>;
+	threadRepository: Pick<ThreadRepository, 'deleteThread' | 'listThreadIds' | 'readDeletionCount' | 'readHistoryId' | 'readThreadJson'>;
 	threadService: any;
 }) {
 	let syncState: GmailSyncState | undefined;

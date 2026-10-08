@@ -6,7 +6,7 @@ import nebulog from 'nebulog';
 import fileio from '../../../helpers/fileio.js';
 import {createKeyedSerializer} from '../../../helpers/keyed_serializer.js';
 import {isThreadId, validatePersistedThread} from '../validation/contracts.js';
-import type {PersistedThread, ThreadModelLike, ThreadRepository} from '../types/thread.js';
+import type {EvictThreadOutcome, PersistedThread, ThreadModelLike, ThreadRepository} from '../types/thread.js';
 
 const logger = nebulog.make({filename: 'src/server/repositories/thread_repository.ts', level: 'info'});
 const THREADS_DIRECTORY = 'data/threads';
@@ -32,12 +32,39 @@ export function createThreadRepository(dependencies: {
 	// Writes to one thread's file run one at a time, so a save's compare
 	// against the cached copy can't race another save or a delete.
 	const serializeWrite = createKeyedSerializer();
+	// Bumped by every deleteThread, so a save can tell that its payload was
+	// fetched from Gmail before the thread was deleted, and so is stale.
+	const deletionCounts = new Map<string, number>();
+	// The historyId of the payload that last evicted each thread, so an older
+	// payload saved afterwards can't bring the thread back.
+	const evictedHistoryIds = new Map<string, string>();
 
-	function deleteThread(threadId: string): Promise<boolean> {
-		return serializeWrite(threadId, () => deleteThreadFile(threadId));
+	function readDeletionCount(threadId: string): number {
+		return deletionCounts.get(threadId) ?? 0;
 	}
 
-	async function deleteThreadFile(threadId: string): Promise<boolean> {
+	function deleteThread(threadId: string): Promise<boolean> {
+		// Bumped now rather than once the delete's turn comes, so a save
+		// already queued behind it is refused too.
+		deletionCounts.set(threadId, readDeletionCount(threadId) + 1);
+		return serializeWrite(threadId, async () => (await deleteThreadFile(threadId)) !== 'failed');
+	}
+
+	function evictThread(threadId: string, historyId: string | undefined): Promise<EvictThreadOutcome> {
+		return serializeWrite(threadId, async () => {
+			const cachedHistoryId = await readHistoryIdIfReadable(threadId);
+			if (isOlderThan(historyId, cachedHistoryId)) {
+				logger.info(`Not evicting thread ${threadId}: historyId ${historyId} is older than the cached ${cachedHistoryId}.`);
+				return 'kept';
+			}
+			if (historyId !== undefined && !isOlderThan(historyId, evictedHistoryIds.get(threadId))) {
+				evictedHistoryIds.set(threadId, historyId);
+			}
+			return deleteThreadFile(threadId);
+		});
+	}
+
+	async function deleteThreadFile(threadId: string): Promise<'deleted' | 'absent' | 'failed'> {
 		const pathToDelete = threadPath(threadId);
 		// Recorded as "no cached copy" rather than forgotten, so a read already
 		// in flight can't put the deleted file's historyId back. If the rm
@@ -46,15 +73,15 @@ export function createThreadRepository(dependencies: {
 		try {
 			await rm(pathToDelete);
 			logger.info(`Deleted file ${pathToDelete}`);
-			return true;
+			return 'deleted';
 		} catch (error) {
 			const err = error as Error & {code?: string; stack?: string};
 			if (err.code === 'ENOENT') {
 				logger.info(`File ${pathToDelete} already deleted.`);
-				return true;
+				return 'absent';
 			}
 			logger.error(`Error deleting ${pathToDelete}. Code: ${err.code}. Stack: ${err.stack}`);
-			return false;
+			return 'failed';
 		}
 	}
 
@@ -121,27 +148,43 @@ export function createThreadRepository(dependencies: {
 		return validatePersistedThread(threadJson);
 	}
 
-	function saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<boolean> {
+	function saveThreadJson(
+		threadId: string,
+		threadPayload: PersistedThread,
+		{deletionCountAtFetch}: {deletionCountAtFetch?: number} = {},
+	): Promise<boolean> {
 		return serializeWrite(threadId, async () => {
 			validatePersistedThread(threadPayload);
-			if (await isCachedCopy(threadId, threadPayload)) {
+			if (deletionCountAtFetch !== undefined && deletionCountAtFetch !== readDeletionCount(threadId)) {
+				logger.info(`Not saving thread ${threadId}: it was deleted after this copy was fetched.`);
+				return false;
+			}
+			const cachedHistoryId = await readHistoryIdIfReadable(threadId);
+			const newerHistoryId = [cachedHistoryId, evictedHistoryIds.get(threadId)]
+				.find((historyId) => isOlderThan(threadPayload.historyId, historyId));
+			if (newerHistoryId !== undefined) {
+				logger.info(`Not saving thread ${threadId}: historyId ${threadPayload.historyId} is older than ${newerHistoryId}.`);
+				return false;
+			}
+			// Comparing historyIds first means the usual save of a changed
+			// thread needn't parse the old file.
+			if (cachedHistoryId === threadPayload.historyId && await isCachedCopy(threadId, threadPayload)) {
 				return false;
 			}
 			await fileioImpl.saveJsonToFile(threadPayload, threadPath(threadId));
 			historyIds.set(threadId, threadPayload.historyId);
+			evictedHistoryIds.delete(threadId);
 			return true;
 		});
 	}
 
-	// Checks the historyId first, so the usual save of a changed thread
-	// needn't parse the old file. A cached copy that is unreadable or fails
-	// validation doesn't match, so the save replaces it.
+	// A cached copy that is unreadable or fails validation doesn't match, so
+	// the save replaces it.
 	async function isCachedCopy(threadId: string, threadPayload: PersistedThread): Promise<boolean> {
 		try {
-			return await readHistoryId(threadId) === threadPayload.historyId
-				&& util.isDeepStrictEqual(await readCachedThread(threadId), threadPayload);
+			return util.isDeepStrictEqual(await readCachedThread(threadId), threadPayload);
 		} catch (error) {
-			if (error instanceof SyntaxError || (error as {code?: string}).code === 'INVALID_CONTRACT') {
+			if (isUnreadableCacheError(error)) {
 				logger.warn(`Replacing unreadable cached copy of thread ${threadId}: ${(error as Error).message}`);
 				return false;
 			}
@@ -149,12 +192,39 @@ export function createThreadRepository(dependencies: {
 		}
 	}
 
+	// Treats an unreadable cached copy as having no historyId, so a save
+	// replaces it and an eviction removes it.
+	async function readHistoryIdIfReadable(threadId: string): Promise<string | undefined> {
+		try {
+			return await readHistoryId(threadId);
+		} catch (error) {
+			if (isUnreadableCacheError(error)) {
+				return undefined;
+			}
+			throw error;
+		}
+	}
+
 	return {
 		deleteThread,
+		evictThread,
 		listThreadIds,
+		readDeletionCount,
 		readHistoryId,
 		readThread,
 		readThreadJson,
 		saveThreadJson,
 	};
+}
+
+function isUnreadableCacheError(error: unknown): boolean {
+	return error instanceof SyntaxError || (error as {code?: string}).code === 'INVALID_CONTRACT';
+}
+
+// Gmail historyIds are decimal uint64s that only grow, so the larger one is
+// newer. False if either is missing or not a number, as then neither is known
+// to be older.
+function isOlderThan(historyId: string | undefined, otherHistoryId: string | undefined): boolean {
+	const isDecimal = (value: string | undefined): value is string => value !== undefined && /^\d+$/.test(value);
+	return isDecimal(historyId) && isDecimal(otherHistoryId) && BigInt(historyId) < BigInt(otherHistoryId);
 }

@@ -192,3 +192,98 @@ test('concurrent saves of one thread are written one at a time', async () => {
 		await rm(threadsDirectory, { recursive: true, force: true });
 	}
 });
+
+test('saveThreadJson refuses a payload older than the cached copy', async () => {
+	const threadsDirectory = await mkdtemp(path.join(tmpdir(), 'nailbox-threads-'));
+	try {
+		const threadId = '18c2f0a1b2c3d4e5';
+		const threadRepository = createThreadRepository({ threadsDirectory });
+
+		assert.equal(await threadRepository.saveThreadJson(threadId, { id: threadId, historyId: '200', messages: [] }), true);
+		// Compared as numbers, not strings, which would put '1000' before '200'.
+		assert.equal(await threadRepository.saveThreadJson(threadId, { id: threadId, historyId: '1000', messages: [] }), true);
+		assert.equal(await threadRepository.saveThreadJson(threadId, { id: threadId, historyId: '200', messages: [] }), false);
+
+		assert.equal((await threadRepository.readThreadJson(threadId)).historyId, '1000');
+	} finally {
+		await rm(threadsDirectory, { recursive: true, force: true });
+	}
+});
+
+test('saveThreadJson refuses a payload fetched before the thread was deleted', async () => {
+	const threadsDirectory = await mkdtemp(path.join(tmpdir(), 'nailbox-threads-'));
+	try {
+		const threadId = '18c2f0a1b2c3d4e5';
+		const threadRepository = createThreadRepository({ threadsDirectory });
+		await threadRepository.saveThreadJson(threadId, { id: threadId, historyId: '100', messages: [] });
+
+		const deletionCountBeforeDelete = threadRepository.readDeletionCount(threadId);
+		await threadRepository.deleteThread(threadId);
+		const fetchedBeforeDelete = { id: threadId, historyId: '200', messages: [] };
+		assert.equal(await threadRepository.saveThreadJson(threadId, fetchedBeforeDelete, { deletionCountAtFetch: deletionCountBeforeDelete }), false);
+		assert.deepEqual(await threadRepository.readThreadJson(threadId), {});
+
+		const fetchedAfterDelete = { id: threadId, historyId: '300', messages: [] };
+		assert.equal(await threadRepository.saveThreadJson(threadId, fetchedAfterDelete, { deletionCountAtFetch: threadRepository.readDeletionCount(threadId) }), true);
+		assert.deepEqual(await threadRepository.readThreadJson(threadId), fetchedAfterDelete);
+	} finally {
+		await rm(threadsDirectory, { recursive: true, force: true });
+	}
+});
+
+test('a save already queued behind a delete is refused if its payload was fetched before the delete', async () => {
+	const threadsDirectory = await mkdtemp(path.join(tmpdir(), 'nailbox-threads-'));
+	try {
+		const threadId = '18c2f0a1b2c3d4e5';
+		const threadRepository = createThreadRepository({ threadsDirectory });
+		const deletionCountAtFetch = threadRepository.readDeletionCount(threadId);
+
+		const [deleted, saved] = await Promise.all([
+			threadRepository.deleteThread(threadId),
+			threadRepository.saveThreadJson(threadId, { id: threadId, historyId: '100', messages: [] }, { deletionCountAtFetch }),
+		]);
+
+		assert.equal(deleted, true);
+		assert.equal(saved, false);
+		assert.deepEqual(await threadRepository.readThreadJson(threadId), {});
+	} finally {
+		await rm(threadsDirectory, { recursive: true, force: true });
+	}
+});
+
+test('evictThread keeps a cached copy newer than the evicting payload', async () => {
+	const threadsDirectory = await mkdtemp(path.join(tmpdir(), 'nailbox-threads-'));
+	try {
+		const threadId = '18c2f0a1b2c3d4e5';
+		const threadRepository = createThreadRepository({ threadsDirectory });
+		await threadRepository.saveThreadJson(threadId, { id: threadId, historyId: '200', messages: [] });
+
+		assert.equal(await threadRepository.evictThread(threadId, '100'), 'kept');
+		assert.equal((await threadRepository.readThreadJson(threadId)).historyId, '200');
+
+		assert.equal(await threadRepository.evictThread(threadId, '300'), 'deleted');
+		assert.deepEqual(await threadRepository.readThreadJson(threadId), {});
+		assert.equal(await threadRepository.evictThread(threadId, '300'), 'absent');
+	} finally {
+		await rm(threadsDirectory, { recursive: true, force: true });
+	}
+});
+
+test('after evictThread, saveThreadJson refuses payloads older than the evicting one', async () => {
+	const threadsDirectory = await mkdtemp(path.join(tmpdir(), 'nailbox-threads-'));
+	try {
+		const threadId = '18c2f0a1b2c3d4e5';
+		const threadRepository = createThreadRepository({ threadsDirectory });
+		await threadRepository.saveThreadJson(threadId, { id: threadId, historyId: '100', messages: [] });
+
+		assert.equal(await threadRepository.evictThread(threadId, '300'), 'deleted');
+		assert.equal(await threadRepository.saveThreadJson(threadId, { id: threadId, historyId: '200', messages: [] }), false);
+		assert.deepEqual(await threadRepository.readThreadJson(threadId), {});
+
+		// Back in the inbox, e.g. after a reply.
+		assert.equal(await threadRepository.saveThreadJson(threadId, { id: threadId, historyId: '400', messages: [] }), true);
+		assert.equal((await threadRepository.readThreadJson(threadId)).historyId, '400');
+	} finally {
+		await rm(threadsDirectory, { recursive: true, force: true });
+	}
+});

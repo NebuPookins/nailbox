@@ -119,15 +119,39 @@ export interface ThreadModelLike {
 	} | null;
 }
 
+/**
+ * What evictThread did: removed the cached copy, found none, kept it because
+ * it is newer than the evicting payload, or failed to remove it.
+ */
+export type EvictThreadOutcome = 'deleted' | 'absent' | 'kept' | 'failed';
+
 export interface ThreadRepository {
+	/**
+	 * Removes the cached copy, e.g. after the user archived it. A save whose
+	 * payload was fetched before this call is then refused; see
+	 * readDeletionCount.
+	 */
 	deleteThread(threadId: string): Promise<boolean>;
+	/**
+	 * Removes the cached copy because a payload with the given historyId shows
+	 * the thread left the inbox, unless the cached copy is newer. Saves of
+	 * payloads older than that historyId are then refused.
+	 */
+	evictThread(threadId: string, historyId: string | undefined): Promise<EvictThreadOutcome>;
 	listThreadIds(): Promise<string[]>;
+	/**
+	 * Read before fetching a thread from Gmail and passed to saveThreadJson,
+	 * so the save is refused if the thread was deleted meanwhile.
+	 */
+	readDeletionCount(threadId: string): number;
 	readHistoryId(threadId: string): Promise<string | undefined>;
 	readThread(threadId: string): Promise<ThreadModelLike>;
 	readThreadJson(threadId: string): Promise<Partial<PersistedThread>>;
 	/**
-	 * Caches threadPayload unless it equals the cached copy, serialized with
-	 * every other write to that thread. Resolves to whether it was saved.
+	 * Caches threadPayload unless it equals the cached copy, is older than it
+	 * or than the payload that last evicted the thread, or was fetched before
+	 * a deleteThread. Serialized with every other write to that thread.
+	 * Resolves to whether it was saved.
 	 */
-	saveThreadJson(threadId: string, threadPayload: PersistedThread): Promise<boolean>;
+	saveThreadJson(threadId: string, threadPayload: PersistedThread, options?: {deletionCountAtFetch?: number}): Promise<boolean>;
 }

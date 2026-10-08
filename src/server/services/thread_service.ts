@@ -31,12 +31,19 @@ export function createThreadService(dependencies: {
 		});
 	}
 
+	/**
+	 * Caches a thread fetched from Gmail, or evicts it if it has left the
+	 * inbox. Pass deletionCountAtFetch, read from the repository before the
+	 * fetch, so a thread deleted meanwhile isn't brought back.
+	 */
 	async function saveThreadPayload({
 		threadPayload,
 		lastRefresheds,
+		deletionCountAtFetch,
 	}: {
 		threadPayload: any;
 		lastRefresheds: any;
+		deletionCountAtFetch?: number;
 	}): Promise<{status: number; changed?: boolean; body?: {humanErrorMessage: string}}> {
 		try {
 			validateThreadPayload(threadPayload);
@@ -61,20 +68,20 @@ export function createThreadService(dependencies: {
 
 		const noMessageInInbox = !threadPayload.messages.some(isInInbox);
 		if (noMessageInInbox) {
-			const existingData = await repository.readThreadJson(threadId);
-			logger.info(`Deleting thread ${threadId} because no message in the thread is in the inbox.`);
-			const deleted = await repository.deleteThread(threadId);
-			if (deleted && bundles) {
+			logger.info(`Evicting thread ${threadId} because no message in the thread is in the inbox.`);
+			const outcome = await repository.evictThread(threadId, threadPayload.historyId);
+			if ((outcome === 'deleted' || outcome === 'absent') && bundles) {
 				await removeThreadFromBundle(bundles, threadId);
 			}
 			return {
-				status: deleted ? 200 : 500,
-				changed: deleted && Boolean(existingData && Object.keys(existingData).length > 0),
+				status: outcome === 'failed' ? 500 : 200,
+				changed: outcome === 'deleted',
 			};
 		}
 
 		// Gmail bumps a thread's historyId on every change, so a matching one
 		// means the cached copy is current and needn't be re-read or rewritten.
+		// Just a shortcut: saveThreadJson re-checks under the thread's lock.
 		if (threadPayload.historyId && await repository.readHistoryId(threadId) === threadPayload.historyId) {
 			markRefreshed(lastRefresheds, threadId);
 			return {status: 200, changed: false};
@@ -87,7 +94,7 @@ export function createThreadService(dependencies: {
 				calculatedTimeToReadSeconds: readTimeSecondsFor(countWords(plainTextOf(new MessageClass(messageData)))),
 			})),
 		};
-		const didChange = await repository.saveThreadJson(threadId, newThread);
+		const didChange = await repository.saveThreadJson(threadId, newThread, {deletionCountAtFetch});
 		markRefreshed(lastRefresheds, threadId);
 		return {
 			status: 200,

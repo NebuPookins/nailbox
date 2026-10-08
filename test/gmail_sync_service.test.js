@@ -23,6 +23,7 @@ function runSync({
 		threadRepository: {
 			deleteThread: async () => true,
 			listThreadIds: async () => cachedThreadIds,
+			readDeletionCount: () => 0,
 			readHistoryId,
 			readThreadJson: async () => ({}),
 		},
@@ -309,6 +310,7 @@ function makeGatedSyncer() {
 		threadRepository: {
 			deleteThread: async () => true,
 			listThreadIds: async () => [],
+			readDeletionCount: () => 0,
 			readHistoryId: async () => undefined,
 			readThreadJson: async () => ({}),
 		},
@@ -362,6 +364,7 @@ test('createGmailSyncer starts a fresh sync when none is in flight', async () =>
 test('refreshSingleThreadFromGmail removes a 404ed thread from its bundle', async () => {
 	const fakeThreadRepository = {
 		deleteThread: async () => true,
+		readDeletionCount: () => 0,
 		readThreadJson: async () => ({id: 'gone-thread', messages: [{id: 'm1'}]}),
 	};
 	const gmailRequest = async () => {
@@ -396,4 +399,31 @@ test('refreshSingleThreadFromGmail removes a 404ed thread from its bundle', asyn
 	assert.deepEqual(result, {status: 200, changed: true});
 	assert.deepEqual(bundle.threadIds, ['other-thread', 'third-thread']);
 	assert.ok(saved, 'expected bundles.save() to be called');
+});
+
+test('refreshSingleThreadFromGmail saves with the deletion count read before the fetch', async () => {
+	let deletionCount = 0;
+	let savedWith;
+	await refreshSingleThreadFromGmail({
+		gmailRequest: async () => {
+			// The user deletes the thread while Gmail is answering.
+			deletionCount += 1;
+			return threadPayload('t1');
+		},
+		threadId: 't1',
+		lastRefresheds: {markRefreshed: () => Promise.resolve()},
+		threadRepository: {
+			deleteThread: async () => true,
+			readDeletionCount: () => deletionCount,
+			readThreadJson: async () => ({}),
+		},
+		threadService: {
+			saveThreadPayload: async ({deletionCountAtFetch}) => {
+				savedWith = deletionCountAtFetch;
+				return {status: 200, changed: false};
+			},
+		},
+	});
+
+	assert.equal(savedWith, 0);
 });

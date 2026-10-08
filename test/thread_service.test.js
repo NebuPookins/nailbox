@@ -85,15 +85,14 @@ test('saveThreadPayload evicts a cached thread once no message has the INBOX lab
 	// purged the local cache when *every* message was in TRASH, so the periodic Gmail
 	// sync kept re-fetching and re-saving such threads, making them reappear in the
 	// inbox even though Gmail no longer considered them inbox threads.
-	let deleteThreadCalled = false;
+	let evictThreadCalled = false;
 	const threadService = createThreadService({
 		threadRepository: {
-			deleteThread: async (threadId) => {
-				deleteThreadCalled = true;
+			evictThread: async (threadId) => {
+				evictThreadCalled = true;
 				assert.equal(threadId, 'thread1');
-				return true;
+				return 'deleted';
 			},
-			readThreadJson: async () => ({id: 'thread1', messages: [{id: 'm1'}]}),
 			saveThreadJson: () => {
 				throw new Error('saveThreadJson should not be called for a thread with no INBOX message');
 			},
@@ -115,7 +114,7 @@ test('saveThreadPayload evicts a cached thread once no message has the INBOX lab
 		},
 	});
 
-	assert.equal(deleteThreadCalled, true);
+	assert.equal(evictThreadCalled, true);
 	assert.deepEqual(result, {status: 200, changed: true});
 });
 
