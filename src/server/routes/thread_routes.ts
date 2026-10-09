@@ -11,6 +11,9 @@ import {
 	normalizeTrustedImageSenderDto,
 } from '../validation/contracts.js';
 
+/** How many rows each group on the main page shows. */
+const MAX_ITEMS_PER_GROUP = 10;
+
 export default function registerThreadRoutes(app: Application, dependencies: any): void {
 	const {
 		bundles,
@@ -19,6 +22,7 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 		hideUntils,
 		lastRefresheds,
 		logger,
+		notifyThreadsChanged,
 		threadRepository,
 		threadService,
 	} = dependencies;
@@ -132,7 +136,7 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 		try {
 			const allThreads = await threadService.getMostRelevantThreads({
 				hideUntils,
-				limit: 100,
+				limit: Infinity,
 			});
 			const bundleList = dependencies.bundles ? dependencies.bundles.listBundles() : [];
 			const orderedGroupThreads = groupThreads(
@@ -140,6 +144,7 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 				bundleList,
 				getEmailGroupingRules(config),
 				hideUntils.comparator(),
+				MAX_ITEMS_PER_GROUP,
 			);
 			res.status(200).type('application/json').send(orderedGroupThreads);
 		} catch (error) {
@@ -155,6 +160,7 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 			const isSuccessful = await threadRepository.deleteThread(threadId);
 			if (isSuccessful) {
 				await removeThreadFromBundle(bundles, threadId);
+				notifyThreadsChanged?.('thread-removed');
 			}
 			res.sendStatus(isSuccessful ? 200 : 500);
 		} catch (error) {
@@ -183,6 +189,7 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 					res.status(400).send('Invalid hideUntil.type');
 					return;
 			}
+			notifyThreadsChanged?.('thread-hidden');
 			res.sendStatus(200);
 		} catch (error) {
 			const err = error as Error & {code?: string};

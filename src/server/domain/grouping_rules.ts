@@ -103,6 +103,7 @@ export function groupThreads(
 	bundles: BundleDto[] = [],
 	groupingRules: GroupingRulesConfig,
 	hideUntilComparator: (a: ThreadSortInfo, b: ThreadSortInfo) => number,
+	maxItemsPerGroup: number = Infinity,
 ): ThreadGroupDto[] {
 	function itemComparator(a: ThreadRowItem, b: ThreadRowItem): number {
 		return hideUntilComparator(sortKeyOf(a), sortKeyOf(b));
@@ -172,12 +173,12 @@ export function groupThreads(
 			}
 		}
 
-		const sortedItems = [...groupedItems[group]];
-		if (sortType === 'shortest') {
-			sortedItems.sort((a, b) => a.totalTimeToReadSeconds - b.totalTimeToReadSeconds);
-		} else {
-			sortedItems.sort(itemComparator);
-		}
+		// Every group gets its own quota of the most relevant items, so a flood of
+		// mail in one group can't crowd the others out.
+		const mostRelevantItems = [...groupedItems[group]].sort(itemComparator).slice(0, maxItemsPerGroup);
+		const sortedItems = sortType === 'shortest'
+			? mostRelevantItems.sort((a, b) => a.totalTimeToReadSeconds - b.totalTimeToReadSeconds)
+			: mostRelevantItems;
 
 		const threadItems = sortedItems.filter((item): item is ThreadSummaryDto => item.type !== 'bundle');
 

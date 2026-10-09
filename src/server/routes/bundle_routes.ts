@@ -26,6 +26,7 @@ export default function registerBundleRoutes(app: Application, dependencies: any
 		bundles,
 		hideUntils,
 		logger,
+		notifyThreadsChanged,
 		threadRepository,
 		withGmailApi,
 	} = dependencies;
@@ -149,6 +150,7 @@ export default function registerBundleRoutes(app: Application, dependencies: any
 						return Promise.resolve();
 				}
 			}));
+			notifyThreadsChanged?.('bundle-hidden');
 			res.sendStatus(200);
 		} catch (error) {
 			const err = error as Error & {code?: string};
@@ -192,6 +194,7 @@ export default function registerBundleRoutes(app: Application, dependencies: any
 			));
 			bundles.deleteBundle(bundleId);
 			await bundles.save();
+			notifyThreadsChanged?.('bundle-removed');
 			res.sendStatus(200);
 		} catch (error) {
 			const err = error as Error & {code?: string};
@@ -231,6 +234,7 @@ export default function registerBundleRoutes(app: Application, dependencies: any
 			));
 			bundles.deleteBundle(bundleId);
 			await bundles.save();
+			notifyThreadsChanged?.('bundle-removed');
 			res.sendStatus(200);
 		} catch (error) {
 			logger.error(util.inspect(error));

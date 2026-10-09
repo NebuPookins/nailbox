@@ -367,3 +367,53 @@ test('thread move route rejects an invalid body without calling Gmail', async ()
 	assert.equal(gmailCalled, false);
 	assert.equal(res.statusCode, 400);
 });
+
+test('thread archive route tells clients the thread list changed once the thread is gone', async () => {
+	const app = createFakeApp();
+	const notifications = [];
+	registerThreadActionRoutes(app, {
+		lastRefresheds: {},
+		logger: { error() {}, info() {}, warn() {} },
+		notifyThreadsChanged(reason) {
+			notifications.push(reason);
+		},
+		threadRepository: {
+			async deleteThread() {
+				return true;
+			},
+		},
+		async withGmailApi(_res, callback) {
+			return callback(async () => ({ id: 'gmail-response' }));
+		},
+	});
+
+	const handler = findPostHandler(app, '/^\\/api\\/threads\\/([a-z0-9]+)\\/archive$/');
+	await handler({ params: ['abc123'] }, createFakeResponse());
+
+	assert.equal(notifications.length, 1);
+});
+
+test('thread archive route does not announce a change when the cached thread survives', async () => {
+	const app = createFakeApp();
+	const notifications = [];
+	registerThreadActionRoutes(app, {
+		lastRefresheds: {},
+		logger: { error() {}, info() {}, warn() {} },
+		notifyThreadsChanged(reason) {
+			notifications.push(reason);
+		},
+		threadRepository: {
+			async deleteThread() {
+				return false;
+			},
+		},
+		async withGmailApi(_res, callback) {
+			return callback(async () => ({ id: 'gmail-response' }));
+		},
+	});
+
+	const handler = findPostHandler(app, '/^\\/api\\/threads\\/([a-z0-9]+)\\/archive$/');
+	await handler({ params: ['abc123'] }, createFakeResponse());
+
+	assert.deepEqual(notifications, []);
+});

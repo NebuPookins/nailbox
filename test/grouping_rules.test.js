@@ -220,3 +220,57 @@ test('groupThreads ranks a bundle by the hide-untils of its member threads', () 
 
 	assert.deepEqual(itemIdsOf(groups[0]), ['fresh', 'snoozed-bundle']);
 });
+
+test('groupThreads keeps a high priority group visible when a low priority group floods the inbox', () => {
+	const rules = {
+		rules: [
+			{name: 'Work', priority: 1, sortType: 'mostRecent', conditions: [{type: 'subject', value: 'work'}]},
+			{name: 'Promotions', priority: 2, sortType: 'mostRecent', conditions: [{type: 'subject', value: 'sale'}]},
+		],
+	};
+	const promotions = Array.from({length: 50}, (_, i) => thread({threadId: `sale${i}`, subject: 'sale', lastUpdated: 100 + i}));
+	const groups = groupThreads(
+		[thread({threadId: 'old-work', subject: 'work', lastUpdated: 1}), ...promotions],
+		[],
+		rules,
+		(a, b) => b.lastUpdated - a.lastUpdated,
+		10,
+	);
+
+	assert.deepEqual(groups.map((group) => group.label), ['Work', 'Promotions']);
+	assert.deepEqual(itemIdsOf(groups[0]), ['old-work']);
+	assert.deepEqual(itemIdsOf(groups[1]), ['sale49', 'sale48', 'sale47', 'sale46', 'sale45', 'sale44', 'sale43', 'sale42', 'sale41', 'sale40']);
+});
+
+test('groupThreads fills a shortest-first group with its most recent items, then sorts them by read time', () => {
+	const groups = groupThreads(
+		[
+			thread({threadId: 'newest-long', lastUpdated: 3, totalTimeToReadSeconds: 90}),
+			thread({threadId: 'newer-short', lastUpdated: 2, totalTimeToReadSeconds: 10}),
+			thread({threadId: 'oldest-shortest', lastUpdated: 1, totalTimeToReadSeconds: 1}),
+		],
+		[],
+		{rules: [{name: 'Quick', priority: 1, sortType: 'shortest', conditions: [{type: 'subject', value: 'quick'}]}]},
+		(a, b) => b.lastUpdated - a.lastUpdated,
+		2,
+	);
+
+	assert.deepEqual(itemIdsOf(groups[0]), ['newer-short', 'newest-long']);
+});
+
+test('groupThreads counts a bundle as a single item toward the group limit', () => {
+	const groups = groupThreads(
+		[
+			thread({threadId: 'a', lastUpdated: 5}),
+			thread({threadId: 'b', lastUpdated: 4}),
+			thread({threadId: 'c', lastUpdated: 3}),
+			thread({threadId: 'd', lastUpdated: 2}),
+		],
+		[{bundleId: 'bundle', threadIds: ['a', 'b', 'c']}],
+		{rules: []},
+		(a, b) => b.lastUpdated - a.lastUpdated,
+		2,
+	);
+
+	assert.deepEqual(itemIdsOf(groups[0]), ['bundle', 'd']);
+});

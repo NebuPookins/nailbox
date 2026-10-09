@@ -44,6 +44,7 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 		const isSuccessful = await threadRepository.deleteThread(threadId);
 		if (isSuccessful) {
 			await removeThreadFromBundle(bundles, threadId);
+			notifyThreadsChanged?.('thread-removed');
 			res.status(200).send(gmailResponse);
 			return;
 		}
