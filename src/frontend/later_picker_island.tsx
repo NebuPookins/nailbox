@@ -48,8 +48,11 @@ function LaterPickerApp({ notify, onDismiss, state }: LaterPickerAppProps) {
 		}
 		setPendingPreset(presetValue);
 		try {
-			await Promise.resolve(state.onHide?.(state.targetId as string, hideUntil));
+			// Hiding removes the row right away, so close the picker now rather than after the
+			// server responds; a failure brings the row back and is reported through the messenger.
+			const pending = state.onHide?.(state.targetId as string, hideUntil);
 			onDismiss?.();
+			await pending;
 		} catch (error: unknown) {
 			const message = error instanceof Error && error.message
 				? error.message

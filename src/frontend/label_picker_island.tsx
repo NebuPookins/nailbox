@@ -39,15 +39,13 @@ function LabelPickerApp({ notify, onDismiss, onMoveThread, onMoveBundle, state }
 		}
 		setPendingLabelId(labelId);
 		try {
-			if (state.bundleId) {
-				await Promise.resolve(onMoveBundle?.(state.bundleId, labelId));
-			} else {
-				const result = await Promise.resolve(onMoveThread?.(state.threadId as string, labelId));
-				if (result && result.ok === false) {
-					return;
-				}
-			}
+			// The move removes the row right away, so close the picker now rather than after the
+			// server responds; a failure brings the row back and is reported through the messenger.
+			const pending = state.bundleId
+				? onMoveBundle?.(state.bundleId, labelId)
+				: onMoveThread?.(state.threadId as string, labelId);
 			onDismiss?.();
+			await pending;
 		} catch (error: unknown) {
 			const message = error instanceof Error && error.message
 				? error.message
