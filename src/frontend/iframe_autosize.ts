@@ -1,4 +1,32 @@
 /**
+ * Calls `onReady` once with the frame's srcdoc document as soon as it has been
+ * parsed (not waiting for images, unlike the frame's `load` event) and `isNew`
+ * accepts it. Returns a function that cancels the wait.
+ *
+ * This polls because there is nothing to listen to: a sandboxed srcdoc can't run
+ * scripts to tell us it is ready, and listeners can't be attached to a document
+ * that doesn't exist yet (the frame starts out on an initial about:blank document
+ * and navigation replaces it with a new one).
+ */
+export function whenFrameDocumentReady(
+	frame: HTMLIFrameElement,
+	isNew: (doc: Document) => boolean,
+	onReady: (doc: Document) => void,
+): () => void {
+	let handle = 0;
+	const poll = () => {
+		const doc = frame.contentDocument;
+		if (doc && doc.URL === 'about:srcdoc' && doc.readyState !== 'loading' && isNew(doc)) {
+			onReady(doc);
+			return;
+		}
+		handle = requestAnimationFrame(poll);
+	};
+	poll();
+	return () => cancelAnimationFrame(handle);
+}
+
+/**
  * Keeps `onHeight` informed of the full height of an iframe's document, so the
  * frame can be sized to show all of it. This relies on the frame being
  * same-origin (`allow-same-origin`). Returns a function that stops observing.

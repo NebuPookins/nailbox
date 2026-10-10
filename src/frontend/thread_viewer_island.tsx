@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ThreadMessageDto, PersonDto } from '../server/types/thread.js';
 import type { ThreadOpenPayload } from './thread_grouping.js';
@@ -11,7 +11,7 @@ import {
 	mayReferenceRemoteContent,
 	type RemoteContent,
 } from './email_srcdoc.js';
-import { forwardKeydownToParent, observeContentHeight } from './iframe_autosize.js';
+import { forwardKeydownToParent, observeContentHeight, whenFrameDocumentReady } from './iframe_autosize.js';
 import { linkifySegments } from './linkify.js';
 import { parseWithReadability } from './readability_parser.js';
 import { readerViewFor } from './reader_view.js';
@@ -168,26 +168,36 @@ interface SandboxedFrameProps {
 /** Shows an HTML document in a script-less sandboxed iframe that grows to fit its content. */
 function SandboxedFrame({ srcdoc, title }: SandboxedFrameProps) {
 	const [frame, setFrame] = useState<HTMLIFrameElement | null>(null);
-	const [loadCount, setLoadCount] = useState(0);
 	const [height, setHeight] = useState(MIN_FRAME_HEIGHT_PX);
+	// The last document we attached to, so a changed srcdoc waits for its replacement document.
+	const observedDocument = useRef<Document | null>(null);
 	useEffect(function() {
 		if (!frame) {
 			return undefined;
 		}
-		const stopObserving = observeContentHeight(frame, setHeight);
-		const stopForwarding = forwardKeydownToParent(frame);
+		let stopObserving = function() {};
+		let stopForwarding = function() {};
+		const cancelWaiting = whenFrameDocumentReady(
+			frame,
+			function(doc) { return doc !== observedDocument.current; },
+			function(doc) {
+				observedDocument.current = doc;
+				stopObserving = observeContentHeight(frame, setHeight);
+				stopForwarding = forwardKeydownToParent(frame);
+			},
+		);
 		return function() {
+			cancelWaiting();
 			stopObserving();
 			stopForwarding();
 		};
-	}, [frame, loadCount]);
+	}, [frame, srcdoc]);
 	return (
 		<iframe
 			ref={setFrame}
 			title={title}
 			sandbox={EMAIL_FRAME_SANDBOX}
 			srcDoc={srcdoc}
-			onLoad={function() { setLoadCount(function(count) { return count + 1; }); }}
 			style={{ width: '100%', height: height + 'px', border: 0, display: 'block' }}
 		/>
 	);
