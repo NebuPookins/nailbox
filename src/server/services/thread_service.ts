@@ -1,7 +1,5 @@
-import assert from 'assert';
 import util from 'util';
 
-import {decode} from 'html-entities';
 import nebulog from 'nebulog';
 
 import {removeThreadFromBundle} from '../../../models/bundle.js';
@@ -14,7 +12,7 @@ import {
 	normalizeThreadSummaryDto,
 	validateThreadPayload,
 } from '../validation/contracts.js';
-import type {PersistedMessage, PersistedThread, ThreadSummaryDto, ThreadMessageDto} from '../types/thread.js';
+import type {PersistedMessage, PersistedThread, ThreadSummaryDto, ThreadMessageDto, ThreadSummaryFields} from '../types/thread.js';
 
 const logger = nebulog.make({filename: 'src/server/services/thread_service.js', level: 'info'});
 
@@ -109,54 +107,21 @@ export function createThreadService(dependencies: {
 		hideUntils: any;
 		limit?: number;
 	}): Promise<ThreadSummaryDto[]> {
-		const filenames: string[] = await repository.listThreadIds();
+		const summaries: readonly ThreadSummaryFields[] = await repository.listThreadSummaries();
 		const now = Date.now();
-		const rawThreads: (ThreadSummaryDto | null)[] = await Promise.all(filenames.map(async (filename: string) => {
+		const formattedThreads: ThreadSummaryDto[] = summaries.flatMap((fields) => {
 			try {
-				const thread = await repository.readThread(filename);
-				const maybeMostRecentSnippetInThread = thread.snippet();
-				assert((typeof thread.id()) === 'string', `Expected thread.id() to be a string but was ${typeof thread.threadId} for file ${filename}.`);
-
-				let totalTimeToReadSecondsForThread = 0;
-				const messagesInThread = thread.messages();
-				messagesInThread.forEach((message: any) => {
-					totalTimeToReadSecondsForThread += message.getReadTimeSeconds();
-				});
-
-				let recentMessageReadTime = 0;
-				if (messagesInThread.length > 0) {
-					let mostRecentMessage = messagesInThread[0];
-					for (let i = 1; i < messagesInThread.length; i += 1) {
-						if (parseInt(messagesInThread[i].getInternalDate(), 10) > parseInt(mostRecentMessage.getInternalDate(), 10)) {
-							mostRecentMessage = messagesInThread[i];
-						}
-					}
-					recentMessageReadTime = mostRecentMessage.getReadTimeSeconds();
-				}
-
-				return normalizeThreadSummaryDto({
-					threadId: thread.id(),
-					senders: thread.senders(),
-					receivers: thread.recipients(),
-					lastUpdated: thread.lastUpdated(),
-					subject: thread.subject(),
-					snippet: maybeMostRecentSnippetInThread ? decode(maybeMostRecentSnippetInThread) : null,
-					messageIds: thread.messageIds(),
-					labelIds: thread.labelIds(),
-					visibility: hideUntils.get({threadId: thread.id(), lastUpdated: thread.lastUpdated()}).getVisibility(thread.lastUpdated(), now),
-					isWhenIHaveTime: hideUntils.get({threadId: thread.id(), lastUpdated: thread.lastUpdated()}).isWhenIHaveTime(),
-					totalTimeToReadSeconds: totalTimeToReadSecondsForThread,
-					recentMessageReadTimeSeconds: recentMessageReadTime,
-				});
+				const hideUntil = hideUntils.get({threadId: fields.threadId, lastUpdated: fields.lastUpdated});
+				return [normalizeThreadSummaryDto({
+					...fields,
+					visibility: hideUntil.getVisibility(fields.lastUpdated, now),
+					isWhenIHaveTime: hideUntil.isWhenIHaveTime(),
+				})];
 			} catch (error) {
-				logger.warn(`Couldn't read certain threads in getMostRelevantThreads. Ignoring and continuing. filename=${filename} ${util.inspect(error)}`);
-				return null;
+				logger.warn(`Couldn't summarise certain threads in getMostRelevantThreads. Ignoring and continuing. threadId=${fields.threadId} ${util.inspect(error)}`);
+				return [];
 			}
-		}));
-
-		const formattedThreads = rawThreads
-			.filter((x): x is ThreadSummaryDto => x !== null)
-			.filter((x) => x.visibility !== 'hidden');
+		}).filter((x) => x.visibility !== 'hidden');
 		formattedThreads.sort(hideUntils.comparator());
 		formattedThreads.length = Math.min(formattedThreads.length, limit);
 		return formattedThreads;

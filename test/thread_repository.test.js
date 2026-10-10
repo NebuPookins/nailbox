@@ -287,3 +287,137 @@ test('after evictThread, saveThreadJson refuses payloads older than the evicting
 		await rm(threadsDirectory, { recursive: true, force: true });
 	}
 });
+
+// A minimal stand-in for the Thread model, summarising a persisted thread
+// whose `subject` is set by the test.
+class FakeThread {
+	constructor(data) {
+		this.data = data;
+	}
+	id() { return this.data.id; }
+	snippet() { return null; }
+	messages() { return []; }
+	senders() { return []; }
+	recipients() { return []; }
+	lastUpdated() { return 5; }
+	subject() { return this.data.subject; }
+	messageIds() { return []; }
+	labelIds() { return ['INBOX']; }
+}
+
+const summaryThreadId = '18c2f0a1b2c3d4e5';
+const summaryThread = (subject, id = summaryThreadId) => ({ id, historyId: '1', messages: [], subject });
+const subjectsOf = async (repository) => (await repository.listThreadSummaries()).map((s) => s.subject).sort();
+
+async function withSummaryRepository(run, fileioImpl) {
+	const threadsDirectory = await mkdtemp(path.join(tmpdir(), 'nailbox-threads-'));
+	try {
+		const threadRepository = createThreadRepository({ threadsDirectory, threadModelModule: { Thread: FakeThread }, ...(fileioImpl && { fileioImpl }) });
+		await run({ threadsDirectory, threadRepository });
+	} finally {
+		await rm(threadsDirectory, { recursive: true, force: true });
+	}
+}
+
+// The parts of fileio the summary tests don't exercise.
+const noopFileio = {
+	readJsonFromOptionalFile: async () => ({}),
+	saveJsonToFile: async () => {},
+};
+
+// A fileio whose reads return an old copy of the summary thread, each held
+// until the test releases it, so the test can act while the scan is reading.
+function heldReadFileio() {
+	const readStarted = Promise.withResolvers();
+	const readReleased = Promise.withResolvers();
+	const fileioImpl = {
+		...noopFileio,
+		readJsonFromFile: async () => {
+			readStarted.resolve();
+			await readReleased.promise;
+			return summaryThread('Old');
+		},
+	};
+	return { fileioImpl, readStarted, readReleased };
+}
+
+test('listThreadSummaries lists the threads already on disk and skips unreadable ones', async () => {
+	await withSummaryRepository(async ({ threadsDirectory, threadRepository }) => {
+		await writeFile(path.join(threadsDirectory, summaryThreadId), JSON.stringify(summaryThread('On disk')));
+		await writeFile(path.join(threadsDirectory, '28c2f0a1b2c3d4e5'), 'not json');
+		assert.deepEqual(await subjectsOf(threadRepository), ['On disk']);
+	});
+});
+
+test('listThreadSummaries reflects a save, including a change to a single field', async () => {
+	await withSummaryRepository(async ({ threadsDirectory, threadRepository }) => {
+		await writeFile(path.join(threadsDirectory, summaryThreadId), JSON.stringify(summaryThread('Old')));
+		assert.deepEqual(await subjectsOf(threadRepository), ['Old']);
+
+		await threadRepository.saveThreadJson(summaryThreadId, { ...summaryThread('New'), historyId: '2' });
+		assert.deepEqual(await subjectsOf(threadRepository), ['New']);
+
+		await threadRepository.saveThreadJson('28c2f0a1b2c3d4e5', summaryThread('Another', '28c2f0a1b2c3d4e5'));
+		assert.deepEqual(await subjectsOf(threadRepository), ['Another', 'New']);
+	});
+});
+
+test('listThreadSummaries drops deleted and evicted threads', async () => {
+	await withSummaryRepository(async ({ threadRepository }) => {
+		const otherId = '28c2f0a1b2c3d4e5';
+		await threadRepository.saveThreadJson(summaryThreadId, summaryThread('First'));
+		await threadRepository.saveThreadJson(otherId, summaryThread('Second', otherId));
+		assert.deepEqual(await subjectsOf(threadRepository), ['First', 'Second']);
+
+		await threadRepository.deleteThread(summaryThreadId);
+		assert.deepEqual(await subjectsOf(threadRepository), ['Second']);
+
+		await threadRepository.evictThread(otherId, '5');
+		assert.deepEqual(await subjectsOf(threadRepository), []);
+	});
+});
+
+test('the initial scan lists every thread without reading all their files at once', async () => {
+	const threadIds = Array.from({ length: 100 }, (_, i) => `18c2f0a1b2c3d${i.toString(16).padStart(3, '0')}`);
+	let openReads = 0;
+	let mostOpenReads = 0;
+	const fileioImpl = {
+		readJsonFromFile: async (filePath) => {
+			openReads += 1;
+			mostOpenReads = Math.max(mostOpenReads, openReads);
+			await new Promise((resolve) => setImmediate(resolve));
+			openReads -= 1;
+			return summaryThread(path.basename(filePath), path.basename(filePath));
+		},
+		...noopFileio,
+	};
+	await withSummaryRepository(async ({ threadsDirectory, threadRepository }) => {
+		await Promise.all(threadIds.map((threadId) => writeFile(path.join(threadsDirectory, threadId), 'placeholder')));
+		assert.deepEqual(await subjectsOf(threadRepository), [...threadIds].sort());
+		assert.ok(mostOpenReads < threadIds.length, `read ${mostOpenReads} files at once`);
+	}, fileioImpl);
+});
+
+test('a save that lands while the initial scan is reading wins over what the scan read', async () => {
+	const { fileioImpl, readStarted, readReleased } = heldReadFileio();
+	await withSummaryRepository(async ({ threadsDirectory, threadRepository }) => {
+		await writeFile(path.join(threadsDirectory, summaryThreadId), 'placeholder');
+		const listing = threadRepository.listThreadSummaries();
+		await readStarted.promise;
+		await threadRepository.saveThreadJson(summaryThreadId, summaryThread('New'));
+		readReleased.resolve();
+		assert.deepEqual((await listing).map((s) => s.subject), ['New']);
+	}, fileioImpl);
+});
+
+test('a delete that lands while the initial scan is reading is not undone by the scan', async () => {
+	const { fileioImpl, readStarted, readReleased } = heldReadFileio();
+	await withSummaryRepository(async ({ threadsDirectory, threadRepository }) => {
+		await writeFile(path.join(threadsDirectory, summaryThreadId), 'placeholder');
+		const listing = threadRepository.listThreadSummaries();
+		await readStarted.promise;
+		await threadRepository.deleteThread(summaryThreadId);
+		readReleased.resolve();
+		assert.deepEqual(await listing, []);
+	}, fileioImpl);
+});

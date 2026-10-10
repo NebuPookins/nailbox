@@ -5,13 +5,17 @@ import nebulog from 'nebulog';
 
 import fileio from '../../../helpers/fileio.js';
 import {createKeyedSerializer} from '../../../helpers/keyed_serializer.js';
+import {mapWithConcurrency} from '../../../helpers/map_with_concurrency.js';
+import {summaryFieldsOf} from '../domain/thread_summary.js';
 import {isThreadId, validatePersistedThread} from '../validation/contracts.js';
-import type {EvictThreadOutcome, PersistedThread, ThreadModelLike, ThreadRepository} from '../types/thread.js';
+import type {EvictThreadOutcome, PersistedThread, ThreadModelLike, ThreadRepository, ThreadSummaryFields} from '../types/thread.js';
 
 const logger = nebulog.make({filename: 'src/server/repositories/thread_repository.ts', level: 'info'});
 const THREADS_DIRECTORY = 'data/threads';
 // Enough to cover {"id":"<16 hex>","historyId":"<digits>" with room to spare.
 const HISTORY_ID_HEAD_BYTES = 128;
+// How many thread files the initial summary scan reads at once.
+const SCAN_CONCURRENCY = 16;
 
 export function createThreadRepository(dependencies: {
 	fileioImpl?: typeof fileio;
@@ -29,6 +33,15 @@ export function createThreadRepository(dependencies: {
 	// threads changed without re-parsing every cached file on every poll. Kept
 	// current by saveThreadJson and deleteThread, the only writers of the cache.
 	const historyIds = new Map<string, string | undefined>();
+	// Each cached thread's summary, so listing threads needn't re-parse every
+	// cached file (which holds all message bodies) on every request. Kept
+	// current by saveThreadJson and deleteThreadFile, the only writers of the
+	// cache, and filled for the rest by one scan of the directory. Like
+	// historyIds, undefined records "no readable cached copy", so a scan
+	// already in flight can't put a deleted thread back.
+	const summaries = new Map<string, ThreadSummaryFields | undefined>();
+	// The one scan filling summaries, shared by everyone who needs them.
+	let initialScan: Promise<void> | undefined;
 	// Writes to one thread's file run one at a time, so a save's compare
 	// against the cached copy can't race another save or a delete.
 	const serializeWrite = createKeyedSerializer();
@@ -70,25 +83,64 @@ export function createThreadRepository(dependencies: {
 		// in flight can't put the deleted file's historyId back. If the rm
 		// fails, the mismatch just costs one extra re-fetch, whose save fixes it.
 		historyIds.set(threadId, undefined);
-		try {
-			await rm(pathToDelete);
-			logger.info(`Deleted file ${pathToDelete}`);
-			return 'deleted';
-		} catch (error) {
-			const err = error as Error & {code?: string; stack?: string};
-			if (err.code === 'ENOENT') {
-				logger.info(`File ${pathToDelete} already deleted.`);
-				return 'absent';
-			}
-			logger.error(`Error deleting ${pathToDelete}. Code: ${err.code}. Stack: ${err.stack}`);
-			return 'failed';
+		const outcome = await removeFile(pathToDelete);
+		// Unlike historyIds, the summary is kept when the rm fails: the file
+		// is still there, so its summary is still true.
+		if (outcome !== 'failed') {
+			summaries.set(threadId, undefined);
 		}
+		return outcome;
 	}
 
 	async function listThreadIds(): Promise<string[]> {
 		// Skips anything that isn't a cached thread, e.g. in-flight temp files.
 		const filenames = await readdir(threadsDirectory);
 		return filenames.filter(isThreadId);
+	}
+
+	async function listThreadSummaries(): Promise<readonly ThreadSummaryFields[]> {
+		initialScan ??= scanThreadSummaries().catch((error) => {
+			// Don't remember the failure, so the next call retries the scan.
+			initialScan = undefined;
+			throw error;
+		});
+		await initialScan;
+		return [...summaries.values()].filter((fields): fields is ThreadSummaryFields => fields !== undefined);
+	}
+
+	async function scanThreadSummaries(): Promise<void> {
+		// Bounded, as reading thousands of files at once risks EMFILE.
+		await mapWithConcurrency(await listThreadIds(), SCAN_CONCURRENCY, scanThreadSummary);
+	}
+
+	async function scanThreadSummary(threadId: string): Promise<void> {
+		if (summaries.has(threadId)) {
+			return;
+		}
+		try {
+			const fields = summaryFieldsOf(await readThread(threadId), threadId);
+			// A save or delete during the read already recorded a newer
+			// value; the one just read from disk may be stale.
+			if (!summaries.has(threadId)) {
+				summaries.set(threadId, fields);
+			}
+		} catch (error) {
+			logger.warn(`Couldn't read certain threads for the summaries. Ignoring and continuing. threadId=${threadId} ${util.inspect(error)}`);
+		}
+	}
+
+	// Called once the payload is written, so the index never needs to re-read
+	// the file. A payload that can't be summarised counts as unreadable.
+	function recordSummary(threadId: string, threadPayload: PersistedThread): void {
+		if (!threadModelModule) {
+			return;
+		}
+		try {
+			summaries.set(threadId, summaryFieldsOf(new threadModelModule.Thread(threadPayload), threadId));
+		} catch (error) {
+			logger.warn(`Couldn't summarise saved thread ${threadId}: ${util.inspect(error)}`);
+			summaries.set(threadId, undefined);
+		}
 	}
 
 	async function readHistoryId(threadId: string): Promise<string | undefined> {
@@ -173,6 +225,7 @@ export function createThreadRepository(dependencies: {
 			}
 			await fileioImpl.saveJsonToFile(threadPayload, threadPath(threadId));
 			historyIds.set(threadId, threadPayload.historyId);
+			recordSummary(threadId, threadPayload);
 			evictedHistoryIds.delete(threadId);
 			return true;
 		});
@@ -209,12 +262,29 @@ export function createThreadRepository(dependencies: {
 		deleteThread,
 		evictThread,
 		listThreadIds,
+		listThreadSummaries,
 		readDeletionCount,
 		readHistoryId,
 		readThread,
 		readThreadJson,
 		saveThreadJson,
 	};
+}
+
+async function removeFile(pathToDelete: string): Promise<'deleted' | 'absent' | 'failed'> {
+	try {
+		await rm(pathToDelete);
+		logger.info(`Deleted file ${pathToDelete}`);
+		return 'deleted';
+	} catch (error) {
+		const err = error as Error & {code?: string; stack?: string};
+		if (err.code === 'ENOENT') {
+			logger.info(`File ${pathToDelete} already deleted.`);
+			return 'absent';
+		}
+		logger.error(`Error deleting ${pathToDelete}. Code: ${err.code}. Stack: ${err.stack}`);
+		return 'failed';
+	}
 }
 
 function isUnreadableCacheError(error: unknown): boolean {

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createThreadRepository } from '../src/server/repositories/thread_repository.js';
+import { summaryFieldsOf } from '../src/server/domain/thread_summary.js';
 import { createThreadService } from '../src/server/services/thread_service.js';
 
 test('deleteThread is idempotent for missing files', async () => {
@@ -44,8 +45,7 @@ test('saveThreadPayload rejects invalid thread ids', async () => {
 test('getMostRelevantThreads tolerates repository threads and returns formatted summaries', async () => {
 	const threadService = createThreadService({
 		threadRepository: {
-			listThreadIds: async () => ['thread-1'],
-			readThread: async () => ({
+			listThreadSummaries: async () => [summaryFieldsOf({
 			id: () => 'thread-1',
 			snippet: () => 'Hello',
 			messages: () => [{
@@ -58,7 +58,7 @@ test('getMostRelevantThreads tolerates repository threads and returns formatted 
 			subject: () => 'Subject',
 			messageIds: () => ['m1'],
 			labelIds: () => ['INBOX'],
-			}),
+			}, 'thread-1')],
 		},
 	});
 
@@ -190,4 +190,40 @@ test('saveThreadPayload skips reading and rewriting a cached thread whose histor
 
 	assert.deepEqual(result, {status: 200, changed: false});
 	assert.equal(markedRefreshed, true);
+});
+
+function hideUntilsWith(visibilityOf) {
+	return {
+		get: ({threadId}) => ({
+			getVisibility: () => visibilityOf(threadId),
+			isWhenIHaveTime: () => false,
+		}),
+		comparator: () => () => 0,
+	};
+}
+
+test('getMostRelevantThreads applies the current hideUntils on every call', async () => {
+	const fields = {
+		type: 'thread',
+		threadId: '18c2f0a1b2c3d4e5',
+		senders: [],
+		receivers: [],
+		lastUpdated: 5,
+		subject: 'Subject',
+		snippet: null,
+		messageIds: [],
+		labelIds: ['INBOX'],
+		totalTimeToReadSeconds: 0,
+		recentMessageReadTimeSeconds: 0,
+	};
+	const threadService = createThreadService({threadRepository: {listThreadSummaries: async () => [fields]}});
+
+	const visible = await threadService.getMostRelevantThreads({hideUntils: hideUntilsWith(() => 'visible')});
+	assert.deepEqual(visible.map((t) => t.visibility), ['visible']);
+
+	const hidden = await threadService.getMostRelevantThreads({hideUntils: hideUntilsWith(() => 'hidden')});
+	assert.deepEqual(hidden, []);
+
+	const again = await threadService.getMostRelevantThreads({hideUntils: hideUntilsWith(() => 'stale')});
+	assert.deepEqual(again.map((t) => t.visibility), ['stale']);
 });

@@ -1,5 +1,6 @@
 import _ from 'lodash';
 
+import {mapWithConcurrency} from '../../../helpers/map_with_concurrency.js';
 import {removeThreadFromBundle} from '../../../models/bundle.js';
 import {isInInbox} from '../validation/contracts.js';
 import type {ThreadRepository} from '../types/thread.js';
@@ -17,24 +18,6 @@ const FIRST_RETRY_DELAY_MS = 5 * 60 * 1000;
 const MAX_RETRY_DELAY_MS = 24 * 60 * 60 * 1000;
 // Reading cached historyIds is local file I/O; bound it to avoid EMFILE.
 const MAX_CONCURRENT_HISTORY_ID_READS = 20;
-
-async function mapWithConcurrency<T, R>(
-	items: readonly T[],
-	limit: number,
-	mapper: (item: T) => Promise<R>,
-): Promise<R[]> {
-	const results: R[] = new Array(items.length);
-	let nextIndex = 0;
-	const worker = async (): Promise<void> => {
-		while (nextIndex < items.length) {
-			const index = nextIndex;
-			nextIndex += 1;
-			results[index] = await mapper(items[index]);
-		}
-	};
-	await Promise.all(Array.from({length: Math.min(limit, items.length)}, worker));
-	return results;
-}
 
 interface ThreadListing {
 	id: string;

@@ -54,6 +54,9 @@ export interface ThreadSummaryDto {
 	recentMessageReadTimeSeconds: number;
 }
 
+/** The parts of a thread's summary that don't depend on the time or on hideUntils. */
+export type ThreadSummaryFields = Omit<ThreadSummaryDto, 'visibility' | 'isWhenIHaveTime'>;
+
 export interface BundleSummaryDto {
 	type: 'bundle';
 	bundleId: string;
@@ -106,7 +109,7 @@ export interface ThreadModelLike {
 	snippet(): string;
 	messages(): Array<{
 		getReadTimeSeconds(): number;
-		getInternalDate(): string | number;
+		getInternalDate(): string;
 	}>;
 	senders(): PersonDto[];
 	recipients(): PersonDto[];
@@ -139,6 +142,11 @@ export interface ThreadRepository {
 	 */
 	evictThread(threadId: string, historyId: string | undefined): Promise<EvictThreadOutcome>;
 	listThreadIds(): Promise<string[]>;
+	/**
+	 * Summaries of every cached thread that can be read, kept current by the
+	 * repository's own writes. Needs threadModelModule.
+	 */
+	listThreadSummaries(): Promise<readonly ThreadSummaryFields[]>;
 	/**
 	 * Read before fetching a thread from Gmail and passed to saveThreadJson,
 	 * so the save is refused if the thread was deleted meanwhile.

@@ -146,6 +146,10 @@ const config = await configRepository.readConfig();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const threadRepository = createThreadRepository({ threadModelModule: threadModel as any });
 const threadService = createThreadService({ threadRepository, MessageClass: Message, bundles });
+// Warms the thread summary index so the first page load doesn't pay for it.
+threadRepository.listThreadSummaries().catch((error) => {
+	logger.error(util.format('Failed to warm the thread summary cache: %s', util.inspect(error)));
+});
 const rfc2822Service = createRfc2822Service({ threadRepository });
 const threadUpdatesNotifier = createThreadUpdatesNotifier({ logger });
 // Shared by the background poller and the manual sync route: both resume from
