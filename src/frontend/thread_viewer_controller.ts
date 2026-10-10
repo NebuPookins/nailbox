@@ -146,12 +146,11 @@ export function createThreadViewerController({
 	) {
 		return async function(options: ThreadWithModal) {
 			try {
-				const result = await action(options.threadId ?? '');
-				if (!result || !result.ok) {
-					return result;
-				}
+				// The action removes the row right away, so close the modal now rather than after the
+				// server responds; a failure brings the row back and is reported through the messenger.
+				const pending = action(options.threadId ?? '');
 				options.hideModal();
-				return result;
+				return await pending;
 			} catch (error) {
 				showError(error);
 				return {
