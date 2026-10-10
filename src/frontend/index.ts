@@ -54,6 +54,7 @@ interface FrontendApi {
 		setEmpty(): void;
 		setError(): void;
 		setIdle(): void;
+		showThreadListState(isEmpty: boolean): void;
 		setSetupNeeded(message?: string | null): void;
 	};
 	mountGroupingRulesIsland(opts: {
@@ -88,7 +89,6 @@ interface FrontendApi {
 		container: Element;
 		notify?: Notify;
 		onDismiss?: () => void;
-		onHidden?: (threadId: string) => void;
 	}): {
 		clear(): void;
 		open(opts: { onHideThread: (threadId: string, hideUntil: HideUntilValue) => Promise<void>; threadId: string }): void;
@@ -123,14 +123,8 @@ interface FrontendApi {
 		onOpenThread: (payload: ThreadOpenPayload) => void;
 		onUngroup: (bundleId: string) => void;
 	}): {
-		createBundleRow(bundleId: string, threadIds: string[]): void;
-		removeBundleRow(bundleId: string): void;
-		removeThread(id: string): void;
-		setGroupingRules(rules: GroupingRulesConfig): void;
-		setGroups(groups: ThreadGroup[]): void;
+		setGroups(groups: readonly ThreadGroup[]): void;
 		setLabels(labels: Array<{ id: string; name: string }>): void;
-		ungroupBundleRow(bundleId: string): void;
-		updateBundleRow(bundleId: string, threadIds: string[], mergeBundleIds?: string[]): void;
 	};
 	mountThreadViewerIsland(opts: {
 		container: Element;

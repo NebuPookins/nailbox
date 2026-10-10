@@ -8,11 +8,9 @@ import {
 } from './thread_list_presenter.js';
 import { AddSenderRuleButton } from './add_sender_rule_button.js';
 import { formatPerson } from './person_presenter.js';
+import { goneItems, groupsWithAnimatingRows, itemKey, type AnimatingRow } from './animating_rows.js';
 import {
-	groupThreads as regroupThreads,
 	type BundleSummary,
-	type BundleData,
-	type GroupingRulesConfig,
 	type ThreadGroup,
 	type ThreadOpenPayload,
 	type ThreadRowItem,
@@ -36,47 +34,6 @@ interface LaterPickerPayload {
 
 interface BundleLaterPickerPayload {
 	bundleId: string;
-}
-
-function cloneItem(item: ThreadRowItem): ThreadRowItem {
-	if (item.type === 'bundle') {
-		return {
-			...item,
-			memberThreads: (item.memberThreads || []).map(function(thread) { return ({...thread}); }),
-		};
-	}
-	return {...item};
-}
-
-export function removeThreadFromItems(items: ThreadRowItem[], threadId: string): ThreadRowItem[] {
-	return items.flatMap(function(item): ThreadRowItem[] {
-		if (item.type === 'bundle') {
-			const containsThread = item.threadIds.includes(threadId);
-			if (!containsThread) {
-				return [cloneItem(item)];
-			}
-			const remainingMemberThreads = (item.memberThreads || [])
-				.filter(function(thread) { return thread.threadId !== threadId; })
-				.map(function(thread) { return ({...thread}); });
-			const remainingThreadIds = item.threadIds.filter(function(id) { return id !== threadId; });
-			if (remainingThreadIds.length >= 2) {
-				return [{
-					...item,
-					threadIds: remainingThreadIds,
-					threadCount: remainingMemberThreads.length,
-					memberThreads: remainingMemberThreads,
-				}];
-			}
-			if (remainingMemberThreads.length === 1) {
-				return [remainingMemberThreads[0]];
-			}
-			return [];
-		}
-		if (item.threadId === threadId) {
-			return [];
-		}
-		return [{...item}];
-	});
 }
 
 function renderParticipants(people: Person[]): string {
@@ -126,24 +83,41 @@ interface ThreadRowProps {
 	onDebugGrouping: (item: ThreadRowItem) => void;
 }
 
+/**
+ * Collapses the row while it animates out. Clears the inline styles if the row stops
+ * being removed (e.g. the removal failed), so it shows again.
+ */
+function useCollapseWhileRemoving(rowRef: React.RefObject<HTMLDivElement | null>, isRemoving: boolean): void {
+	useEffect(function() {
+		const el = rowRef.current;
+		if (!isRemoving || !el) {
+			return;
+		}
+		const height = el.offsetHeight;
+		el.style.height = height + 'px';
+		el.style.overflow = 'hidden';
+		// Force reflow so the explicit height is applied before the transition starts
+		void el.offsetHeight;
+		el.style.transition = 'height 0.4s ease-out, opacity 0.4s ease-out, margin-bottom 0.4s, border-bottom-width 0.4s';
+		el.style.height = '0';
+		el.style.opacity = '0';
+		el.style.marginBottom = '0';
+		el.style.borderBottomWidth = '0';
+		return function() {
+			el.style.removeProperty('height');
+			el.style.removeProperty('overflow');
+			el.style.removeProperty('transition');
+			el.style.removeProperty('opacity');
+			el.style.removeProperty('margin-bottom');
+			el.style.removeProperty('border-bottom-width');
+		};
+	}, [isRemoving]);
+}
+
 function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onAddSenderRule, onArchive, onDelete, onMarkSpam, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onToggleSelect, onDebugGrouping }: ThreadRowProps) {
 	const rowRef = useRef<HTMLDivElement>(null);
 
-	useEffect(function() {
-		if (isRemoving && rowRef.current) {
-			const el = rowRef.current;
-			const height = el.offsetHeight;
-			el.style.height = height + 'px';
-			el.style.overflow = 'hidden';
-			// Force reflow so the explicit height is applied before the transition starts
-			void el.offsetHeight;
-			el.style.transition = 'height 0.4s ease-out, opacity 0.4s ease-out, margin-bottom 0.4s, border-bottom-width 0.4s';
-			el.style.height = '0';
-			el.style.opacity = '0';
-			el.style.marginBottom = '0';
-			el.style.borderBottomWidth = '0';
-		}
-	}, [isRemoving]);
+	useCollapseWhileRemoving(rowRef, isRemoving);
 
 	const senders = Array.isArray(thread.senders) ? thread.senders : [];
 	const receivers = Array.isArray(thread.receivers) ? thread.receivers : [];
@@ -313,20 +287,7 @@ interface BundleRowProps {
 function BundleRow({ bundle, isExpanded, isRemoving, children, showCheckbox, isSelected, onAddSenderRule, onArchive, onEdit, onOpenLaterPicker, onOpenLabelPicker, onUngroup, onToggleExpand, onToggleSelectBundle, onDebugGrouping }: BundleRowProps) {
 	const rowRef = useRef<HTMLDivElement>(null);
 
-	useEffect(function() {
-		if (isRemoving && rowRef.current) {
-			const el = rowRef.current;
-			const height = el.offsetHeight;
-			el.style.height = height + 'px';
-			el.style.overflow = 'hidden';
-			void el.offsetHeight;
-			el.style.transition = 'height 0.4s ease-out, opacity 0.4s ease-out, margin-bottom 0.4s, border-bottom-width 0.4s';
-			el.style.height = '0';
-			el.style.opacity = '0';
-			el.style.marginBottom = '0';
-			el.style.borderBottomWidth = '0';
-		}
-	}, [isRemoving]);
+	useCollapseWhileRemoving(rowRef, isRemoving);
 
 	const senders = Array.isArray(bundle.senders) ? bundle.senders : [];
 
@@ -468,7 +429,7 @@ function SelectionBar({ selectedCount, editingBundleId, onBundle, onCancel }: Se
 }
 
 interface ThreadListAppProps {
-	groups: ThreadGroup[];
+	groups: readonly ThreadGroup[];
 	labels: LabelInfo[];
 	removingThreadIds: Set<string>;
 	removingBundleIds: Set<string>;
@@ -738,19 +699,19 @@ interface MountThreadListIslandDeps {
 
 export function mountThreadListIsland({ container, onAddSenderRule, onArchive, onDelete, onMarkSpam, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup, onDebugGrouping }: MountThreadListIslandDeps) {
 	const root = createRoot(container);
-	let groups: ThreadGroup[] = [];
+	let latestGroups: readonly ThreadGroup[] = [];
+	/** Rows that left the latest groups and are still animating out, by item key. */
+	let animatingRows: ReadonlyMap<string, AnimatingRow> = new Map();
+	let nextAnimationToken = 0;
 	let labels: LabelInfo[] = [];
-	let removingThreadIds = new Set<string>();
-	let removingBundleIds = new Set<string>();
-	let groupingRules: GroupingRulesConfig = {rules: []};
 
 	function render() {
 		root.render(
 			<ThreadListApp
-				groups={groups}
+				groups={groupsWithAnimatingRows(latestGroups, animatingRows)}
 				labels={labels}
-				removingThreadIds={removingThreadIds}
-				removingBundleIds={removingBundleIds}
+				removingThreadIds={animatingIds('thread')}
+				removingBundleIds={animatingIds('bundle')}
 				onAddSenderRule={onAddSenderRule}
 				onArchive={onArchive}
 				onDelete={onDelete}
@@ -769,195 +730,54 @@ export function mountThreadListIsland({ container, onAddSenderRule, onArchive, o
 		);
 	}
 
-	function getAllItems(): ThreadRowItem[] {
-		return groups.flatMap(function(group) {
-			return group.items.map(cloneItem);
-		});
-	}
-
-	function regroupItems(items: ThreadRowItem[]): void {
-		const orderedItemIds = items.map(function(item) {
-			return item.type === 'bundle' ? item.bundleId : item.threadId;
-		});
-		const threadMap = new Map<string, ThreadSummary>();
-		const bundles: BundleData[] = [];
-		items.forEach(function(item) {
-			if (item.type === 'bundle') {
-				(item.memberThreads || []).forEach(function(thread) {
-					threadMap.set(thread.threadId, {...thread});
-				});
-				bundles.push({
-					bundleId: item.bundleId,
-					threadIds: [...item.threadIds],
-				});
-				return;
-			}
-			threadMap.set(item.threadId, {...item});
-		});
-		groups = regroupThreads({
-			threads: Array.from(threadMap.values()),
-			bundles: bundles,
-			groupingRules: groupingRules,
-			orderedItemIds: orderedItemIds,
-		});
+	function animatingIds(type: 'thread' | 'bundle'): Set<string> {
+		return new Set([...animatingRows.values()].flatMap(function(row) {
+			return row.item.type === 'bundle'
+				? (type === 'bundle' ? [row.item.bundleId] : [])
+				: (type === 'thread' ? [row.item.threadId] : []);
+		}));
 	}
 
 	render();
 
 	return {
-		setGroups: function(newGroups: ThreadGroup[]) {
-			groups = newGroups;
+		/**
+		 * Replaces the list contents. Rows that were on screen and are absent from the new groups
+		 * play the removal animation before they are dropped; rows that come back just show.
+		 */
+		/**
+		 * Replaces the list contents. Rows that were on screen and are absent from the new groups
+		 * play the removal animation before they are dropped; rows that come back just show.
+		 */
+		setGroups: function(newGroups: readonly ThreadGroup[]) {
+			const displayedBefore = groupsWithAnimatingRows(latestGroups, animatingRows);
+			const stillGone = new Map(goneItems(displayedBefore, newGroups).map(function(row) {
+				return [itemKey(row.item), row];
+			}));
+			// Rows already animating keep their animation; rows that came back stop animating.
+			const kept = [...animatingRows].filter(function([key]) { return stillGone.has(key); });
+			const started = [...stillGone]
+				.filter(function([key]) { return !animatingRows.has(key); })
+				.map(function([key, row]): [string, AnimatingRow] {
+					nextAnimationToken += 1;
+					return [key, { ...row, token: nextAnimationToken }];
+				});
+			latestGroups = newGroups;
+			animatingRows = new Map([...kept, ...started]);
 			render();
+			started.forEach(function([key, row]) {
+				setTimeout(function() {
+					// Only clear the animation this timer started.
+					if (animatingRows.get(key)?.token !== row.token) {
+						return;
+					}
+					animatingRows = new Map([...animatingRows].filter(function([k]) { return k !== key; }));
+					render();
+				}, REMOVE_ANIMATION_MS);
+			});
 		},
 		setLabels: function(newLabels: LabelInfo[]) {
 			labels = newLabels;
-			render();
-		},
-		setGroupingRules: function(nextGroupingRules: GroupingRulesConfig) {
-			groupingRules = nextGroupingRules;
-		},
-		removeThread: function(threadId: string) {
-			removingThreadIds = new Set(removingThreadIds);
-			removingThreadIds.add(threadId);
-			render();
-			setTimeout(function() {
-				removingThreadIds = new Set(removingThreadIds);
-				removingThreadIds.delete(threadId);
-				regroupItems(removeThreadFromItems(getAllItems(), threadId));
-				render();
-			}, REMOVE_ANIMATION_MS);
-		},
-		removeBundleRow: function(bundleId: string) {
-			removingBundleIds = new Set(removingBundleIds);
-			removingBundleIds.add(bundleId);
-			render();
-			setTimeout(function() {
-				removingBundleIds = new Set(removingBundleIds);
-				removingBundleIds.delete(bundleId);
-				groups = groups
-					.map(function(group) {
-						return {
-							...group,
-							items: group.items.filter(function(item) {
-								return item.type !== 'bundle' || (item as BundleSummary).bundleId !== bundleId;
-							}),
-						};
-					})
-					.filter(function(group) {
-						return group.items.length > 0;
-					});
-				render();
-			}, REMOVE_ANIMATION_MS);
-		},
-		createBundleRow: function(bundleId: string, threadIds: string[]) {
-			const allItems = getAllItems();
-			const memberThreads = allItems
-				.filter(function(item): item is ThreadSummary {
-					return item.type !== 'bundle' && threadIds.includes(item.threadId);
-				})
-				.map(function(thread) { return {...thread}; });
-			if (memberThreads.length < 2) {
-				return;
-			}
-			const remainingItems = allItems.filter(function(item) {
-				return item.type === 'bundle' || !threadIds.includes(item.threadId);
-			});
-			const firstRemovedIndex = allItems.findIndex(function(item) {
-				return item.type !== 'bundle' && threadIds.includes(item.threadId);
-			});
-			const insertIndex = firstRemovedIndex === -1 ? remainingItems.length : Math.min(firstRemovedIndex, remainingItems.length);
-			const nextItems = remainingItems.slice(0, insertIndex)
-				.concat([{
-					type: 'bundle' as const,
-					bundleId: bundleId,
-					threadIds: [...threadIds],
-					senders: [],
-					lastUpdated: 0,
-					visibility: 'hidden' as const,
-					threadCount: memberThreads.length,
-					memberThreads: memberThreads,
-					totalTimeToReadSeconds: memberThreads.reduce(function(sum, t) { return sum + t.totalTimeToReadSeconds; }, 0),
-					recentMessageReadTimeSeconds: memberThreads.reduce(function(latest, t) { return t.lastUpdated > latest.lastUpdated ? t : latest; }, memberThreads[0]).recentMessageReadTimeSeconds,
-				}])
-				.concat(remainingItems.slice(insertIndex));
-			regroupItems(nextItems);
-			render();
-		},
-		updateBundleRow: function(bundleId: string, threadIds: string[], mergeBundleIds?: string[]) {
-			const mergeSet = new Set(mergeBundleIds || []);
-			const allItems = getAllItems();
-			const bundleIndex = allItems.findIndex(function(item) {
-				return item.type === 'bundle' && item.bundleId === bundleId;
-			});
-			const existingBundle = bundleIndex === -1 ? null : allItems[bundleIndex] as BundleSummary;
-			if (!existingBundle) {
-				return;
-			}
-			const availableThreadsById = new Map<string, ThreadSummary>();
-			allItems.forEach(function(item) {
-				if (item.type === 'bundle') {
-					(item.memberThreads || []).forEach(function(thread) {
-						availableThreadsById.set(thread.threadId, {...thread});
-					});
-					return;
-				}
-				availableThreadsById.set(item.threadId, {...item});
-			});
-			const nextMemberThreads = threadIds
-				.map(function(threadId) { return availableThreadsById.get(threadId); })
-				.filter(function(thread): thread is ThreadSummary { return Boolean(thread); });
-			if (nextMemberThreads.length < 2) {
-				return;
-			}
-			const removedMemberThreads = (existingBundle.memberThreads || []).filter(function(thread) {
-				return !threadIds.includes(thread.threadId);
-			});
-			const filteredItems = allItems.filter(function(item) {
-				if (item.type === 'bundle') {
-					// Remove the target bundle (will be re-inserted) and any merged bundles
-					return item.bundleId !== bundleId && !mergeSet.has(item.bundleId);
-				}
-				return !threadIds.includes(item.threadId);
-			});
-			// Adjust bundleIndex for removed merged bundles that appeared before it
-			let adjustedIndex = bundleIndex;
-			for (let i = 0; i < bundleIndex; i++) {
-				const item = allItems[i];
-				if (item.type === 'bundle' && mergeSet.has(item.bundleId)) {
-					adjustedIndex--;
-				}
-			}
-			const nextItems = filteredItems.slice(0, adjustedIndex)
-				.concat([{
-					type: 'bundle' as const,
-					bundleId: bundleId,
-					threadIds: [...threadIds],
-					senders: [],
-					lastUpdated: 0,
-					visibility: 'hidden' as const,
-					threadCount: nextMemberThreads.length,
-					memberThreads: nextMemberThreads,
-					totalTimeToReadSeconds: nextMemberThreads.reduce(function(sum, t) { return sum + t.totalTimeToReadSeconds; }, 0),
-					recentMessageReadTimeSeconds: nextMemberThreads.reduce(function(latest, t) { return t.lastUpdated > latest.lastUpdated ? t : latest; }, nextMemberThreads[0]).recentMessageReadTimeSeconds,
-				}])
-				.concat(removedMemberThreads)
-				.concat(filteredItems.slice(adjustedIndex));
-			regroupItems(nextItems);
-			render();
-		},
-		ungroupBundleRow: function(bundleId: string) {
-			const allItems = getAllItems();
-			const bundleIndex = allItems.findIndex(function(item) {
-				return item.type === 'bundle' && item.bundleId === bundleId;
-			});
-			if (bundleIndex === -1) {
-				return;
-			}
-			const bundle = allItems[bundleIndex] as BundleSummary;
-			const nextItems = allItems.slice(0, bundleIndex)
-				.concat((bundle.memberThreads || []).map(function(thread) { return ({...thread}); }))
-				.concat(allItems.slice(bundleIndex + 1));
-			regroupItems(nextItems);
 			render();
 		},
 		unmount: function() {

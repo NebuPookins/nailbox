@@ -11,6 +11,16 @@ import { createIslandManager } from './island_manager.js';
 import { wireModals } from './modal_wiring.js';
 import { createThreadUpdatesSocket } from './thread_updates_socket.js';
 import { type GroupingRulesConfig, type ThreadOpenPayload } from './thread_grouping.js';
+import {
+	initialThreadListState,
+	removalConfirmed,
+	removalFailed,
+	removalStarted,
+	snapshotReceived,
+	snapshotRequested,
+	visibleGroups,
+	type RemovalTarget,
+} from './thread_list_state.js';
 import type { Result, ThreadDataResponse } from './api.js';
 import type { LabelResponse, HideUntilValue, AppApi } from './api.js';
 
@@ -60,6 +70,9 @@ document.addEventListener('DOMContentLoaded', function() {
 	var groupingRulesCache: GroupingRulesConfig = { rules: [] };
 	var threadRefreshInFlight = false;
 	var pendingThreadRefresh = false;
+	// Only ever reassigned to the result of a thread_list_state transition.
+	var threadListState = initialThreadListState();
+	var nextRemovalNumber = 0;
 
 	String.prototype.hashCode = function(this: string): number {
 		var hash = 0;
@@ -124,10 +137,6 @@ function renderSetupNeededState(message?: string): void {
 			throw response.error instanceof Error ? response.error : new Error('Failed to load grouping rules.');
 		}
 		groupingRulesCache = response.value;
-		var threadListIslandState = islands.ensureThreadListIsland();
-		if (threadListIslandState) {
-			threadListIslandState.instance.setGroupingRules(groupingRulesCache);
-		}
 	}
 
 	async function syncThreadsFromGoogle(updateMessenger: MsgHandle): Promise<void> {
@@ -170,12 +179,47 @@ function renderSetupNeededState(message?: string): void {
 		});
 	}
 
+	/** Shows the server's latest snapshot minus the removals that it may not reflect yet. */
+	function renderThreadList(): void {
+		const groups = visibleGroups(threadListState);
+		var islandState = islands.ensureThreadListIsland();
+		if (islandState) {
+			islandState.instance.setGroups(groups);
+		}
+		authShellIsland.showThreadListState(groups.length === 0);
+	}
+
+	/**
+	 * Hides the target immediately, then keeps it hidden or shows it again depending on how the request ends.
+	 * A rejected request counts as a failure and is rethrown.
+	 */
+	async function withRemoval<T>(target: RemovalTarget, request: () => Promise<Result<T>>): Promise<Result<T>> {
+		nextRemovalNumber += 1;
+		const removalId = 'removal-' + nextRemovalNumber;
+		threadListState = removalStarted(threadListState, removalId, target);
+		renderThreadList();
+		try {
+			const result = await request();
+			threadListState = result.ok
+				? removalConfirmed(threadListState, removalId)
+				: removalFailed(threadListState, removalId);
+			renderThreadList();
+			return result;
+		} catch (error) {
+			threadListState = removalFailed(threadListState, removalId);
+			renderThreadList();
+			throw error;
+		}
+	}
+
 	async function updateUiWithThreadsFromServer(updateMessenger: MsgHandle): Promise<void> {
 		updateMessenger = updateMessenger || messengerGetter().info('Refreshing threads from cache...');
 		updateMessenger.update({
 			type: 'info',
 			message: 'Downloading threads from local cache...'
 		});
+		const [requestedState, requestedAt] = snapshotRequested(threadListState);
+		threadListState = requestedState;
 		const result = await appApi.loadGroupedThreads();
 		if (!result.ok) {
 			authShellIsland.setError();
@@ -185,15 +229,12 @@ function renderSetupNeededState(message?: string): void {
 			});
 			return;
 		}
-		const groupsOfThreads = result.value;
-
-		authShellIsland.setIdle();
-		var islandState = islands.ensureThreadListIsland();
-		if (islandState) {
-			islandState.instance.setGroups(groupsOfThreads);
-		}
-		if (groupsOfThreads.length === 0) {
+		threadListState = snapshotReceived(threadListState, result.value, requestedAt);
+		renderThreadList();
+		if (visibleGroups(threadListState).length === 0) {
 			authShellIsland.setEmpty();
+		} else {
+			authShellIsland.setIdle();
 		}
 		updateMessenger.update({
 			type: 'success',
@@ -215,13 +256,6 @@ function renderSetupNeededState(message?: string): void {
 				pendingThreadRefresh = false;
 				await refreshThreadsFromServerCoalesced(messengerGetter().info('Refreshing threads from cache...'));
 			}
-		}
-	}
-
-	function deleteThreadFromUI(threadId: string): void {
-		var islandState = islands.ensureThreadListIsland();
-		if (islandState) {
-			islandState.instance.removeThread(threadId);
 		}
 	}
 
@@ -258,7 +292,7 @@ function renderSetupNeededState(message?: string): void {
 		islandState.instance.open({
 			onHideThread: async function(selectedThreadId: string, hideUntil: HideUntilValue) {
 				var updateMsg = messengerGetter().info('Hiding thread ' + selectedThreadId + '.');
-				const result = await appApi.hideThread(selectedThreadId, hideUntil);
+				const result = await withRemoval({ kind: 'thread', threadId: selectedThreadId }, function() { return appApi.hideThread(selectedThreadId, hideUntil); });
 				if (!result.ok) {
 					updateMsg.update({ type: 'error', message: result.error.message || 'Failed to hide thread.' });
 					return;
@@ -317,14 +351,10 @@ function renderSetupNeededState(message?: string): void {
 			bundleId: bundleId,
 			onHideBundle: async function(selectedBundleId: string, hideUntil: HideUntilValue) {
 				var updateMsg = messengerGetter().info('Hiding bundle ' + selectedBundleId + '.');
-				const result = await appApi.hideBundle(selectedBundleId, hideUntil);
+				const result = await withRemoval({ kind: 'bundle', bundleId: selectedBundleId }, function() { return appApi.hideBundle(selectedBundleId, hideUntil); });
 				if (!result.ok) {
 					updateMsg.update({ type: 'error', message: result.error.message || 'Failed to hide bundle.' });
 					return;
-				}
-				var threadListIslandState = islands.ensureThreadListIsland();
-				if (threadListIslandState) {
-					threadListIslandState.instance.removeBundleRow(selectedBundleId);
 				}
 				updateMsg.update({
 					type: 'success',
@@ -334,6 +364,14 @@ function renderSetupNeededState(message?: string): void {
 		});
 		showModal(laterPicker);
 		return false;
+	}
+
+	function refreshThreadList(): void {
+		refreshThreadsFromServerCoalesced(
+			messengerGetter().info('Refreshing threads from cache...')
+		).catch(function(error: unknown) {
+			messengerGetter().error(error instanceof Error ? error.message : String(error));
+		});
 	}
 
 	var appApi: AppApi = frontendApi.createAppApi();
@@ -352,18 +390,10 @@ function renderSetupNeededState(message?: string): void {
 			messengerGetter().error(error instanceof Error ? error.message : String(error));
 		},
 	});
-	function deleteBundleFromUI(bundleId: string): void {
-		var islandState = islands.ensureThreadListIsland();
-		if (islandState) {
-			islandState.instance.removeBundleRow(bundleId);
-		}
-	}
-
 	var threadActionController = createThreadActionController({
 		appApi: appApi,
 		messengerGetter: messengerGetter,
-		onThreadRemoved: deleteThreadFromUI,
-		onBundleRemoved: deleteBundleFromUI,
+		withRemoval: withRemoval,
 	});
 	var islands = createIslandManager({
 		frontendApi: frontendApi,
@@ -382,7 +412,6 @@ function renderSetupNeededState(message?: string): void {
 		hideSenderRuleModal: function() { hideModal(senderRuleModal); },
 		threadActionController: threadActionController,
 		getLabels: function() { return labelsCache; },
-		deleteThreadFromUI: deleteThreadFromUI,
 		updateUiWithThreadsFromServer: updateUiWithThreadsFromServer,
 		messengerGetter: messengerGetter,
 		reportAsyncError: function(error: unknown) {
@@ -400,10 +429,7 @@ function renderSetupNeededState(message?: string): void {
 				messengerGetter().error(result.error.message);
 				return;
 			}
-			var threadListIslandState = islands.ensureThreadListIsland();
-			if (threadListIslandState && result.value.bundleId) {
-				threadListIslandState.instance.createBundleRow(result.value.bundleId, threadIds);
-			}
+			refreshThreadList();
 		},
 		onEditBundle: async function(bundleId: string, threadIds: string[], mergeBundleIds: string[]) {
 			const result = await appApi.updateBundle(bundleId, threadIds, mergeBundleIds);
@@ -411,10 +437,7 @@ function renderSetupNeededState(message?: string): void {
 				messengerGetter().error(result.error.message);
 				return;
 			}
-			var threadListIslandState = islands.ensureThreadListIsland();
-			if (threadListIslandState) {
-				threadListIslandState.instance.updateBundleRow(bundleId, threadIds, mergeBundleIds);
-			}
+			refreshThreadList();
 		},
 		onArchiveBundle: function(bundleId: string) { threadListController.archiveBundle(bundleId); },
 		onGroupingRulesSaved: loadGroupingRules,
@@ -422,14 +445,10 @@ function renderSetupNeededState(message?: string): void {
 		onOpenLabelPickerForBundle: function(bundleSummary) { showLabelPickerForBundle(bundleSummary.bundleId); },
 		onMoveBundle: async function(bundleId: string, labelId: string) {
 			var updateMsg = messengerGetter().info('Labeling bundle ' + bundleId + '...');
-			const result = await appApi.addLabelToBundle(bundleId, labelId);
+			const result = await withRemoval({ kind: 'bundle', bundleId }, function() { return appApi.addLabelToBundle(bundleId, labelId); });
 			if (!result.ok) {
 				updateMsg.update({ type: 'error', message: result.error.message || 'Failed to label bundle.' });
 				return;
-			}
-			var threadListIslandState = islands.ensureThreadListIsland();
-			if (threadListIslandState) {
-				threadListIslandState.instance.removeBundleRow(bundleId);
 			}
 			updateMsg.update({
 				type: 'success',
@@ -452,10 +471,7 @@ function renderSetupNeededState(message?: string): void {
 				updateMsg.update({ type: 'error', message: result.error.message || 'Failed to ungroup bundle.' });
 				return;
 			}
-			var threadListIslandState = islands.ensureThreadListIsland();
-			if (threadListIslandState) {
-				threadListIslandState.instance.ungroupBundleRow(bundleId);
-			}
+			refreshThreadList();
 			updateMsg.update({
 				type: 'success',
 				message: 'Bundle ungrouped.'

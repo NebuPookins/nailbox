@@ -156,6 +156,14 @@ export function mountAuthShellIsland({ statusContainer, authControlsContainer, o
 			state.type = 'empty';
 			renderAll();
 		},
+		/** Switches between the idle and empty states; leaves any other state (e.g. an error) alone. */
+		showThreadListState(isEmpty: boolean) {
+			if (state.type !== 'idle' && state.type !== 'empty') {
+				return;
+			}
+			state.type = isEmpty ? 'empty' : 'idle';
+			renderAll();
+		},
 		setError() {
 			state.type = 'error';
 			renderAll();

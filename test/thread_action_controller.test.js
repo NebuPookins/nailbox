@@ -34,6 +34,25 @@ function createMessengerGetter() {
 	};
 }
 
+function createRemovalTracker() {
+	const outcomes = [];
+	return {
+		get confirmed() {
+			return outcomes.filter((outcome) => outcome.ok).map((outcome) => outcome.target);
+		},
+		get failed() {
+			return outcomes.filter((outcome) => !outcome.ok).map((outcome) => outcome.target);
+		},
+		hooks: {
+			async withRemoval(target, request) {
+				const result = await request();
+				outcomes.push({ target, ok: result.ok });
+				return result;
+			},
+		},
+	};
+}
+
 test('filterSelectableLabels removes hidden and reserved labels', () => {
 	const labels = [
 		{ id: 'Label_1', labelListVisibility: 'labelShow' },
@@ -47,8 +66,8 @@ test('filterSelectableLabels removes hidden and reserved labels', () => {
 	]);
 });
 
-test('deleteThread removes the thread from the UI after the API call succeeds', async () => {
-	const removedThreadIds = [];
+test('deleteThread confirms the thread removal after the API call succeeds', async () => {
+	const removals = createRemovalTracker();
 	const { events, messengerGetter } = createMessengerGetter();
 	const appApi = {
 		async deleteThread(threadId) {
@@ -59,15 +78,14 @@ test('deleteThread removes the thread from the UI after the API call succeeds', 
 	const controller = createThreadActionController({
 		appApi,
 		messengerGetter,
-		onThreadRemoved(threadId) {
-			removedThreadIds.push(threadId);
-		},
+		...removals.hooks,
 	});
 
 	const result = await controller.deleteThread('abc123');
 
 	assert.deepEqual(result, { ok: true });
-	assert.deepEqual(removedThreadIds, ['abc123']);
+	assert.deepEqual(removals.confirmed, [{ kind: 'thread', threadId: 'abc123' }]);
+	assert.deepEqual(removals.failed, []);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Deleting thread abc123...' },
 		{ type: 'success', message: 'Successfully deleted message abc123' },
@@ -100,7 +118,7 @@ test('archiveThread reports a missing thread id without calling the API', async 
 });
 
 test('moveThreadToLabel updates Gmail then removes the thread from the current list', async () => {
-	const removedThreadIds = [];
+	const removals = createRemovalTracker();
 	const { events, messengerGetter } = createMessengerGetter();
 	const appApi = {
 		async moveThreadToLabel(threadId, labelId) {
@@ -112,15 +130,14 @@ test('moveThreadToLabel updates Gmail then removes the thread from the current l
 	const controller = createThreadActionController({
 		appApi,
 		messengerGetter,
-		onThreadRemoved(threadId) {
-			removedThreadIds.push(threadId);
-		},
+		...removals.hooks,
 	});
 
 	const result = await controller.moveThreadToLabel('abc123', 'Label_2');
 
 	assert.deepEqual(result, { ok: true });
-	assert.deepEqual(removedThreadIds, ['abc123']);
+	assert.deepEqual(removals.confirmed, [{ kind: 'thread', threadId: 'abc123' }]);
+	assert.deepEqual(removals.failed, []);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Moving thread abc123 to label...' },
 		{ type: 'success', message: 'Successfully moved thread abc123 to label.' },
@@ -156,8 +173,8 @@ test('openLabelPicker stores thread context before showing the modal', () => {
 	]);
 });
 
-test('markThreadAsSpam removes the thread from the UI after the API call succeeds', async () => {
-	const removedThreadIds = [];
+test('markThreadAsSpam confirms the thread removal after the API call succeeds', async () => {
+	const removals = createRemovalTracker();
 	const { events, messengerGetter } = createMessengerGetter();
 	const appApi = {
 		async markThreadAsSpam(threadId) {
@@ -168,15 +185,14 @@ test('markThreadAsSpam removes the thread from the UI after the API call succeed
 	const controller = createThreadActionController({
 		appApi,
 		messengerGetter,
-		onThreadRemoved(threadId) {
-			removedThreadIds.push(threadId);
-		},
+		...removals.hooks,
 	});
 
 	const result = await controller.markThreadAsSpam('abc123');
 
 	assert.deepEqual(result, { ok: true });
-	assert.deepEqual(removedThreadIds, ['abc123']);
+	assert.deepEqual(removals.confirmed, [{ kind: 'thread', threadId: 'abc123' }]);
+	assert.deepEqual(removals.failed, []);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Reporting thread abc123 as spam...' },
 		{ type: 'success', message: 'Successfully reported thread abc123 as spam.' },
@@ -206,7 +222,7 @@ test('markThreadAsSpam reports a missing thread id without calling the API', asy
 });
 
 test('markThreadAsSpam keeps the thread in the UI and reports the error when the API call fails', async () => {
-	const removedThreadIds = [];
+	const removals = createRemovalTracker();
 	const { events, messengerGetter } = createMessengerGetter();
 	const controller = createThreadActionController({
 		appApi: {
@@ -215,15 +231,14 @@ test('markThreadAsSpam keeps the thread in the UI and reports the error when the
 			},
 		},
 		messengerGetter,
-		onThreadRemoved(threadId) {
-			removedThreadIds.push(threadId);
-		},
+		...removals.hooks,
 	});
 
 	const result = await controller.markThreadAsSpam('abc123');
 
 	assert.deepEqual(result, { ok: false, reason: 'request-failed' });
-	assert.deepEqual(removedThreadIds, []);
+	assert.deepEqual(removals.confirmed, []);
+	assert.deepEqual(removals.failed, [{ kind: 'thread', threadId: 'abc123' }]);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Reporting thread abc123 as spam...' },
 		{ type: 'error', message: 'Gmail said no.' },
@@ -231,7 +246,7 @@ test('markThreadAsSpam keeps the thread in the UI and reports the error when the
 });
 
 test('archiveThread keeps the thread in the UI and reports the error when the API call fails', async () => {
-	const removedThreadIds = [];
+	const removals = createRemovalTracker();
 	const { events, messengerGetter } = createMessengerGetter();
 	const controller = createThreadActionController({
 		appApi: {
@@ -240,15 +255,14 @@ test('archiveThread keeps the thread in the UI and reports the error when the AP
 			},
 		},
 		messengerGetter,
-		onThreadRemoved(threadId) {
-			removedThreadIds.push(threadId);
-		},
+		...removals.hooks,
 	});
 
 	const result = await controller.archiveThread('abc123');
 
 	assert.deepEqual(result, { ok: false, reason: 'request-failed' });
-	assert.deepEqual(removedThreadIds, []);
+	assert.deepEqual(removals.confirmed, []);
+	assert.deepEqual(removals.failed, [{ kind: 'thread', threadId: 'abc123' }]);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Archiving thread abc123...' },
 		{ type: 'error', message: 'Network unreachable.' },
@@ -276,7 +290,7 @@ test('deleteThread falls back to a generic message when the error carries none',
 });
 
 test('archiveBundle keeps the bundle in the UI and reports the error when the API call fails', async () => {
-	const removedBundleIds = [];
+	const removals = createRemovalTracker();
 	const { events, messengerGetter } = createMessengerGetter();
 	const controller = createThreadActionController({
 		appApi: {
@@ -285,15 +299,14 @@ test('archiveBundle keeps the bundle in the UI and reports the error when the AP
 			},
 		},
 		messengerGetter,
-		onBundleRemoved(bundleId) {
-			removedBundleIds.push(bundleId);
-		},
+		...removals.hooks,
 	});
 
 	const result = await controller.archiveBundle('bundle-1');
 
 	assert.deepEqual(result, { ok: false, reason: 'request-failed' });
-	assert.deepEqual(removedBundleIds, []);
+	assert.deepEqual(removals.confirmed, []);
+	assert.deepEqual(removals.failed, [{ kind: 'bundle', bundleId: 'bundle-1' }]);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Archiving bundle bundle-1...' },
 		{ type: 'error', message: 'Gmail rejected the batch.' },
@@ -301,7 +314,7 @@ test('archiveBundle keeps the bundle in the UI and reports the error when the AP
 });
 
 test('markThreadAsSpam reports a rejected request on the original messenger and keeps the thread', async () => {
-	const removedThreadIds = [];
+	const removals = createRemovalTracker();
 	const { events, messengerGetter } = createMessengerGetter();
 	const controller = createThreadActionController({
 		appApi: {
@@ -310,15 +323,14 @@ test('markThreadAsSpam reports a rejected request on the original messenger and 
 			},
 		},
 		messengerGetter,
-		onThreadRemoved(threadId) {
-			removedThreadIds.push(threadId);
-		},
+		...removals.hooks,
 	});
 
 	const result = await controller.markThreadAsSpam('abc123');
 
 	assert.deepEqual(result, { ok: false, reason: 'request-failed' });
-	assert.deepEqual(removedThreadIds, []);
+	assert.deepEqual(removals.confirmed, []);
+	assert.deepEqual(removals.failed, [{ kind: 'thread', threadId: 'abc123' }]);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Reporting thread abc123 as spam...' },
 		{ type: 'error', message: 'Failed to fetch' },
@@ -326,7 +338,7 @@ test('markThreadAsSpam reports a rejected request on the original messenger and 
 });
 
 test('archiveBundle reports a rejected request on the original messenger and keeps the bundle', async () => {
-	const removedBundleIds = [];
+	const removals = createRemovalTracker();
 	const { events, messengerGetter } = createMessengerGetter();
 	const controller = createThreadActionController({
 		appApi: {
@@ -335,15 +347,14 @@ test('archiveBundle reports a rejected request on the original messenger and kee
 			},
 		},
 		messengerGetter,
-		onBundleRemoved(bundleId) {
-			removedBundleIds.push(bundleId);
-		},
+		...removals.hooks,
 	});
 
 	const result = await controller.archiveBundle('bundle-1');
 
 	assert.deepEqual(result, { ok: false, reason: 'request-failed' });
-	assert.deepEqual(removedBundleIds, []);
+	assert.deepEqual(removals.confirmed, []);
+	assert.deepEqual(removals.failed, [{ kind: 'bundle', bundleId: 'bundle-1' }]);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Archiving bundle bundle-1...' },
 		{ type: 'error', message: 'Failed to fetch' },

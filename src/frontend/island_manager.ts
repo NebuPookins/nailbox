@@ -57,14 +57,8 @@ interface LabelPickerIsland {
 }
 
 interface ThreadListIsland {
-	setGroups(groups: ThreadGroup[]): void;
+	setGroups(groups: readonly ThreadGroup[]): void;
 	setLabels(labels: LabelData[]): void;
-	setGroupingRules(groupingRules: GroupingRulesConfig): void;
-	removeThread(id: string): void;
-	removeBundleRow(bundleId: string): void;
-	createBundleRow(bundleId: string, threadIds: string[]): void;
-	updateBundleRow(bundleId: string, threadIds: string[], mergeBundleIds?: string[]): void;
-	ungroupBundleRow(bundleId: string): void;
 }
 
 interface IslandState<T> {
@@ -76,7 +70,7 @@ interface FrontendApi {
 	mountGroupingRulesSettings?(opts: { container: Element; onSaved?: () => void }): GroupingRulesIsland;
 	mountGroupingRulesDebugIsland?(opts: { container: Element; showModal: () => void; hideModal: () => void }): GroupingRulesDebugIsland;
 	mountSenderRulePicker?(opts: { container: Element; showModal: () => void; hideModal: () => void; onSaved: () => void }): SenderRuleIsland;
-	mountLaterPickerIsland?(opts: { container: Element; notify: Notify; onDismiss?: () => void; onHidden?: (id: string) => void }): LaterPickerIsland;
+	mountLaterPickerIsland?(opts: { container: Element; notify: Notify; onDismiss?: () => void }): LaterPickerIsland;
 	mountLabelPickerIsland?(opts: { container: Element; notify: Notify; onDismiss?: () => void; onMoveThread?: (threadId: string, labelId: string) => Promise<{ ok: boolean } | undefined>; onMoveBundle?: (bundleId: string, labelId: string) => Promise<void> }): LabelPickerIsland;
 	mountThreadListIsland?(opts: {
 		container: Element;
@@ -114,7 +108,6 @@ export function createIslandManager({
 	hideSenderRuleModal,
 	threadActionController,
 	getLabels,
-	deleteThreadFromUI,
 	updateUiWithThreadsFromServer,
 	messengerGetter,
 	reportAsyncError,
@@ -151,7 +144,6 @@ export function createIslandManager({
 	hideSenderRuleModal(): void;
 	threadActionController: ThreadActionController;
 	getLabels(): LabelData[];
-	deleteThreadFromUI(threadId: string): void;
 	updateUiWithThreadsFromServer(messenger: MsgHandle): Promise<void>;
 	messengerGetter(): Messenger;
 	reportAsyncError(error: unknown): void;
@@ -304,9 +296,6 @@ export function createIslandManager({
 			container: laterPickerRoot,
 			notify: createLaterPickerNotify(),
 			onDismiss: hideLaterPicker,
-			onHidden: function(threadId) {
-				deleteThreadFromUI(threadId);
-			}
 		});
 		return {
 			instance: laterPickerIsland,

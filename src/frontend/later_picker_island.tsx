@@ -29,11 +29,10 @@ function chunkPresetOptions(options: LaterPresetOption[], chunkSize: number): La
 interface LaterPickerAppProps {
 	notify: Notify | undefined;
 	onDismiss: (() => void) | undefined;
-	onHidden: ((threadId: string) => void) | undefined;
 	state: LaterPickerState;
 }
 
-function LaterPickerApp({ notify, onDismiss, onHidden, state }: LaterPickerAppProps) {
+function LaterPickerApp({ notify, onDismiss, state }: LaterPickerAppProps) {
 	const [pendingPreset, setPendingPreset] = useState('');
 	const hasTarget = Boolean(state.targetId);
 
@@ -50,7 +49,6 @@ function LaterPickerApp({ notify, onDismiss, onHidden, state }: LaterPickerAppPr
 		setPendingPreset(presetValue);
 		try {
 			await Promise.resolve(state.onHide?.(state.targetId as string, hideUntil));
-			onHidden?.(state.targetId as string);
 			onDismiss?.();
 		} catch (error: unknown) {
 			const message = error instanceof Error && error.message
@@ -93,10 +91,9 @@ interface MountLaterPickerIslandDeps {
 	container: Element;
 	notify?: Notify;
 	onDismiss?: () => void;
-	onHidden?: (threadId: string) => void;
 }
 
-export function mountLaterPickerIsland({ container, notify, onDismiss, onHidden }: MountLaterPickerIslandDeps) {
+export function mountLaterPickerIsland({ container, notify, onDismiss }: MountLaterPickerIslandDeps) {
 	const root = createRoot(container);
 	const state: LaterPickerState = {
 		onHide: null,
@@ -108,7 +105,6 @@ export function mountLaterPickerIsland({ container, notify, onDismiss, onHidden 
 			<LaterPickerApp
 				notify={notify}
 				onDismiss={onDismiss}
-				onHidden={onHidden}
 				state={state}
 			/>
 		);

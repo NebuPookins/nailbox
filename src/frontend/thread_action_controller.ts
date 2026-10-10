@@ -1,4 +1,5 @@
 import { AppApi, JsonValue, Result } from "./api.js";
+import type { RemovalTarget } from "./thread_list_state.js";
 
 interface Label {
 	id: string;
@@ -104,14 +105,22 @@ export function filterSelectableLabels(labels: Label[]): Label[] {
 export function createThreadActionController({
 	appApi,
 	messengerGetter,
-	onThreadRemoved,
-	onBundleRemoved,
+	withRemoval,
 }: {
 	appApi: AppApi
 	messengerGetter: () => Messenger;
-	onThreadRemoved?: (threadId: string) => void;
-	onBundleRemoved?: (bundleId: string) => void;
+	/** Wraps a request that removes a row so the row can vanish immediately and come back if the request fails. */
+	withRemoval?: (target: RemovalTarget, request: () => Promise<Result<JsonValue>>) => Promise<Result<JsonValue>>;
 }) {
+	async function runRemoval(
+		target: RemovalTarget,
+		request: () => Promise<Result<JsonValue>>,
+	): Promise<Result<JsonValue>> {
+		return withRemoval
+			? withRemoval(target, () => attemptRequest(request))
+			: attemptRequest(request);
+	}
+
 	async function runThreadAction({
 		threadId,
 		startMessage,
@@ -127,11 +136,10 @@ export function createThreadActionController({
 		if (!threadId) {
 			return reportMissingThreadId(actionMessenger);
 		}
-		const result = await attemptRequest(request);
+		const result = await runRemoval({ kind: 'thread', threadId }, request);
 		if (!result.ok) {
 			return reportFailedRequest(actionMessenger, result.error);
 		}
-		onThreadRemoved?.(threadId);
 		updateMessenger(actionMessenger, 'success', successMessage);
 		return {
 			ok: true,
@@ -147,6 +155,7 @@ export function createThreadActionController({
 		bundleId: string;
 		startMessage: string;
 		successMessage: string;
+		/** Must not reject; failures are reported through the Result. */
 		request: () => Promise<Result<JsonValue>>;
 	}): Promise<ActionResult> {
 		const actionMessenger = createActionMessenger(messengerGetter, startMessage);
@@ -154,11 +163,10 @@ export function createThreadActionController({
 			updateMessenger(actionMessenger, 'error', 'Missing bundle id.');
 			return {ok: false, reason: 'missing-bundle-id'};
 		}
-		const result = await attemptRequest(request);
+		const result = await request();
 		if (!result.ok) {
 			return reportFailedRequest(actionMessenger, result.error);
 		}
-		onBundleRemoved?.(bundleId);
 		updateMessenger(actionMessenger, 'success', successMessage);
 		return {ok: true};
 	}
@@ -193,7 +201,7 @@ export function createThreadActionController({
 				bundleId,
 				startMessage: `Archiving bundle ${bundleId}...`,
 				successMessage: `Successfully archived bundle.`,
-				request: () => appApi.archiveBundle(bundleId),
+				request: () => runRemoval({ kind: 'bundle', bundleId }, () => appApi.archiveBundle(bundleId)),
 			});
 		},
 		deleteBundle(bundleId: string) {
@@ -201,7 +209,7 @@ export function createThreadActionController({
 				bundleId,
 				startMessage: `Ungrouping bundle ${bundleId}...`,
 				successMessage: `Bundle ungrouped.`,
-				request: () => appApi.deleteBundle(bundleId),
+				request: () => attemptRequest(() => appApi.deleteBundle(bundleId)),
 			});
 		},
 		moveThreadToLabel(threadId: string, labelId: string) {
