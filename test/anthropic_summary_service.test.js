@@ -30,3 +30,11 @@ test('summarizeWithAnthropic sends the selected model and returns text content',
 	assert.equal(request.options.headers['x-api-key'], 'secret');
 	assert.equal(JSON.parse(request.options.body).model, 'claude-sonnet-5-5');
 });
+
+test('summarizeWithAnthropic reports why a response had no text summary', async () => {
+	await assert.rejects(
+		summarizeWithAnthropic({apiKey: 'secret'}, {subject: 'Subject', sender: 'Alice', body: 'Body'}, async () =>
+			new Response(JSON.stringify({content: [{type: 'thinking', thinking: ''}], stop_reason: 'max_tokens'}), {status: 200})),
+		(error) => /stop_reason=max_tokens/.test(error.message) && /thinking/.test(error.message),
+	);
+});
