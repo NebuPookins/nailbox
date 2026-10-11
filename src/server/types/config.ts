@@ -2,6 +2,13 @@ import type { GoogleOAuthConfig } from './auth.js';
 import type { GroupingRulesConfig } from './grouping_rules.js';
 
 export const RENDER_MODES = ['original', 'reader', 'plain'] as const;
+export const ANTHROPIC_MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5', 'claude-fable-5-1'] as const;
+export type AnthropicModel = typeof ANTHROPIC_MODELS[number];
+
+export interface AnthropicConfig {
+	apiKey?: string;
+	model?: AnthropicModel;
+}
 
 /** How a message body is shown: as sent, as a distraction-free article, or as plain text. */
 export type RenderMode = typeof RENDER_MODES[number];
@@ -33,12 +40,18 @@ export interface AppConfig {
 	emailGroupingRules?: GroupingRulesConfig;
 	senderRenderModes?: SenderRenderModes;
 	trustedImageSenders?: TrustedImageSenders;
+	anthropic?: AnthropicConfig;
 }
 
 export interface GoogleOAuthSetupDto {
 	clientId: string;
 	clientSecret: string;
 	redirectUri: string;
+}
+
+export interface ProfileSetupDto {
+	googleOAuth: GoogleOAuthSetupDto;
+	anthropic: AnthropicConfig;
 }
 
 export interface ConfigRepository {

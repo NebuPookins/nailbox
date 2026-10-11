@@ -10,6 +10,8 @@ import {
 	normalizeSenderRenderModeDto,
 	normalizeTrustedImageSenderDto,
 } from '../validation/contracts.js';
+import {summarizeWithAnthropic, SummaryProviderError} from '../services/anthropic_summary_service.js';
+import type {PersonDto, ThreadMessageDto} from '../types/thread.js';
 
 /** How many rows each group on the main page shows. */
 const MAX_ITEMS_PER_GROUP = 10;
@@ -25,6 +27,8 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 		notifyThreadsChanged,
 		threadRepository,
 		threadService,
+		summaryRepository,
+		summarizeMessage = summarizeWithAnthropic,
 	} = dependencies;
 
 	app.post('/api/threads', async function(req: Request, res: Response) {
@@ -206,7 +210,11 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 		const threadId = req.params[0];
 		try {
 			const result = await threadService.getThreadMessages(threadId);
-			res.status(200).send(result.data);
+			const messages = await Promise.all((result.data.messages as ThreadMessageDto[]).map(async (message) => {
+				const summary = summaryRepository ? await summaryRepository.readSummary(message.messageId) : null;
+				return summary ? {...message, summary} : message;
+			}));
+			res.status(200).send({messages});
 		} catch (error) {
 			const err = error as Error & {code?: string};
 			if (err.code === 'ENOENT') {
@@ -214,6 +222,48 @@ export default function registerThreadRoutes(app: Application, dependencies: any
 				return;
 			}
 			logger.error(util.format('Failed to read thread data: %s', util.inspect(error)));
+			res.sendStatus(500);
+		}
+	});
+
+	app.post(/^\/api\/threads\/([a-z0-9]+)\/messages\/([a-z0-9]+)\/summary$/, async function(req: Request, res: Response) {
+		const threadId = req.params[0];
+		const messageId = req.params[1];
+		if (!summaryRepository) {
+			res.status(503).send({humanErrorMessage: 'Email summaries are unavailable.'});
+			return;
+		}
+		try {
+			const result = await threadService.getThreadMessage(threadId, messageId);
+			if (result.status === 404 || !result.data) {
+				res.sendStatus(404);
+				return;
+			}
+			const sender = (result.data as ThreadMessageDto).from.filter((person: PersonDto | null): person is PersonDto => person !== null)
+				.map((person: PersonDto) => person.email ? `${person.name} <${person.email}>` : person.name).join(', ') || 'Unknown sender';
+			const summaryText = await summarizeMessage(config.anthropic ?? {}, {
+				subject: result.thread.subject(),
+				sender,
+				body: result.data.body.plainText,
+			});
+			const summary = await summaryRepository.saveSummary({
+				messageId,
+				summary: summaryText,
+				createdAt: new Date().toISOString(),
+				model: config.anthropic?.model ?? 'claude-haiku-5-5',
+			});
+			res.status(200).type('application/json').send(summary);
+		} catch (error) {
+			if (error instanceof SummaryProviderError) {
+				res.status(error.status).send({humanErrorMessage: error.message});
+				return;
+			}
+			const err = error as NodeJS.ErrnoException;
+			if (err.code === 'ENOENT') {
+				res.sendStatus(404);
+				return;
+			}
+			logger.error(util.inspect(error));
 			res.sendStatus(500);
 		}
 	});

@@ -137,14 +137,15 @@ export function createThreadService(dependencies: {
 		};
 	}
 
-	async function getThreadMessage(threadId: string, messageId: string): Promise<{status: number; data?: ThreadMessageDto}> {
+	async function getThreadMessage(threadId: string, messageId: string): Promise<{status: number; thread: any; data?: ThreadMessageDto}> {
 		const thread = await repository.readThread(threadId);
 		const matchingMessage = thread.message(messageId);
 		if (!matchingMessage) {
-			return {status: 404};
+			return {status: 404, thread};
 		}
 		return {
 			status: 200,
+			thread,
 			data: loadRelevantDataFromMessage(matchingMessage),
 		};
 	}

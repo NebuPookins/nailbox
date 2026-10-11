@@ -82,9 +82,9 @@ function AuthControls({ state, onDisconnect, onRefreshNow }: AuthControlsProps) 
 	}
 	return (
 		<span>
-			<span className="text-muted" style={{ marginRight: '10px' }}>
-				{state.emailAddress || 'Connected'}
-			</span>
+			<a className="text-muted" href="/profile" style={{ marginRight: '10px' }}>
+				{state.emailAddress || 'Profile'}
+			</a>
 			<button
 				className="btn btn-default btn-sm"
 				onClick={onRefreshNow}

@@ -549,6 +549,11 @@ function renderSetupNeededState(message?: string): void {
 				throw result.error;
 			}
 		},
+		summarizeMessage: async function(threadId, messageId) {
+			const result = await appApi.summarizeMessage(threadId, messageId);
+			if (!result.ok) throw result.error;
+			return result.value;
+		},
 		hideModal: function() { hideModal(threadViewer); },
 		getEmailAddress: function() { return authStatus.emailAddress; },
 		reportError: function(error: unknown) {

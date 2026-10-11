@@ -1,0 +1,46 @@
+doctype html
+html(lang="en")
+	head
+		meta(charset="utf-8")
+		meta(name="viewport" content="width=device-width, initial-scale=1")
+		title Nailbox - Profile
+		link(rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css")
+	body
+		.container
+			h1 Profile settings
+			if errorMessage
+				.alert.alert-danger(role="alert")= errorMessage
+			if successMessage
+				.alert.alert-success(role="alert")= successMessage
+			form(method="POST" action="/profile")
+				.panel.panel-default
+					.panel-heading Google OAuth
+					.panel-body
+						p Configure the Google application Nailbox uses to access your mail.
+						.form-group
+							label(for="clientId") Client ID
+							input.form-control#clientId(name="clientId" value=googleOAuth.clientId || '' required)
+						.form-group
+							label(for="clientSecret") Client secret
+							input.form-control#clientSecret(name="clientSecret" value=googleOAuth.clientSecret || '' required)
+						.form-group
+							label(for="redirectUri") Redirect URI
+							input.form-control#redirectUri(name="redirectUri" value=googleOAuth.redirectUri || defaultRedirectUri required)
+				.panel.panel-default
+					.panel-heading AI summaries (Anthropic)
+					.panel-body
+						p Nailbox sends a message's subject, sender, and body to Anthropic only when you choose to summarize it. Your API key is stored locally in data/config.json.
+						.form-group
+							label(for="anthropicApiKey") API key
+							input.form-control#anthropicApiKey(type="password" name="anthropicApiKey" placeholder=anthropic.apiKey ? "Saved key (leave blank to keep it)" : "sk-ant-...")
+						.form-group
+							label(for="anthropicModel") Model
+							select.form-control#anthropicModel(name="anthropicModel")
+								each model in anthropicModels
+									option(value=model selected=(anthropic.model || anthropicModels[0]) === model)= model
+				button.btn.btn-primary(type="submit") Save settings
+			| 
+			a.btn.btn-default(href="/") Back to inbox
+			if authStatus.connected
+				form(method="POST" action="/auth/google/disconnect" style="display:inline; margin-left: 8px")
+					button.btn.btn-warning(type="submit") Disconnect Gmail

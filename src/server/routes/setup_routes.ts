@@ -3,7 +3,8 @@ import util from 'util';
 import type {Application, Request, Response} from 'express';
 
 import {getGoogleAuthStatus, getGoogleOAuthConfig, isGoogleOAuthConfigured} from '../../../services/google_oauth.mjs';
-import {normalizeGoogleOAuthSetupDto} from '../validation/contracts.js';
+import {normalizeGoogleOAuthSetupDto, normalizeProfileSetupDto} from '../validation/contracts.js';
+import {ANTHROPIC_MODELS} from '../types/config.js';
 
 function getDefaultRedirectUri(req: Request): string {
 	return `${req.protocol}://${req.get('host')}/auth/google/callback`;
@@ -33,6 +34,41 @@ export default function registerSetupRoutes(app: Application, dependencies: any)
 
 	app.get('/setup', function(req: Request, res: Response) {
 		res.render('setup', getSetupViewModel(config, req));
+	});
+
+	function getProfileViewModel(req: Request, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+		const googleOAuth = getGoogleOAuthConfig(config);
+		return Object.assign({
+			googleOAuth,
+			authStatus: getGoogleAuthStatus(config),
+			defaultRedirectUri: getDefaultRedirectUri(req),
+			anthropicModels: ANTHROPIC_MODELS,
+			anthropic: config.anthropic ?? {},
+			errorMessage: null,
+			successMessage: null,
+		}, overrides);
+	}
+
+	app.get('/profile', function(req: Request, res: Response) {
+		res.render('profile', getProfileViewModel(req));
+	});
+
+	app.post('/profile', async function(req: Request, res: Response) {
+		try {
+			const profile = normalizeProfileSetupDto(req.body, getDefaultRedirectUri(req), config.anthropic ?? {});
+			Object.assign(getGoogleOAuthConfig(config), profile.googleOAuth);
+			config.anthropic = profile.anthropic;
+			await saveConfig();
+			res.render('profile', getProfileViewModel(req, {successMessage: 'Profile settings saved.'}));
+		} catch (error) {
+			const err = error as Error & {code?: string};
+			if (err.code === 'INVALID_CONTRACT') {
+				res.status(400).render('profile', getProfileViewModel(req, {errorMessage: err.message}));
+				return;
+			}
+			logger.error(util.format('Failed to save profile config: %s', util.inspect(error)));
+			res.sendStatus(500);
+		}
 	});
 
 	app.post('/setup', async function(req: Request, res: Response) {

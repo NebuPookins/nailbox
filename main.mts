@@ -36,6 +36,7 @@ import { startGmailPoller } from './src/server/services/gmail_poller.js';
 import { createGmailQuotaLimiter, gmailRequestCost } from './src/server/services/gmail_quota_limiter.js';
 import { createGmailSyncer } from './src/server/services/gmail_sync_service.js';
 import { createGmailSyncStateRepository } from './src/server/repositories/gmail_sync_state_repository.js';
+import { createSummaryRepository } from './src/server/repositories/summary_repository.js';
 
 const DEFAULT_CONFIG: {port: number} = {
 	port: 3000,
@@ -138,6 +139,7 @@ async function withBackgroundGmailApi<T>(
 
 logger.info("Checking directory structure...");
 await helpers_fileio.ensureDirectoryExists('data/threads');
+await helpers_fileio.ensureDirectoryExists('data/summaries');
 logger.info("Directory structure looks fine.");
 const hideUntils = await hideUntilRepository.load();
 const lastRefresheds = await lastRefreshedRepository.load();
@@ -145,6 +147,7 @@ const bundles = await bundleModel.load();
 const config = await configRepository.readConfig();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const threadRepository = createThreadRepository({ threadModelModule: threadModel as any });
+const summaryRepository = createSummaryRepository();
 const threadService = createThreadService({ threadRepository, MessageClass: Message, bundles });
 // Warms the thread summary index so the first page load doesn't pay for it.
 threadRepository.listThreadSummaries().catch((error) => {
@@ -190,6 +193,7 @@ const routeDependencies = {
 	gmailSyncer,
 	threadRepository,
 	threadService,
+	summaryRepository,
 	withGmailApi,
 };
 

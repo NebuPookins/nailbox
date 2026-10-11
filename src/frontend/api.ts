@@ -187,6 +187,13 @@ const syncThreadsResponseSchema = z.object({
 	})).optional(),
 });
 
+const emailSummarySchema = z.object({
+	messageId: z.string(),
+	summary: z.string(),
+	createdAt: z.string(),
+	model: z.string(),
+});
+
 const threadMessageSchema = z.object({
 	deleted: z.boolean(),
 	messageId: z.string(),
@@ -206,6 +213,7 @@ const threadMessageSchema = z.object({
 		size: z.number(),
 		attachmentId: z.string(),
 	})),
+	summary: emailSummarySchema.optional(),
 });
 
 const threadDataResponseSchema = z.object({
@@ -222,6 +230,7 @@ type LabelsResponse = z.infer<typeof labelsResponseSchema>;
 type SendMessageResponse = z.infer<typeof sendMessageResponseSchema>;
 type SyncThreadsResponse = z.infer<typeof syncThreadsResponseSchema>;
 export type ThreadDataResponse = z.infer<typeof threadDataResponseSchema>;
+export type EmailSummaryResponse = NonNullable<z.infer<typeof threadMessageSchema>['summary']>;
 
 async function request(url: string, options: RequestOptions = {}): Promise<Result<JsonValue>> {
 	const { accept, ...fetchOptions } = options;
@@ -355,6 +364,17 @@ export function createAppApi() {
 				} else {
 					return { ok: false, error: new Error(parseResult.error.message) };
 				}
+			});
+		},
+		summarizeMessage(threadId: string, messageId: string): Promise<Result<EmailSummaryResponse>> {
+			return request(`/api/threads/${threadId}/messages/${messageId}/summary`, {
+				method: 'POST',
+			}).then(result => {
+				if (!result.ok) return result;
+				const parseResult = emailSummarySchema.safeParse(result.value);
+				return parseResult.success
+					? {ok: true, value: parseResult.data}
+					: {ok: false, error: new Error(parseResult.error.message)};
 			});
 		},
 		hideThread(threadId: string, hideUntil: HideUntilValue): Promise<Result<JsonValue>> {

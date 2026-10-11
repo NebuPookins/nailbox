@@ -1,5 +1,6 @@
 import { createAppApi, createGroupingRulesApi } from './api.js';
 import type { AppApi, GroupingRulesApi, HideUntilValue } from './api.js';
+import type { EmailSummaryResponse } from './api.js';
 import { mountAuthShellIsland } from './auth_shell_island.js';
 import { mountGroupingRulesIsland } from './grouping_rules_island.js';
 import { mountGroupingRulesDebugIsland } from './grouping_rules_debug_island.js';
@@ -143,6 +144,7 @@ interface FrontendApi {
 		saveSenderRenderMode: (senderEmail: string, mode: RenderMode) => Promise<void>;
 		loadTrustedImageSenders: () => Promise<TrustedImageSenders>;
 		saveTrustedImageSender: (senderEmail: string) => Promise<void>;
+		summarizeMessage: (threadId: string, messageId: string) => Promise<EmailSummaryResponse>;
 		reportError: (error: Error) => void;
 		showModal: () => void;
 	}): {

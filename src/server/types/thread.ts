@@ -94,6 +94,7 @@ export interface ThreadMessageDto {
 		size: number;
 		attachmentId: string;
 	}>;
+	summary?: import('./email_summary.js').EmailSummaryDto;
 }
 
 export interface ThreadGroupDto {

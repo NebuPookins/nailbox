@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
 	makeValidationError,
 	normalizeAppConfig,
+	normalizeAnthropicConfig,
 	normalizeGmailMoveThreadDto,
 	normalizeGmailSendMessageDto,
 	normalizeGoogleOAuthSetupDto,
@@ -19,6 +20,14 @@ test('normalizeAppConfig fills missing structured defaults', () => {
 	const config = normalizeAppConfig({});
 	assert.deepEqual(config.googleOAuth, {});
 	assert.deepEqual(config.emailGroupingRules, {rules: []});
+	assert.deepEqual(config.anthropic, {});
+});
+
+test('normalizeAnthropicConfig accepts the supported model and trims the API key', () => {
+	assert.deepEqual(normalizeAnthropicConfig({apiKey: ' key ', model: 'claude-haiku-5-5'}), {
+		apiKey: 'key', model: 'claude-haiku-5-5',
+	});
+	assert.throws(() => normalizeAnthropicConfig({model: 'not-a-model'}), {code: 'INVALID_CONTRACT'});
 });
 
 test('normalizeGroupingRulesConfig normalizes omitted rules', () => {

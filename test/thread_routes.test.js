@@ -344,3 +344,45 @@ test('PUT trusted image senders leaves the trusted senders unchanged when saving
 	assert.equal(res.statusCode, 500);
 	assert.deepEqual(config.trustedImageSenders, ['bo@example.com']);
 });
+
+test('message summary route summarizes one message and persists the result', async () => {
+	const app = createFakeApp();
+	const savedSummaries = [];
+	registerThreadRoutes(app, {
+		config: {anthropic: {apiKey: 'key', model: 'claude-haiku-5-5'}},
+		logger: {error() {}, info() {}},
+		threadService: {
+			async getThreadMessage(threadId, messageId) {
+				assert.equal(threadId, 'abc123');
+				assert.equal(messageId, 'def456');
+				return {
+					status: 200,
+					thread: {subject: () => 'Payment needed'},
+					data: {from: [{name: 'Vendor', email: 'vendor@example.com'}], body: {plainText: 'Please pay $12 by Friday.'}},
+				};
+			},
+		},
+		summaryRepository: {
+			async saveSummary(summary) {
+				savedSummaries.push(summary);
+				return summary;
+			},
+		},
+		async summarizeMessage(config, input) {
+			assert.equal(config.apiKey, 'key');
+			assert.deepEqual(input, {
+				subject: 'Payment needed', sender: 'Vendor <vendor@example.com>', body: 'Please pay $12 by Friday.',
+			});
+			return 'Action: Pay $12 by Friday.';
+		},
+	});
+	const handler = findHandler(app, 'POST', '/^\\/api\\/threads\\/([a-z0-9]+)\\/messages\\/([a-z0-9]+)\\/summary$/');
+	const res = createFakeResponse();
+
+	await handler({params: ['abc123', 'def456']}, res);
+
+	assert.equal(res.statusCode, 200);
+	assert.equal(res.body.summary, 'Action: Pay $12 by Friday.');
+	assert.equal(savedSummaries.length, 1);
+	assert.equal(savedSummaries[0].messageId, 'def456');
+});

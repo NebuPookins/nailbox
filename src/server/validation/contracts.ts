@@ -1,5 +1,5 @@
 import type {GroupingCondition, GroupingRule, GroupingRulesConfig} from '../types/grouping_rules.js';
-import {RENDER_MODES, senderKeyFor, type AppConfig, type GoogleOAuthSetupDto, type RenderMode, type SenderRenderModeDto, type SenderRenderModes, type TrustedImageSenderDto, type TrustedImageSenders} from '../types/config.js';
+import {ANTHROPIC_MODELS, RENDER_MODES, senderKeyFor, type AnthropicConfig, type AppConfig, type GoogleOAuthSetupDto, type ProfileSetupDto, type RenderMode, type SenderRenderModeDto, type SenderRenderModes, type TrustedImageSenderDto, type TrustedImageSenders} from '../types/config.js';
 import type {GoogleOAuthConfig, GmailMoveThreadDto, GmailSendMessageDto, Rfc2822RequestDto} from '../types/auth.js';
 import type {
 	PersistedMessage,
@@ -199,6 +199,22 @@ function normalizeGoogleOAuthConfig(value: unknown): GoogleOAuthConfig {
 	return result;
 }
 
+export function normalizeAnthropicConfig(value: unknown): AnthropicConfig {
+	if (value === undefined || value === null) return {};
+	assertObject(value, 'anthropic');
+	const apiKey = value['apiKey'];
+	const model = value['model'];
+	assertOptionalString(apiKey, 'anthropic.apiKey');
+	if (model !== undefined && model !== null) {
+		assertString(model, 'anthropic.model');
+		assertOneOf(model, ANTHROPIC_MODELS, 'anthropic.model');
+	}
+	return {
+		...(typeof apiKey === 'string' && apiKey.trim() ? {apiKey: apiKey.trim()} : {}),
+		...(typeof model === 'string' ? {model} : {}),
+	};
+}
+
 export function normalizeAppConfig(value: unknown): AppConfig {
 	if (value === undefined || value === null) {
 		return {
@@ -220,6 +236,7 @@ export function normalizeAppConfig(value: unknown): AppConfig {
 		emailGroupingRules: normalizeGroupingRulesConfig(value['emailGroupingRules']),
 		senderRenderModes: normalizeSenderRenderModes(value['senderRenderModes']),
 		trustedImageSenders: normalizeTrustedImageSenders(value['trustedImageSenders']),
+		anthropic: normalizeAnthropicConfig(value['anthropic']),
 	};
 	if (rawPort !== undefined) {
 		result.port = rawPort as number;
@@ -228,6 +245,19 @@ export function normalizeAppConfig(value: unknown): AppConfig {
 		result.clientId = clientId;
 	}
 	return result;
+}
+
+export function normalizeProfileSetupDto(value: unknown, defaultRedirectUri: unknown, existingAnthropic: AnthropicConfig): ProfileSetupDto {
+	assertObject(value, 'profileSetup');
+	const googleOAuth = normalizeGoogleOAuthSetupDto(value, defaultRedirectUri);
+	const rawKey = value['anthropicApiKey'];
+	assertOptionalString(rawKey, 'anthropicApiKey');
+	const rawModel = value['anthropicModel'];
+	const anthropic = normalizeAnthropicConfig({
+		apiKey: typeof rawKey === 'string' && rawKey.trim() ? rawKey : existingAnthropic.apiKey,
+		model: rawModel === undefined || rawModel === null || rawModel === '' ? existingAnthropic.model ?? ANTHROPIC_MODELS[0] : rawModel,
+	});
+	return {googleOAuth, anthropic};
 }
 
 export function normalizeGoogleOAuthSetupDto(value: unknown, defaultRedirectUri: unknown): GoogleOAuthSetupDto {

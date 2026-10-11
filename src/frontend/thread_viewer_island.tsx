@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { ThreadMessageDto, PersonDto } from '../server/types/thread.js';
+import type { EmailSummaryDto } from '../server/types/email_summary.js';
 import type { ThreadOpenPayload } from './thread_grouping.js';
 import { AddSenderRuleButton } from './add_sender_rule_button.js';
 import { formatPerson } from './person_presenter.js';
@@ -44,6 +45,7 @@ interface ThreadViewerState {
 	trustedImageSenders: TrustedImageSenders;
 	/** Messages whose remote images the user chose to load. */
 	remoteContentAllowedFor: ReadonlySet<string>;
+	summarizingMessageIds: ReadonlySet<string>;
 }
 
 /** The state with no thread shown, keeping only what outlives a thread. */
@@ -62,6 +64,7 @@ function emptyThreadState({ senderRenderModes, trustedImageSenders }: Pick<Threa
 		messageRenderModes: {},
 		trustedImageSenders,
 		remoteContentAllowedFor: new Set(),
+		summarizingMessageIds: new Set(),
 	};
 }
 
@@ -348,9 +351,11 @@ interface MessagePanelProps {
 	onRenderModeChange: (mode: RenderMode) => void;
 	onLoadImages: () => void;
 	onAlwaysLoadImages: (senderKey: string) => void;
+	onSummarize: () => void;
+	isSummarizing: boolean;
 }
 
-function MessagePanel({ message, renderMode, remoteContent, onAddSenderRule, onDownloadAttachment, onRenderModeChange, onLoadImages, onAlwaysLoadImages }: MessagePanelProps) {
+function MessagePanel({ message, renderMode, remoteContent, onAddSenderRule, onDownloadAttachment, onRenderModeChange, onLoadImages, onAlwaysLoadImages, onSummarize, isSummarizing }: MessagePanelProps) {
 	return (
 		<div className="message panel panel-default" data-message-id={message.messageId}>
 			<div className="panel-heading">
@@ -375,6 +380,14 @@ function MessagePanel({ message, renderMode, remoteContent, onAddSenderRule, onD
 				</div>
 			</div>
 			<div className="panel-body">
+				<div className="ai-summary well well-sm">
+					{message.summary ? <><strong>Email summary</strong><div>{message.summary.summary}</div></> : <span className="text-muted">No AI summary yet.</span>}
+					<div>
+						<button type="button" className="btn btn-link btn-xs" onClick={onSummarize} disabled={isSummarizing} style={{paddingLeft: 0}}>
+							{isSummarizing ? 'Summarizing…' : message.summary ? 'Regenerate summary' : 'Summarize with AI'}
+						</button>
+					</div>
+				</div>
 				<div className="row">
 					<div className="col-xs-12 message-body">
 						{renderMode !== null && (
@@ -462,6 +475,8 @@ interface ThreadViewerAppProps {
 	onOpenLabelPicker: () => void;
 	onViewOnGmail: () => void;
 	onClose: () => void;
+	onSummarizeMessage: (messageId: string) => void;
+	isSummarizing: (messageId: string) => boolean;
 }
 
 function ThreadViewerApp({
@@ -491,6 +506,8 @@ function ThreadViewerApp({
 	onOpenLabelPicker,
 	onViewOnGmail,
 	onClose,
+	onSummarizeMessage,
+	isSummarizing,
 }: ThreadViewerAppProps) {
 	return (
 		<>
@@ -540,6 +557,8 @@ function ThreadViewerApp({
 								onRenderModeChange={function(mode) { onRenderModeChange(message, mode); }}
 								onLoadImages={function() { onLoadImages(message); }}
 								onAlwaysLoadImages={onAlwaysLoadImages}
+								onSummarize={function() { onSummarizeMessage(message.messageId); }}
+								isSummarizing={isSummarizing(message.messageId)}
 							/>
 						);
 					})}
@@ -644,6 +663,7 @@ interface MountThreadViewerIslandDeps {
 	saveSenderRenderMode: (senderEmail: string, mode: RenderMode) => Promise<void>;
 	loadTrustedImageSenders: () => Promise<TrustedImageSenders>;
 	saveTrustedImageSender: (senderEmail: string) => Promise<void>;
+	summarizeMessage: (threadId: string, messageId: string) => Promise<EmailSummaryDto>;
 }
 
 export interface ThreadViewerAdapter {
@@ -685,6 +705,7 @@ export function mountThreadViewerIsland({
 	saveSenderRenderMode,
 	loadTrustedImageSenders,
 	saveTrustedImageSender,
+	summarizeMessage,
 }: MountThreadViewerIslandDeps) {
 	const root = createRoot(container);
 
@@ -735,6 +756,18 @@ export function mountThreadViewerIsland({
 					saveTrustedImageSender(senderKey).catch(reportError);
 					render();
 				}}
+				onSummarizeMessage={function(messageId) {
+					if (state.threadId === null) return;
+					state.summarizingMessageIds = new Set([...state.summarizingMessageIds, messageId]);
+					render();
+					summarizeMessage(state.threadId, messageId).then(function(summary) {
+						state.messages = state.messages.map((message) => message.messageId === messageId ? {...message, summary} : message);
+					}).catch(reportError).finally(function() {
+						state.summarizingMessageIds = new Set([...state.summarizingMessageIds].filter((id) => id !== messageId));
+						render();
+					});
+				}}
+				isSummarizing={function(messageId) { return state.summarizingMessageIds.has(messageId); }}
 				onAddSenderRule={onAddSenderRule}
 				onReplyTextChange={function(text) {
 					state.replyText = text;
