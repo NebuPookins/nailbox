@@ -1,6 +1,6 @@
 import util from 'util';
 
-import nebulog from 'nebulog';
+import {createLogger} from '../../../helpers/logger.js';
 
 import {removeThreadFromBundle} from '../../../models/bundle.js';
 import {countWords, htmlToPlainText, readTimeSecondsFor, sanitizeEmailHtml} from './email_html.js';
@@ -14,7 +14,7 @@ import {
 } from '../validation/contracts.js';
 import type {PersistedMessage, PersistedThread, ThreadSummaryDto, ThreadMessageDto, ThreadSummaryFields} from '../types/thread.js';
 
-const logger = nebulog.make({filename: 'src/server/services/thread_service.js', level: 'info'});
+const logger = createLogger({filename: 'src/server/services/thread_service.ts', level: 'info'});
 
 export function createThreadService(dependencies: {
 	threadRepository?: any;

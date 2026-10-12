@@ -1,13 +1,13 @@
 import assert from 'assert';
 import {encode} from 'html-entities';
-import nebulog from 'nebulog';
+import {createLogger} from '../helpers/logger.js';
 import addressparser from 'nodemailer/lib/addressparser';
 import util from 'util';
 
 import {maxBy} from '../helpers/arrays.js';
 import {decodeMimeWords} from '../helpers/mime_words.js';
 
-const logger = nebulog.make({filename: 'models/message.ts', level: 'debug'});
+const logger = createLogger({filename: 'models/message.ts', level: 'debug'});
 
 export interface EmailAddress {
 	name: string;

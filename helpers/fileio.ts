@@ -2,11 +2,11 @@ import path from 'node:path';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import crypto from 'node:crypto';
 
-import nebulog from 'nebulog';
+import {createLogger} from './logger.js';
 
 import {createKeyedSerializer} from './keyed_serializer.js';
 
-const logger = nebulog.make({filename: 'helpers/fileio.ts', level: 'info'});
+const logger = createLogger({filename: 'helpers/fileio.ts', level: 'info'});
 
 /**
  * Returns a promise of a JSON structure representing the parsed contents of

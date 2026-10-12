@@ -2,12 +2,12 @@ import util from 'util';
 import { createServer } from 'node:http';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import path from 'path';
-import nebulog from 'nebulog';
+import {createLogger} from './helpers/logger.js';
 
 import type { AppConfig } from './src/server/types/config.js';
 import type { GmailApiRequestOptions } from './services/google_oauth.mjs';
 
-const logger = nebulog.make({filename: 'main.mts', level: 'debug'});
+const logger = createLogger({filename: 'main.mts', level: 'debug'});
 import helpers_fileio from './helpers/fileio.js';
 
 import threadModel from './models/thread.js';

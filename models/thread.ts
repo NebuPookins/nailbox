@@ -1,10 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import {maxBy, uniqBy} from '../helpers/arrays.js';
-import nebulog from 'nebulog';
+import {createLogger} from '../helpers/logger.js';
 
 import { Message, GmailMessageData, EmailAddress, GmailHeader } from './message.js';
 
-const logger = nebulog.make({filename: 'models/thread.ts', level: 'info'});
+const logger = createLogger({filename: 'models/thread.ts', level: 'info'});
 
 interface GmailThreadData {
 	id: string;

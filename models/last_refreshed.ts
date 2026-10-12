@@ -1,10 +1,10 @@
 
-import nebulog from 'nebulog';
+import {createLogger} from '../helpers/logger.js';
 
 import fileio from '../helpers/fileio.js';
 
 const PATH_TO_LAST_REFRESHED = 'data/LastRefreshed.json';
-const logger = nebulog.make({filename: 'models/last_refreshed.ts', level: 'debug'});
+const logger = createLogger({filename: 'models/last_refreshed.ts', level: 'debug'});
 const DEFAULT_FLUSH_DELAY_MS = 100;
 
 type LastRefreshedJsonData = Record<string, number>;

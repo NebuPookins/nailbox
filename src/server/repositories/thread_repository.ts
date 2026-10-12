@@ -1,7 +1,7 @@
 import {open, readdir, rm} from 'node:fs/promises';
 import util from 'node:util';
 
-import nebulog from 'nebulog';
+import {createLogger} from '../../../helpers/logger.js';
 
 import fileio from '../../../helpers/fileio.js';
 import {createKeyedSerializer} from '../../../helpers/keyed_serializer.js';
@@ -10,7 +10,7 @@ import {summaryFieldsOf} from '../domain/thread_summary.js';
 import {isThreadId, validatePersistedThread} from '../validation/contracts.js';
 import type {EvictThreadOutcome, PersistedThread, ThreadModelLike, ThreadRepository, ThreadSummaryFields} from '../types/thread.js';
 
-const logger = nebulog.make({filename: 'src/server/repositories/thread_repository.ts', level: 'info'});
+const logger = createLogger({filename: 'src/server/repositories/thread_repository.ts', level: 'info'});
 const THREADS_DIRECTORY = 'data/threads';
 // Enough to cover {"id":"<16 hex>","historyId":"<digits>" with room to spare.
 const HISTORY_ID_HEAD_BYTES = 128;

@@ -1,12 +1,12 @@
 import assert from 'assert';
 import util from 'util';
 
-import nebulog from 'nebulog';
+import {createLogger} from '../helpers/logger.js';
 
 import fileio from '../helpers/fileio.js';
 
 const PATH_TO_HIDE_UNTILS = 'data/hideUntils.json';
-const logger = nebulog.make({filename: 'models/hide_until.ts', level: 'debug'});
+const logger = createLogger({filename: 'models/hide_until.ts', level: 'debug'});
 const MESSAGE_IS_STALE_AFTER = 7 * 24 * 60 * 60 * 1000; //1 week in milliseconds
 
 export type Visibility = 'updated' | 'visible' | 'when-i-have-time' | 'hidden' | 'stale';
