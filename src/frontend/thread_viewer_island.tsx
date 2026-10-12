@@ -4,6 +4,7 @@ import type { ThreadMessageDto, PersonDto } from '../server/types/thread.js';
 import type { EmailSummaryDto } from '../server/types/email_summary.js';
 import type { ThreadOpenPayload } from './thread_grouping.js';
 import { AddSenderRuleButton } from './add_sender_rule_button.js';
+import { formatFileSize, formatPrettyTimestamp } from './display_format.js';
 import { formatPerson } from './person_presenter.js';
 import {
 	buildEmailSrcdoc,
@@ -109,27 +110,6 @@ function PeopleList({ people, onAddSenderRule }: PeopleListProps) {
 			})}
 		</>
 	);
-}
-
-function formatPrettyTimestamp(timestamp: number): string {
-	const momentLib = (globalThis as Record<string, unknown>).moment as ((arg?: unknown) => { isSame: (ref: unknown, unit: string) => boolean; format: (fmt: string) => string }) | undefined;
-	if (typeof momentLib !== 'function') {
-		return String(timestamp || '');
-	}
-	const now = momentLib();
-	const m = momentLib(timestamp);
-	if (m.isSame(now, 'day')) return m.format('h:mm A');
-	if (m.isSame(now, 'week')) return m.format('ddd h:mm A');
-	if (m.isSame(now, 'year')) return m.format('MMM Do');
-	return m.format('YYYY-MMM-DD');
-}
-
-function formatFilesize(size: number): string {
-	const filesizeLib = (globalThis as Record<string, unknown>).filesize as ((size: number) => string) | undefined;
-	if (typeof filesizeLib === 'function') {
-		return filesizeLib(size);
-	}
-	return String(size) + ' bytes';
 }
 
 interface DeletedMessagesNoticeProps {
@@ -413,7 +393,7 @@ function MessagePanel({ message, renderMode, remoteContent, onAddSenderRule, onD
 									}}
 								>
 									<span className="glyphicon glyphicon-file" aria-hidden="true"></span>
-									{att.filename} {formatFilesize(att.size)}
+									{att.filename} {formatFileSize(att.size)}
 								</button>
 							);
 						})}

@@ -24,7 +24,16 @@ import {
 import type { Result, ThreadDataResponse } from './api.js';
 import type { LabelResponse, HideUntilValue, AppApi } from './api.js';
 
-declare const saveAs: (blob: Blob, name: string) => void;
+// Saves a blob through the browser's download prompt.
+function saveAs(blob: Blob, fileName: string): void {
+	const url = URL.createObjectURL(blob);
+	const link = document.createElement('a');
+	link.href = url;
+	link.download = fileName;
+	link.click();
+	// Revoking right away can cancel the download in some browsers.
+	setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 // String.prototype.hashCode is declared in string_extensions.d.ts
 

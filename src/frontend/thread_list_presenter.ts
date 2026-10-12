@@ -1,12 +1,11 @@
+import { formatPrettyTimestamp } from './display_format.js';
 import { formatPerson } from './person_presenter.js';
-
-type MomentLib = (ts?: unknown) => { isSame(other: unknown, unit: string): boolean; format(fmt: string): string };
 
 interface Label { id: string; name?: string; type?: string; }
 interface Person { name?: string; email?: string; }
-interface ThreadData { threadId?: string; visibility?: string; senders?: Person[]; receivers?: Person[]; subject?: string; snippet?: string | null; labelIds?: string[]; messageIds?: unknown[]; lastUpdated?: unknown; totalTimeToReadSeconds?: number; recentMessageReadTimeSeconds?: number; }
+interface ThreadData { threadId?: string; visibility?: string; senders?: Person[]; receivers?: Person[]; subject?: string; snippet?: string | null; labelIds?: string[]; messageIds?: unknown[]; lastUpdated?: number; totalTimeToReadSeconds?: number; recentMessageReadTimeSeconds?: number; }
 interface ThreadGroup { label?: string; }
-interface RenderThreadItemOptions { labels?: Label[]; momentLib?: MomentLib; }
+interface RenderThreadItemOptions { labels?: Label[]; }
 
 function escapeHtml(value: unknown): string {
 	return String(value ?? '')
@@ -15,24 +14,6 @@ function escapeHtml(value: unknown): string {
 		.replace(/>/g, '&gt;')
 		.replace(/"/g, '&quot;')
 		.replace(/'/g, '&#39;');
-}
-
-export function formatPrettyTimestamp(timestamp: unknown, momentLib: MomentLib | undefined = (globalThis as Record<string, unknown>).moment as MomentLib | undefined): string {
-	if (!momentLib || typeof momentLib !== 'function') {
-		return escapeHtml(timestamp);
-	}
-	var now = momentLib();
-	var momentToFormat = momentLib(timestamp);
-	if (momentToFormat.isSame(now, 'day')) {
-		return momentToFormat.format('h:mm A');
-	}
-	if (momentToFormat.isSame(now, 'week')) {
-		return momentToFormat.format('ddd h:mm A');
-	}
-	if (momentToFormat.isSame(now, 'year')) {
-		return momentToFormat.format('MMM Do');
-	}
-	return momentToFormat.format('YYYY-MMM-DD');
 }
 
 export function formatReadTime(totalSeconds: number): string {
@@ -125,7 +106,7 @@ export function renderThreadItem(thread: ThreadData, options: RenderThreadItemOp
 				'<div class="col-xs-2">' +
 					escapeHtml((thread.messageIds || []).length) +
 					'<span class="glyphicon glyphicon-envelope"></span>&nbsp;' +
-					escapeHtml(formatPrettyTimestamp(thread.lastUpdated, options.momentLib)) +
+					escapeHtml(formatPrettyTimestamp(thread.lastUpdated ?? Number.NaN)) +
 				'</div>' +
 			'</div>' +
 			'<div class="row">' +

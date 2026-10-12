@@ -87,11 +87,5 @@ html(lang="en")
 				because the name wasn't as catchy and OAuth was significantly harder
 				to get right in Ruby.
 
-		script(type='text/javascript' src='https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js')
 		script(type='text/javascript').
-			$(function() {
-				var origin = window.location.origin;
-				var redirectUri = origin + '/auth/google/callback';
-				$('#host').text(origin);
-				$('#redirect-uri').text(redirectUri);
-			});
+			document.getElementById('redirect-uri').textContent = window.location.origin + '/auth/google/callback';

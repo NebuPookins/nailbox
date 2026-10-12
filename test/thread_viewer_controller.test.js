@@ -6,20 +6,6 @@ import {
 	normalizeBase64AttachmentData,
 } from '../src/frontend/thread_viewer_controller.js';
 
-globalThis.moment = {
-	duration(value, unit) {
-		assert.equal(unit, 'seconds');
-		return {
-			humanize() {
-				if (value === 90) {
-					return '2 minutes';
-				}
-				return `${value} seconds`;
-			},
-		};
-	},
-};
-
 function createMessengerGetter() {
 	const events = [];
 	return {

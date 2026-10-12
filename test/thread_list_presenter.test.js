@@ -9,19 +9,6 @@ import {
 	renderThreadItem,
 } from '../src/frontend/thread_list_presenter.js';
 
-function createMoment() {
-	return function moment(value) {
-		return {
-			isSame(_other, unit) {
-				return value === 'today' ? unit === 'day' : false;
-			},
-			format(pattern) {
-				return pattern === 'h:mm A' ? '9:15 AM' : pattern;
-			},
-		};
-	};
-}
-
 test('formatReadTime handles seconds and minutes', () => {
 	assert.equal(formatReadTime(0), '0 sec read');
 	assert.equal(formatReadTime(45), '45 sec read');
@@ -47,7 +34,7 @@ test('renderThreadGroup wraps the group label', () => {
 test('renderThreadItem escapes content and includes controls', () => {
 	const html = renderThreadItem({
 		labelIds: ['INBOX', 'Label_1'],
-		lastUpdated: 'today',
+		lastUpdated: Date.now(),
 		messageIds: ['m1', 'm2'],
 		receivers: [{name: 'Bob'}],
 		recentMessageReadTimeSeconds: 30,
@@ -59,7 +46,6 @@ test('renderThreadItem escapes content and includes controls', () => {
 		visibility: 'updated',
 	}, {
 		labels: [{id: 'Label_1', name: 'Finance', type: 'user'}],
-		momentLib: createMoment(),
 	});
 
 	assert.match(html, /class="thread visibility-updated"/);

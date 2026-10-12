@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
+import { formatPrettyTimestamp } from './display_format.js';
 import {
-	formatPrettyTimestamp,
 	formatReadTime,
 	getThreadMainDisplayedLabelIds,
 	getLabelName,

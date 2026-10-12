@@ -1,6 +1,7 @@
-declare const moment: {
-	duration(amount: number, unit: string): { humanize(): string; as(unit: string): number };
-};
+import { humanizeDuration } from './display_format.js';
+import type { PersonDto, ThreadMessageDto } from '../server/types/thread.js';
+import type { ThreadOpenPayload } from './thread_grouping.js';
+import type { Result, ThreadDataResponse } from './api.js';
 
 interface MsgHandle {
 	update(opts: { type: string; message: string }): void;
@@ -10,10 +11,6 @@ interface Messenger {
 	info(message: string): MsgHandle;
 	error(message: string): MsgHandle;
 }
-
-import type { PersonDto, ThreadMessageDto } from '../server/types/thread.js';
-import type { ThreadOpenPayload } from './thread_grouping.js';
-import type { Result, ThreadDataResponse } from './api.js';
 
 type RenderedMessage = ThreadMessageDto & { duration: string };
 
@@ -195,7 +192,7 @@ export function createThreadViewerController({
 				nonDeletedMessages.forEach(function(message) {
 					var renderedMessage: RenderedMessage = {
 						...message,
-						duration: moment.duration(message.timeToReadSeconds ?? 0, 'seconds').humanize(),
+						duration: humanizeDuration(message.timeToReadSeconds ?? 0),
 					};
 					options.appendMessage(renderedMessage);
 				});
