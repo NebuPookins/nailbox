@@ -21,6 +21,12 @@ test('maxBy returns the highest-scoring item, preferring the earliest on ties', 
 	assert.equal(maxBy(items, (item) => item.size), items[1]);
 });
 
+test('maxBy skips items whose score is NaN', () => {
+	const items = [{id: 'a', size: Number.NaN}, {id: 'b', size: 2}];
+	assert.equal(maxBy(items, (item) => item.size), items[1]);
+	assert.equal(maxBy([{size: Number.NaN}], (item) => item.size), undefined);
+});
+
 test('maxBy of an empty array is undefined', () => {
 	assert.equal(maxBy([], () => 0), undefined);
 });

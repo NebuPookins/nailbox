@@ -215,3 +215,11 @@ test('buildRfc2822Message inlines syntax highlighting styles in the HTML body', 
 	assert.match(html, /<span class="hljs-keyword" style="color:#859900">const<\/span>/);
 	assert.match(html, /<span class="hljs-string" style="color:#2aa198">/);
 });
+
+test('buildRfc2822Message keeps links in any scheme and raw HTML comments in the HTML body', async () => {
+	const html = decodeQuotedPrintable(await buildReplyMimeText([], '[call me](sms:123) ![logo](cid:logo@x)\n\n<!-- note -->'));
+
+	assert.match(html, /<a href="sms:123">call me<\/a>/);
+	assert.match(html, /<img src="cid:logo@x" alt="logo"/);
+	assert.match(html, /<!-- note -->/);
+});

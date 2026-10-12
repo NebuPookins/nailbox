@@ -54,18 +54,24 @@ export function formatPrettyTimestamp(timestamp: number, now: Date = new Date())
 
 /**
  * An approximate, human-friendly length of time, e.g. "a few seconds",
- * "a minute", "12 minutes", "an hour", "3 hours", "a day", "4 days".
+ * "12 minutes", "an hour", "4 days", "3 months", "a year", using moment's
+ * humanize thresholds.
  */
 export function humanizeDuration(totalSeconds: number): string {
 	const minutes = Math.round(totalSeconds / 60);
 	const hours = Math.round(totalSeconds / 3600);
+	const days = Math.round(totalSeconds / 86400);
 	if (totalSeconds < 45) return 'a few seconds';
 	if (totalSeconds < 90) return 'a minute';
 	if (minutes < 45) return `${minutes} minutes`;
 	if (minutes < 90) return 'an hour';
 	if (hours < 22) return `${hours} hours`;
 	if (hours < 36) return 'a day';
-	return `${Math.round(totalSeconds / 86400)} days`;
+	if (days < 26) return `${days} days`;
+	if (days < 45) return 'a month';
+	if (days < 320) return `${Math.round(days / 30.4)} months`;
+	if (days < 548) return 'a year';
+	return `${Math.round(days / 365)} years`;
 }
 
 const FILE_SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'] as const;

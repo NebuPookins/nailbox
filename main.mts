@@ -165,9 +165,16 @@ const gmailSyncer = createGmailSyncer({
 });
 
 const app = express();
-// Bundled assets have content hashes in their names, so they never change.
-app.use('/public/assets', express.static('public/assets', {immutable: true, maxAge: '1y'}));
-app.use('/public', express.static('public'));
+// Bundled assets have content hashes in their names (see
+// scripts/build_frontend.mjs), so they never change.
+const FINGERPRINTED_ASSET = /-[A-Z0-9]{8}\.[a-z0-9]+$/;
+app.use('/public', express.static('public', {
+	setHeaders(res, filePath) {
+		if (FINGERPRINTED_ASSET.test(filePath)) {
+			res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+		}
+	},
+}));
 app.use(express.json({limit: '10mb'}));
 app.use(express.urlencoded({limit: '10mb', parameterLimit: 10000, extended: true }));
 app.use(function (req: Request, res: Response, next: NextFunction) {

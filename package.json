@@ -28,6 +28,7 @@
     "html-entities": "^2.6.0",
     "marked": "^18.1.1",
     "nodemailer": "^10.1.0",
+    "posthtml": "^0.16.7",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "sanitize-html": "^2.18.0",

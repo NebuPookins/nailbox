@@ -15,11 +15,14 @@ export function uniqBy<T>(items: readonly T[], key: (item: T) => unknown): T[] {
 
 /**
  * The item with the highest score (the earliest one on ties), or undefined if
- * the array is empty.
+ * no item has a score that is a number (NaN scores are skipped).
  */
 export function maxBy<T>(items: readonly T[], score: (item: T) => number): T | undefined {
-	return items.reduce<T | undefined>(
-		(best, item) => best === undefined || score(item) > score(best) ? item : best,
-		undefined,
-	);
+	return items
+		.map((item) => ({item, itemScore: score(item)}))
+		.filter(({itemScore}) => !Number.isNaN(itemScore))
+		.reduce<{item: T; itemScore: number} | undefined>(
+			(best, candidate) => best === undefined || candidate.itemScore > best.itemScore ? candidate : best,
+			undefined,
+		)?.item;
 }

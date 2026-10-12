@@ -16,3 +16,7 @@ test('decodeMimeWords leaves plain text and words in unknown charsets unchanged'
 	assert.equal(decodeMimeWords('Alfred Alpha'), 'Alfred Alpha');
 	assert.equal(decodeMimeWords('=?x-not-a-charset?Q?abc?='), '=?x-not-a-charset?Q?abc?=');
 });
+
+test('decodeMimeWords decodes a multi-byte character split across adjacent encoded words', () => {
+	assert.equal(decodeMimeWords('=?UTF-8?B?8J+Y?= =?UTF-8?B?gA==?= <e@example.com>'), '\u{1F600} <e@example.com>');
+});

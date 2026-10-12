@@ -43,6 +43,10 @@ test('humanizeDuration describes read times approximately', () => {
 	assert.equal(humanizeDuration(3 * 3600), '3 hours');
 	assert.equal(humanizeDuration(24 * 3600), 'a day');
 	assert.equal(humanizeDuration(4 * 86400), '4 days');
+	assert.equal(humanizeDuration(30 * 86400), 'a month');
+	assert.equal(humanizeDuration(90 * 86400), '3 months');
+	assert.equal(humanizeDuration(400 * 86400), 'a year');
+	assert.equal(humanizeDuration(800 * 86400), '2 years');
 });
 
 test('formatFileSize uses binary units rounded to two decimals', () => {

@@ -2,7 +2,7 @@ import util from 'util';
 
 import {marked} from 'marked';
 import hljs from 'highlight.js';
-import sanitizeHtml from 'sanitize-html';
+import posthtml from 'posthtml';
 import {encode} from 'html-entities';
 import MailComposer from 'nodemailer/lib/mail-composer';
 import type MimeNode from 'nodemailer/lib/mime-node';
@@ -50,23 +50,14 @@ const HLJS_CLASS_STYLES: ReadonlyMap<string, string> = new Map([
 	['hljs-strong', 'font-weight:700'],
 ]);
 
-// Rewrites tags in trusted HTML without removing anything.
-function transformHtmlTags(html: string, transformTags: sanitizeHtml.IOptions['transformTags']): string {
-	return sanitizeHtml(html, {allowedTags: false, allowedAttributes: false, transformTags});
-}
+const PRE_STYLE = 'background:#002b36; color:#839496';
 
 // A fence's language tag is free text, and hljs.highlight throws on names it
 // doesn't know, so anything unrecognized falls back to auto-detection.
 function renderHighlightedCode(code: string, lang: string): string {
-	const htmlWithClasses = hljs.getLanguage(lang) ?
+	return hljs.getLanguage(lang) ?
 		hljs.highlight(code, {language: lang, ignoreIllegals: true}).value :
 		hljs.highlightAuto(code).value;
-	return transformHtmlTags(htmlWithClasses, {
-		span: (tagName, attribs) => {
-			const style = HLJS_CLASS_STYLES.get(attribs.class ?? '');
-			return {tagName, attribs: style ? {...attribs, style} : attribs};
-		},
-	});
 }
 
 marked.use({
@@ -84,9 +75,16 @@ async function markdownToHtml(bodyPlusSignature: string): Promise<string> {
 		gfm: true,
 		breaks: true,
 	});
-	return transformHtmlTags(content, {
-		pre: () => ({tagName: 'pre', attribs: {style: 'background:#002b36; color:#839496'}}),
-	});
+	const result = await posthtml()
+		.use((tree) => {
+			tree.match({tag: 'pre'}, (node) => ({...node, attrs: {style: PRE_STYLE}}));
+			tree.match({tag: 'span'}, (node) => {
+				const style = HLJS_CLASS_STYLES.get(node.attrs?.class ?? '');
+				return style ? {...node, attrs: {...node.attrs, style}} : node;
+			});
+		})
+		.process(content);
+	return result.html;
 }
 
 function normalizeEmailAddress(emailAddress: unknown): string {
