@@ -4,21 +4,24 @@ import type {Application, Request, Response} from 'express';
 
 import {getGoogleAuthStatus, getGoogleOAuthConfig, isGoogleOAuthConfigured} from '../../../services/google_oauth.mjs';
 import {normalizeGoogleOAuthSetupDto, normalizeProfileSetupDto} from '../validation/contracts.js';
-import {ANTHROPIC_MODELS} from '../types/config.js';
+import frontendAssetService from '../services/frontend_asset_service.js';
+import type {AppConfig} from '../types/config.js';
+import {renderIndexPage} from '../views/index_page.js';
+import type {GoogleOAuthViewModel, PageNotice} from '../views/page.js';
+import {renderProfilePage} from '../views/profile_page.js';
+import {renderSetupPage} from '../views/setup_page.js';
 
 function getDefaultRedirectUri(req: Request): string {
 	return `${req.protocol}://${req.get('host')}/auth/google/callback`;
 }
 
-function getSetupViewModel(config: any, req: Request, overrides: Record<string, unknown> = {}): Record<string, unknown> {
-	const googleOAuth = getGoogleOAuthConfig(config);
-	return Object.assign({
-		googleOAuth,
+function getSetupViewModel(config: AppConfig, req: Request, notice?: PageNotice): GoogleOAuthViewModel {
+	return {
+		googleOAuth: getGoogleOAuthConfig(config),
 		authStatus: getGoogleAuthStatus(config),
 		defaultRedirectUri: getDefaultRedirectUri(req),
-		errorMessage: null,
-		successMessage: null,
-	}, overrides);
+		notice,
+	};
 }
 
 export default function registerSetupRoutes(app: Application, dependencies: any): void {
@@ -26,31 +29,25 @@ export default function registerSetupRoutes(app: Application, dependencies: any)
 
 	app.get('/', function(req: Request, res: Response) {
 		if (isGoogleOAuthConfigured(config)) {
-			res.render('index');
+			res.send(renderIndexPage(frontendAssetService.assetPath('main.ts')));
 		} else {
 			res.redirect('/setup');
 		}
 	});
 
 	app.get('/setup', function(req: Request, res: Response) {
-		res.render('setup', getSetupViewModel(config, req));
+		res.send(renderSetupPage(getSetupViewModel(config, req)));
 	});
 
-	function getProfileViewModel(req: Request, overrides: Record<string, unknown> = {}): Record<string, unknown> {
-		const googleOAuth = getGoogleOAuthConfig(config);
-		return Object.assign({
-			googleOAuth,
-			authStatus: getGoogleAuthStatus(config),
-			defaultRedirectUri: getDefaultRedirectUri(req),
-			anthropicModels: ANTHROPIC_MODELS,
+	function renderProfile(req: Request, notice?: PageNotice): string {
+		return renderProfilePage({
+			...getSetupViewModel(config, req, notice),
 			anthropic: config.anthropic ?? {},
-			errorMessage: null,
-			successMessage: null,
-		}, overrides);
+		});
 	}
 
 	app.get('/profile', function(req: Request, res: Response) {
-		res.render('profile', getProfileViewModel(req));
+		res.send(renderProfile(req));
 	});
 
 	app.post('/profile', async function(req: Request, res: Response) {
@@ -59,11 +56,11 @@ export default function registerSetupRoutes(app: Application, dependencies: any)
 			Object.assign(getGoogleOAuthConfig(config), profile.googleOAuth);
 			config.anthropic = profile.anthropic;
 			await saveConfig();
-			res.render('profile', getProfileViewModel(req, {successMessage: 'Profile settings saved.'}));
+			res.send(renderProfile(req, {kind: 'success', text: 'Profile settings saved.'}));
 		} catch (error) {
 			const err = error as Error & {code?: string};
 			if (err.code === 'INVALID_CONTRACT') {
-				res.status(400).render('profile', getProfileViewModel(req, {errorMessage: err.message}));
+				res.status(400).send(renderProfile(req, {kind: 'error', text: err.message}));
 				return;
 			}
 			logger.error(util.format('Failed to save profile config: %s', util.inspect(error)));
@@ -80,15 +77,17 @@ export default function registerSetupRoutes(app: Application, dependencies: any)
 			googleOAuth.redirectUri = googleOAuthSetup.redirectUri;
 			logger.info('Updating Google OAuth configuration.');
 			await saveConfig();
-			res.render('setup', getSetupViewModel(config, req, {
-				successMessage: 'Google OAuth configuration saved.',
-			}));
+			res.send(renderSetupPage(getSetupViewModel(config, req, {
+				kind: 'success',
+				text: 'Google OAuth configuration saved.',
+			})));
 		} catch (error) {
 			const err = error as Error & {code?: string};
 			if (err.code === 'INVALID_CONTRACT') {
-				res.status(400).render('setup', getSetupViewModel(config, req, {
-					errorMessage: err.message,
-				}));
+				res.status(400).send(renderSetupPage(getSetupViewModel(config, req, {
+					kind: 'error',
+					text: err.message,
+				})));
 				return;
 			}
 			logger.error(util.format('Failed to save config file: %s', util.inspect(error)));

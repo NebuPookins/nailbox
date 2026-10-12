@@ -14,6 +14,7 @@ import {
 	isGoogleOAuthConfigured,
 } from '../../../services/google_oauth.mjs';
 import {getSetupViewModel} from './setup_routes.js';
+import {renderSetupPage} from '../views/setup_page.js';
 
 function setCookie(res: Response, name: string, value: string, options: {
 	path?: string;
@@ -87,23 +88,26 @@ export default function registerAuthRoutes(app: Application, dependencies: any):
 		const cookies = parseCookies(req);
 		clearCookie(res, 'google_oauth_state', {path: '/auth/google/callback'});
 		if (!req.query.state || req.query.state !== cookies.google_oauth_state) {
-			res.status(400).render('setup', getSetupViewModel(config, req, {
-				errorMessage: 'Google OAuth state validation failed. Please try connecting again.',
-			}));
+			res.status(400).send(renderSetupPage(getSetupViewModel(config, req, {
+				kind: 'error',
+				text: 'Google OAuth state validation failed. Please try connecting again.',
+			})));
 			return;
 		}
 		if (req.query.error) {
-			res.status(400).render('setup', getSetupViewModel(config, req, {
-				errorMessage: `Google authorization failed: ${req.query.error}`,
-			}));
+			res.status(400).send(renderSetupPage(getSetupViewModel(config, req, {
+				kind: 'error',
+				text: `Google authorization failed: ${req.query.error}`,
+			})));
 			return;
 		}
 		try {
 			const code = req.query.code;
 			if (typeof code !== 'string') {
-				res.status(400).render('setup', getSetupViewModel(config, req, {
-					errorMessage: 'Missing or invalid authorization code.',
-				}));
+				res.status(400).send(renderSetupPage(getSetupViewModel(config, req, {
+					kind: 'error',
+					text: 'Missing or invalid authorization code.',
+				})));
 				return;
 			}
 			const tokenResponse = await exchangeCodeForTokens(config, code);
@@ -130,9 +134,10 @@ export default function registerAuthRoutes(app: Application, dependencies: any):
 			res.redirect('/?googleAuth=success');
 		} catch (error) {
 			logger.error(util.format('Failed during Google OAuth callback: %s', util.inspect(error)));
-			res.status(500).render('setup', getSetupViewModel(config, req, {
-				errorMessage: 'Failed to complete Google OAuth setup. Verify client ID, client secret, and redirect URI.',
-			}));
+			res.status(500).send(renderSetupPage(getSetupViewModel(config, req, {
+				kind: 'error',
+				text: 'Failed to complete Google OAuth setup. Verify client ID, client secret, and redirect URI.',
+			})));
 		}
 	});
 

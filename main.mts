@@ -1,7 +1,6 @@
 import util from 'util';
 import { createServer } from 'node:http';
 import express, { type NextFunction, type Request, type Response } from 'express';
-import path from 'path';
 import {createLogger} from './helpers/logger.js';
 
 import type { AppConfig } from './src/server/types/config.js';
@@ -30,7 +29,6 @@ import configRepository from './src/server/repositories/config_repository.js';
 import registerSetupRoutes from './src/server/routes/setup_routes.js';
 import registerThreadRoutes from './src/server/routes/thread_routes.js';
 import registerBundleRoutes from './src/server/routes/bundle_routes.js';
-import frontendAssetService from './src/server/services/frontend_asset_service.js';
 import { createThreadUpdatesNotifier } from './src/server/services/thread_updates_notifier.js';
 import { startGmailPoller } from './src/server/services/gmail_poller.js';
 import { createGmailQuotaLimiter, gmailRequestCost } from './src/server/services/gmail_quota_limiter.js';
@@ -167,9 +165,6 @@ const gmailSyncer = createGmailSyncer({
 });
 
 const app = express();
-app.set('views', path.join(process.cwd(), 'views'));
-app.set('view engine', 'pug');
-app.locals.assetPath = frontendAssetService.assetPath;
 app.use('/public', express.static('public'));
 app.use(express.json({limit: '10mb'}));
 app.use(express.urlencoded({limit: '10mb', parameterLimit: 10000, extended: true }));
