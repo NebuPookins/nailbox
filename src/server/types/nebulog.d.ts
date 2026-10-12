@@ -9,30 +9,3 @@ declare module 'nebulog' {
   const nebulog: { make: typeof make };
   export default nebulog;
 }
-
-declare module 'sanitize-html' {
-  const sanitizeHtml: any;
-  export = sanitizeHtml;
-}
-
-declare module 'mailcomposer' {
-  const mailcomposer: any;
-  export = mailcomposer;
-}
-
-declare module 'mimelib' {
-  const mimelib: any;
-  export = mimelib;
-}
-
-declare module 'posthtml' {
-  interface Result {
-    html: string;
-  }
-  interface PostHTML {
-    use(plugin: any): PostHTML;
-    process(html: string, options?: any): Result & Promise<Result>;
-  }
-  function posthtml(): PostHTML;
-  export = posthtml;
-}

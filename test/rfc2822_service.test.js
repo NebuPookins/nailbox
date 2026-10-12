@@ -201,3 +201,17 @@ test('buildRfc2822Message escapes a code fence language tag in the HTML body', a
 
 	assert.doesNotMatch(mimeText, /language-a"onmouseover/);
 });
+
+function decodeQuotedPrintable(text) {
+	return text
+		.replace(/=\r?\n/g, '')
+		.replace(/=([0-9A-F]{2})/g, (_match, hex) => String.fromCharCode(parseInt(hex, 16)));
+}
+
+test('buildRfc2822Message inlines syntax highlighting styles in the HTML body', async () => {
+	const html = decodeQuotedPrintable(await buildReplyMimeText([], '```js\nconst x = "hi";\n```'));
+
+	assert.match(html, /<pre style="background:#002b36; ?color:#839496"><code class="language-js">/);
+	assert.match(html, /<span class="hljs-keyword" style="color:#859900">const<\/span>/);
+	assert.match(html, /<span class="hljs-string" style="color:#2aa198">/);
+});

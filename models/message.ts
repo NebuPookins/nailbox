@@ -1,10 +1,11 @@
 import assert from 'assert';
 import {encode} from 'html-entities';
 import nebulog from 'nebulog';
-import mimelib from 'mimelib';
+import addressparser from 'nodemailer/lib/addressparser';
 import util from 'util';
 
 import {maxBy} from '../helpers/arrays.js';
+import {decodeMimeWords} from '../helpers/mime_words.js';
 
 const logger = nebulog.make({filename: 'models/message.ts', level: 'debug'});
 
@@ -64,9 +65,10 @@ export interface Attachment {
  * ]
  */
 function parseEmailToString(str: string): EmailAddress[] {
-	return mimelib.parseAddresses(str).map((entry: {name: string; address: string}) => {
-		const name = entry.name ? entry.name : (entry.address || '(unknown)');
-		return {name: name, email: entry.address || undefined};
+	return addressparser(str).map((entry) => {
+		const address = 'address' in entry ? entry.address : '';
+		const name = entry.name ? decodeMimeWords(entry.name) : (address || '(unknown)');
+		return {name: name, email: address || undefined};
 	});
 }
 (function test_parseEmailToString() {
@@ -92,15 +94,24 @@ function parseEmailToString(str: string): EmailAddress[] {
 	assert.deepEqual(
 		parseEmailToString('undisclosed-recipients:;'),
 		[{name: 'undisclosed-recipients', email: undefined}]);
+	// Encoded-word display names are decoded
+	assert.deepEqual(
+		parseEmailToString('=?UTF-8?B?w6lsw6luZQ==?= <ee@gmail.com>'),
+		[{name: 'éléne', email: 'ee@gmail.com'}]);
 })();
+
+// Gmail sends bodies as base64url; Buffer's base64 decoder accepts either alphabet.
+function decodeBase64(data: string | undefined): string {
+	return Buffer.from(data ?? '', 'base64').toString('utf8');
+}
 
 function formatPartAsHtml(messagePart: GmailMessagePart, threadId: string): string {
 	logger.info(`Formatting part with mime type ${messagePart.mimeType} as HTML...`)
 	switch (messagePart.mimeType) {
 		case 'text/plain':
-			return '<pre>' + encode(mimelib.decodeBase64(messagePart.body.data ?? '')) + '</pre>';
+			return '<pre>' + encode(decodeBase64(messagePart.body.data)) + '</pre>';
 		case 'text/html':
-			return mimelib.decodeBase64(messagePart.body.data ?? '');
+			return decodeBase64(messagePart.body.data);
 		default:
 			logger.error(util.format("Don't know how to handle mimeType %s in thread %s.", messagePart.mimeType, threadId));
 			return '';
@@ -146,7 +157,7 @@ function selectedBestPart(messagePart: GmailMessagePart, threadId: string): Gmai
 (function test_selectedBestPart() {
 	console.log("Running tests on selectedBestPart...");
 	const goodDecoded = "good";
-	const goodEncoded = mimelib.encodeBase64(goodDecoded);
+	const goodEncoded = Buffer.from(goodDecoded).toString('base64');
 	(() => {
 		// If the part is text/html, just return it.
 		const bestPart: GmailMessagePart = {
@@ -482,7 +493,7 @@ export class Message {
 	 */
 	plainTextAlternative(): string | null {
 		const part = bodyPlainTextPart(this._data.payload);
-		return part ? mimelib.decodeBase64(part.body.data ?? '') : null;
+		return part ? decodeBase64(part.body.data) : null;
 	}
 
 	/**
