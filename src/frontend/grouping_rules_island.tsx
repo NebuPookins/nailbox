@@ -180,7 +180,7 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 				) : rules.length === 0 ? (
 					<p className="text-body-secondary">No rules defined yet.</p>
 				) : rules.map((rule, ruleIndex) => (
-					<div className="card mb-3" key={`${ruleIndex}-${reloadToken}`} style={{ marginBottom: '15px' }}>
+					<div className="card" key={`${ruleIndex}-${reloadToken}`} style={{ marginBottom: '15px' }}>
 						<div
 							aria-expanded={expanded[ruleIndex] ? true : false}
 							className="card-header"

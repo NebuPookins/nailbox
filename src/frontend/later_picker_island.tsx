@@ -1,13 +1,7 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { LATER_PRESET_OPTIONS, resolveHideUntilPreset } from './later_picker_presets.js';
+import { LATER_PRESET_OPTIONS, resolveHideUntilPreset, type LaterPresetOption } from './later_picker_presets.js';
 import type { HideUntilValue } from './api.js';
-
-interface LaterPresetOption {
-	icon: string;
-	label: string;
-	value: string;
-}
 
 interface Notify {
 	error?: (msg: string) => void;
@@ -63,11 +57,9 @@ function LaterPickerApp({ notify, onDismiss, state }: LaterPickerAppProps) {
 		}
 	}
 
-	const presetOptions = LATER_PRESET_OPTIONS as LaterPresetOption[];
-
 	return (
 		<div className="later-picker-app">
-			{chunkPresetOptions(presetOptions, 3).map((row, rowIndex) => (
+			{chunkPresetOptions(LATER_PRESET_OPTIONS, 3).map((row, rowIndex) => (
 				<div className="row" key={`later-picker-row-${rowIndex}`}>
 					{row.map((option) => (
 						<div className="col-4" key={option.value}>

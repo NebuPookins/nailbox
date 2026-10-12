@@ -1,19 +1,26 @@
 @import 'bootstrap/dist/css/bootstrap.min.css';
 @import 'bootstrap-icons/font/bootstrap-icons.min.css';
 
-/* Bootstrap 5 sizes everything in rem; a 14px root keeps the dense layout
-   this UI was designed with under Bootstrap 3. */
+/* Bootstrap 5 sizes everything in rem; a 14px root (by default) keeps the
+   dense layout this UI was designed with under Bootstrap 3. */
 html {
-	font-size: 14px;
+	font-size: 87.5%;
+}
+/* Bootstrap 3's default modal width, which the pickers were laid out for */
+.modal {
+	--bs-modal-width: 600px;
+}
+/* Bootstrap 5 dropped the jumbotron component */
+.jumbotron {
+	padding: 3rem;
+	margin-bottom: 1.5rem;
+	background-color: var(--bs-tertiary-bg);
+	border-radius: var(--bs-border-radius-lg);
 }
 .spin {
 	animation: spin 4s linear infinite;
 }
 @keyframes spin { 100% { transform: rotate(360deg); } }
-/* Bootstrap 3's default modal width, which the preset grid was laid out for */
-#later-picker .modal-dialog {
-	max-width: 600px;
-}
 #later-picker .row .button {
 	display: block;
 	width: 100%;
@@ -87,16 +94,6 @@ html {
 		max-width: 949px;
 	}
 }
-.rule-item {
-	margin-bottom: 15px;
-}
-.condition-item {
-	margin-bottom: 10px;
-}
-.condition-item .form-control,
-.condition-item .form-select {
-	margin-bottom: 5px;
-}
 #settings-modal .modal-dialog {
 	max-width: min(90%, 1000px);
 }
@@ -127,8 +124,7 @@ html {
 		max-width: 100%;
 	}
 	/* Larger tap targets for action buttons */
-	.thread .btn,
-	.thread a.btn {
+	.thread .btn {
 		min-height: 40px;
 		min-width: 40px;
 		padding: 8px 10px;

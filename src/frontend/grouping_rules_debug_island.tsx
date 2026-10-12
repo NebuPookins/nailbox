@@ -64,15 +64,13 @@ function ThreadEvaluationBlock({evaluation, threadIndex}: {evaluation: ThreadEva
 }
 
 function RulePanel({ruleTrace, ruleIndex, isBundle}: {ruleTrace: RuleTrace; ruleIndex: number; isBundle: boolean}) {
-	let panelClass = 'card mb-3';
+	let panelClass = 'card';
 	let headerLabel = 'Did not match';
 	let headerColor = '#999';
 	if (ruleTrace.skipped) {
-		panelClass = 'card mb-3';
 		headerLabel = 'Skipped';
-		headerColor = '#999';
 	} else if (ruleTrace.matched) {
-		panelClass = 'card border-success mb-3';
+		panelClass = 'card border-success';
 		headerLabel = 'Matched';
 		headerColor = '#3c763d';
 	}

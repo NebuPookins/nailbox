@@ -19,7 +19,7 @@ function StatusBanner({ state }: StatusBannerProps) {
 	}
 	if (state.type === 'setup-needed') {
 		return (
-			<div className="p-5 mb-4 bg-body-tertiary rounded-3">
+			<div className="jumbotron">
 				<h1>Google OAuth setup required</h1>
 				<p>{state.message || 'Configure Google OAuth before Nailbox can talk to Gmail.'}</p>
 				<p><a className="btn btn-primary" href="/setup">Open setup</a></p>
@@ -28,7 +28,7 @@ function StatusBanner({ state }: StatusBannerProps) {
 	}
 	if (state.type === 'disconnected') {
 		return (
-			<div className="p-5 mb-4 bg-body-tertiary rounded-3">
+			<div className="jumbotron">
 				<h1>Connect Gmail</h1>
 				<p>{state.message || 'Gmail is not connected.'}</p>
 				<p>
@@ -40,7 +40,7 @@ function StatusBanner({ state }: StatusBannerProps) {
 	}
 	if (state.type === 'connected-loading') {
 		return (
-			<div className="p-5 mb-4 bg-body-tertiary rounded-3">
+			<div className="jumbotron">
 				<h1>Loading Nailbox</h1>
 				<p>Reading cached mail and refreshing Gmail in the background...</p>
 			</div>
@@ -48,7 +48,7 @@ function StatusBanner({ state }: StatusBannerProps) {
 	}
 	if (state.type === 'empty') {
 		return (
-			<div className="p-5 mb-4 bg-body-tertiary rounded-3">
+			<div className="jumbotron">
 				<h1>No mail in cache yet</h1>
 				<p>Use &ldquo;Sync Gmail&rdquo; to download mail into the local cache.</p>
 			</div>
@@ -56,7 +56,7 @@ function StatusBanner({ state }: StatusBannerProps) {
 	}
 	if (state.type === 'error') {
 		return (
-			<div className="p-5 mb-4 bg-body-tertiary rounded-3">
+			<div className="jumbotron">
 				<h1>Failed to load cached mail</h1>
 				<p>Check the server logs, then try syncing Gmail again.</p>
 			</div>

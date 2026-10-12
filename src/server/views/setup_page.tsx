@@ -10,7 +10,7 @@ function SetupPage({ stylesheetPath, googleOAuth, authStatus, defaultRedirectUri
 			<Head title="Nailbox - Setup" stylesheetPath={stylesheetPath} />
 			<body>
 				<div className="container">
-					<div id="status" className="p-5 my-4 bg-body-tertiary rounded-3">
+					<div id="status" className="jumbotron mt-4">
 						<h1 className="display-4">Nailbox</h1>
 						<hr />
 						<h2>The world's 2nd best e-mail client</h2>

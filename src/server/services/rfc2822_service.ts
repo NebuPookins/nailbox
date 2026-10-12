@@ -8,6 +8,7 @@ import MailComposer from 'nodemailer/lib/mail-composer';
 import type MimeNode from 'nodemailer/lib/mime-node';
 
 import {uniqBy} from '../../../helpers/arrays.js';
+import type {Logger} from '../../../helpers/logger.js';
 
 // Email clients drop <style> blocks, so highlight.js's classes are turned into
 // inline Solarized Dark styles.
@@ -151,7 +152,7 @@ function buildMail({thread, htmlizedMarkdown, bodyPlusSignature, myEmail, replyM
 	}).compile();
 }
 
-async function buildMimeMessage(mail: MimeNode, logger: any): Promise<Buffer> {
+async function buildMimeMessage(mail: MimeNode, logger: Logger): Promise<Buffer> {
 	try {
 		return await mail.build();
 	} catch (error) {
@@ -179,7 +180,7 @@ export function createRfc2822Service(dependencies: {
 		body: string;
 		inReplyTo: string;
 		myEmail: string;
-		logger: any;
+		logger: Logger;
 	}): Promise<string> {
 		const bodyPlusSignature = `${body}\n\n---\nSent using [Nailbox](https://github.com/NebuPookins/nailbox/).`;
 		const thread = await repository.readThread(threadId);
