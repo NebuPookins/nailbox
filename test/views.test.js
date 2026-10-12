@@ -10,6 +10,7 @@ const connected = {configured: true, connected: true, emailAddress: 'me@example.
 
 function setupViewModel(overrides = {}) {
 	return {
+		stylesheetPath: '/public/assets/styles-XYZ.css',
 		googleOAuth: {clientId: 'client-id', clientSecret: 'secret'},
 		authStatus: disconnected,
 		defaultRedirectUri: 'http://localhost:3000/auth/google/callback',
@@ -18,9 +19,13 @@ function setupViewModel(overrides = {}) {
 }
 
 test('renderIndexPage is an HTML document that loads the client bundle and its mount points', () => {
-	const html = renderIndexPage('/public/assets/main-ABC.js');
+	const html = renderIndexPage({
+		mainScriptPath: '/public/assets/main-ABC.js',
+		stylesheetPath: '/public/assets/styles-XYZ.css',
+	});
 
 	assert.match(html, /^<!DOCTYPE html>/);
+	assert.match(html, /<link rel="stylesheet" href="\/public\/assets\/styles-XYZ\.css"\/>/);
 	assert.match(html, /<script src="\/public\/assets\/main-ABC\.js"><\/script>/);
 	for (const id of ['thread-list-root', 'thread-viewer', 'later-picker', 'label-picker', 'settings-modal', 'sender-rule-root']) {
 		assert.match(html, new RegExp(`id="${id}"`));
@@ -32,6 +37,7 @@ test('renderSetupPage fills in the saved OAuth settings, defaulting the redirect
 
 	assert.match(html, /name="clientId"[^>]*value="client-id"/);
 	assert.match(html, /name="redirectUri"[^>]*value="http:\/\/localhost:3000\/auth\/google\/callback"/);
+	assert.match(html, /<link rel="stylesheet" href="\/public\/assets\/styles-XYZ\.css"\/>/);
 	assert.match(html, /Gmail is not connected yet\./);
 	assert.match(html, />Connect Gmail</);
 });

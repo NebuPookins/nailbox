@@ -39,16 +39,15 @@ function showToast(initialMessage: string, initialType: string): MsgHandle {
 
 	const closeBtn = document.createElement('button');
 	closeBtn.type = 'button';
-	closeBtn.className = 'close';
+	closeBtn.className = 'btn-close';
 	closeBtn.setAttribute('aria-label', 'Close');
-	closeBtn.innerHTML = '<span aria-hidden="true">&times;</span>';
 	closeBtn.addEventListener('click', function() { el.remove(); });
 
 	const textSpan = document.createElement('span');
 	textSpan.textContent = initialMessage;
 
-	el.appendChild(closeBtn);
 	el.appendChild(textSpan);
+	el.appendChild(closeBtn);
 	container.appendChild(el);
 
 	let autoTimer: ReturnType<typeof setTimeout> = setTimeout(function() { el.remove(); }, AUTO_DISMISS_MS);

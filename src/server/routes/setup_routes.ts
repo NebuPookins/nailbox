@@ -17,6 +17,7 @@ function getDefaultRedirectUri(req: Request): string {
 
 function getSetupViewModel(config: AppConfig, req: Request, notice?: PageNotice): GoogleOAuthViewModel {
 	return {
+		stylesheetPath: frontendAssetService.assetPath('styles.css'),
 		googleOAuth: getGoogleOAuthConfig(config),
 		authStatus: getGoogleAuthStatus(config),
 		defaultRedirectUri: getDefaultRedirectUri(req),
@@ -29,7 +30,10 @@ export default function registerSetupRoutes(app: Application, dependencies: any)
 
 	app.get('/', function(req: Request, res: Response) {
 		if (isGoogleOAuthConfigured(config)) {
-			res.send(renderIndexPage(frontendAssetService.assetPath('main.ts')));
+			res.send(renderIndexPage({
+				mainScriptPath: frontendAssetService.assetPath('main.ts'),
+				stylesheetPath: frontendAssetService.assetPath('styles.css'),
+			}));
 		} else {
 			res.redirect('/setup');
 		}

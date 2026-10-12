@@ -84,12 +84,12 @@ export function renderThreadItem(thread: ThreadData, options: RenderThreadItemOp
 	var primarySender = escapeHtml(formatPerson(senders[0]));
 	var primaryReceiver = escapeHtml(receivers[0] && receivers[0].name ? receivers[0].name : '');
 	var badgesHtml = mainDisplayedLabelIds.map(function(labelId) {
-		return '<span class="badge">' + escapeHtml(getLabelName(labelId, labels)) + '</span>';
+		return '<span class="badge rounded-pill text-bg-secondary">' + escapeHtml(getLabelName(labelId, labels)) + '</span>';
 	}).join('');
 	return (
 		'<div class="thread visibility-' + visibility + '" data-thread-id="' + threadId + '">' +
 			'<div class="row">' +
-				'<div class="col-xs-10">' +
+				'<div class="col-10">' +
 					'<strong>From&nbsp;</strong>' +
 					'<span class="senders" title="' + sendersTitle + '">' +
 						primarySender +
@@ -103,39 +103,39 @@ export function renderThreadItem(thread: ThreadData, options: RenderThreadItemOp
 						'</span>'
 					) : '') +
 				'</div>' +
-				'<div class="col-xs-2">' +
+				'<div class="col-2">' +
 					escapeHtml((thread.messageIds || []).length) +
-					'<span class="glyphicon glyphicon-envelope"></span>&nbsp;' +
+					'<span class="bi bi-envelope-fill"></span>&nbsp;' +
 					escapeHtml(formatPrettyTimestamp(thread.lastUpdated ?? Number.NaN)) +
 				'</div>' +
 			'</div>' +
 			'<div class="row">' +
-				'<div class="col-xs-10">' +
+				'<div class="col-10">' +
 					'<strong class="subject">' + subject + '</strong>' +
 					'<span>' + badgesHtml + '</span>' +
 					'<p class="snippet">' + snippet + '</p>' +
 				'</div>' +
-				'<div class="col-xs-2">' +
+				'<div class="col-2">' +
 					'<small>Total:</small>' +
-					'<span class="glyphicon glyphicon-time"></span> ' + escapeHtml(formatReadTime(thread.totalTimeToReadSeconds ?? 0)) +
+					'<span class="bi bi-clock"></span> ' + escapeHtml(formatReadTime(thread.totalTimeToReadSeconds ?? 0)) +
 					'<br>' +
 					'<small>Recent:</small>' +
-					'<span class="glyphicon glyphicon-time"></span> ' + escapeHtml(formatReadTime(thread.recentMessageReadTimeSeconds ?? 0)) +
+					'<span class="bi bi-clock"></span> ' + escapeHtml(formatReadTime(thread.recentMessageReadTimeSeconds ?? 0)) +
 					'<br>' +
-					'<button class="btn btn-xs btn-success archive-thread" title="Done">' +
-						'<span class="glyphicon glyphicon-ok"></span>' +
+					'<button class="btn btn-sm btn-success archive-thread" title="Done">' +
+						'<span class="bi bi-check-lg"></span>' +
 					'</button>' +
-					'<button class="btn btn-xs btn-danger delete" title="Delete">' +
-						'<span class="glyphicon glyphicon-remove"></span>' +
+					'<button class="btn btn-sm btn-danger delete" title="Delete">' +
+						'<span class="bi bi-x-lg"></span>' +
 					'</button>' +
-					'<button class="btn btn-xs btn-warning later" title="Later">' +
-						'<span class="glyphicon glyphicon-time"></span>' +
+					'<button class="btn btn-sm btn-warning later" title="Later">' +
+						'<span class="bi bi-clock"></span>' +
 					'</button>' +
-					'<button class="btn btn-xs btn-primary label-thread" title="Label">' +
-						'<span class="glyphicon glyphicon-list"></span>' +
+					'<button class="btn btn-sm btn-primary label-thread" title="Label">' +
+						'<span class="bi bi-list-ul"></span>' +
 					'</button>' +
-					'<a class="btn btn-xs btn-default view-on-gmail" title="View on Gmail" href="https://mail.google.com/mail/u/0/#inbox/' + threadId + '" target="_blank">' +
-						'<span class="glyphicon glyphicon-option-horizontal"></span>' +
+					'<a class="btn btn-sm btn-outline-secondary view-on-gmail" title="View on Gmail" href="https://mail.google.com/mail/u/0/#inbox/' + threadId + '" target="_blank">' +
+						'<span class="bi bi-three-dots"></span>' +
 					'</a>' +
 				'</div>' +
 			'</div>' +

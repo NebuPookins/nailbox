@@ -1,5 +1,5 @@
 /**
- * Show/hide Bootstrap 3 modals without the jQuery plugin.
+ * Show/hide Bootstrap modals without Bootstrap's JavaScript.
  * Dispatches a native `hidden.bs.modal` CustomEvent after the CSS transition.
  * Handles the Escape key globally to close the topmost open modal.
  */
@@ -19,8 +19,8 @@ export function showModal(el: HTMLElement): void {
 	el.removeAttribute('aria-hidden');
 	// Force reflow to trigger CSS transition
 	backdrop.offsetWidth; // eslint-disable-line no-unused-expressions
-	backdrop.classList.add('in');
-	el.classList.add('in');
+	backdrop.classList.add('show');
+	el.classList.add('show');
 	el.focus();
 	el.addEventListener('click', function(event) {
 		if (event.target === el) {
@@ -34,8 +34,8 @@ export function hideModal(el: HTMLElement): void {
 	const backdrop = activeModals.get(el);
 	if (backdrop === undefined) return;
 	activeModals.delete(el);
-	el.classList.remove('in');
-	backdrop.classList.remove('in');
+	el.classList.remove('show');
+	backdrop.classList.remove('show');
 	setTimeout(function() {
 		el.style.display = 'none';
 		el.setAttribute('aria-hidden', 'true');

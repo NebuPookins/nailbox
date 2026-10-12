@@ -1,5 +1,6 @@
 export interface LaterPresetOption {
-	glyph: string;
+	/** A Bootstrap Icons name. */
+	icon: string;
 	label: string;
 	value: string;
 }
@@ -8,47 +9,47 @@ type HideUntilPresetResult = { type: 'timestamp'; value: number } | { type: 'whe
 
 export const LATER_PRESET_OPTIONS: LaterPresetOption[] = [
 	{
-		glyph: 'time',
+		icon: 'clock',
 		label: 'Couple of Hours',
 		value: 'hours',
 	},
 	{
-		glyph: 'lamp',
+		icon: 'lamp-fill',
 		label: 'Coming Evening',
 		value: 'evening',
 	},
 	{
-		glyph: 'bed',
+		icon: 'moon-stars-fill',
 		label: 'Tomorrow',
 		value: 'tomorrow',
 	},
 	{
-		glyph: 'sunglasses',
+		icon: 'sunglasses',
 		label: 'This Weekend',
 		value: 'weekend',
 	},
 	{
-		glyph: 'briefcase',
+		icon: 'briefcase-fill',
 		label: 'Next Monday',
 		value: 'monday',
 	},
 	{
-		glyph: 'calendar',
+		icon: 'calendar3',
 		label: 'In a Month',
 		value: 'month',
 	},
 	{
-		glyph: 'cloud',
+		icon: 'cloud-fill',
 		label: 'Someday',
 		value: 'someday',
 	},
 	{
-		glyph: 'tasks',
+		icon: 'list-task',
 		label: 'When I have time',
 		value: 'when-i-have-time',
 	},
 	{
-		glyph: 'pencil',
+		icon: 'pencil-fill',
 		label: 'Pick a Date',
 		value: 'custom',
 	},

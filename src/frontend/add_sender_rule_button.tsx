@@ -17,12 +17,12 @@ export function AddSenderRuleButton({ person, onAddSenderRule }: AddSenderRuleBu
 	}
 	return (
 		<button
-			className="btn btn-xs btn-default add-sender-rule"
+			className="btn btn-sm btn-outline-secondary add-sender-rule"
 			onClick={function(e) { e.stopPropagation(); onAddSenderRule(email); }}
 			style={{marginLeft: '4px'}}
 			title={'Add a grouping rule for ' + email}
 		>
-			<span className="glyphicon glyphicon-filter"></span>
+			<span className="bi bi-funnel-fill"></span>
 		</button>
 	);
 }

@@ -42,8 +42,13 @@ const buildOptions = {
 	entryNames: '[name]-[hash]',
 	entryPoints: {
 		'main': path.join(projectRoot, 'src', 'frontend', 'main.ts'),
+		'styles': path.join(projectRoot, 'src', 'frontend', 'styles.css'),
 	},
 	format: 'iife',
+	loader: {
+		'.woff': 'file',
+		'.woff2': 'file',
+	},
 	logLevel: 'info',
 	metafile: true,
 	minify: !isWatchMode,

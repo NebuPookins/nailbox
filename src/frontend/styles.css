@@ -1,20 +1,28 @@
-.spin {
-	-webkit-animation:spin 4s linear infinite;
-	-moz-animation:spin 4s linear infinite;
-	animation:spin 4s linear infinite;
+@import 'bootstrap/dist/css/bootstrap.min.css';
+@import 'bootstrap-icons/font/bootstrap-icons.min.css';
+
+/* Bootstrap 5 sizes everything in rem; a 14px root keeps the dense layout
+   this UI was designed with under Bootstrap 3. */
+html {
+	font-size: 14px;
 }
-@-moz-keyframes spin { 100% { -moz-transform: rotate(360deg); } }
-@-webkit-keyframes spin { 100% { -webkit-transform: rotate(360deg); } }
-@keyframes spin { 100% { -webkit-transform: rotate(360deg); transform:rotate(360deg); } }
+.spin {
+	animation: spin 4s linear infinite;
+}
+@keyframes spin { 100% { transform: rotate(360deg); } }
+/* Bootstrap 3's default modal width, which the preset grid was laid out for */
+#later-picker .modal-dialog {
+	max-width: 600px;
+}
 #later-picker .row .button {
 	display: block;
 	width: 100%;
 	text-align: center;
 	height: 100px;
 	background: #f9f9f9;
-	background-image: none;
 	color: #333;
 	border: solid 1px #fff;
+	border-radius: 0;
 	padding: 10px;
 	white-space: normal;
 }
@@ -22,9 +30,10 @@
 	background: #563d7c;
 	color: #fff;
 }
-#later-picker .row .button .glyphicon {
+#later-picker .row .button .bi {
 	display: block;
 	font-size: 48px;
+	line-height: 1;
 }
 #later-picker .row .button .later-label {
 	display: block;
@@ -46,12 +55,9 @@
 	opacity: 0.3;
 }
 .noselect {
-	-webkit-touch-callout: none; /* iOS Safari */
-	-webkit-user-select: none;   /* Chrome/Safari/Opera */
-	-khtml-user-select: none;    /* Konqueror */
-	-moz-user-select: none;      /* Firefox */
-	-ms-user-select: none;       /* IE/Edge */
-	user-select: none;           /* non-prefixed version, currently not supported by any browser */
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	user-select: none;
 }
 .group {
 	font-size: 120%;
@@ -78,7 +84,7 @@
 }
 @media (min-width: 1041px) {
 	#thread-viewer .modal-dialog {
-		width: 949px;
+		max-width: 949px;
 	}
 }
 .rule-item {
@@ -87,34 +93,29 @@
 .condition-item {
 	margin-bottom: 10px;
 }
-.condition-item .form-control {
+.condition-item .form-control,
+.condition-item .form-select {
 	margin-bottom: 5px;
 }
 #settings-modal .modal-dialog {
-	width: 90%;
-	max-width: 1000px;
+	max-width: min(90%, 1000px);
 }
 @media (max-width: 767px) {
 	html, body {
 		overflow-x: hidden;
 	}
-	/* Rebalance Bootstrap .row negative margins to match tighter container gutter */
+	/* Tighter gutters so narrow screens keep more room for content */
 	.container {
 		padding-left: 10px;
 		padding-right: 10px;
 	}
 	.row {
-		margin-left: -10px;
-		margin-right: -10px;
-	}
-	.row > [class*="col-"] {
-		padding-left: 10px;
-		padding-right: 10px;
+		--bs-gutter-x: 20px;
 	}
 	/* Stack thread columns vertically so buttons have room */
 	.thread .row > [class*="col-"] {
-		width: 100%;
-		float: none;
+		flex: 0 0 100%;
+		max-width: 100%;
 	}
 	/* Prevent long unbreakable text from overflowing */
 	.thread .senders,
@@ -139,7 +140,7 @@
 		padding: 6px 10px;
 		font-size: 13px;
 	}
-	#auth-shell-controls-root.pull-right {
+	#auth-shell-controls-root.float-end {
 		float: none !important;
 		display: block;
 		margin-bottom: 6px;
@@ -147,11 +148,9 @@
 	#settings-btn {
 		width: 100%;
 		margin-bottom: 6px;
-		box-sizing: border-box;
 	}
 	.modal-dialog {
 		margin: 8px;
-		width: auto !important;
 	}
 	#thread-viewer .modal-dialog {
 		margin: 0 !important;

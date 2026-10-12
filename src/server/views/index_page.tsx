@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { renderPage } from './page.js';
+import { Head, renderPage } from './page.js';
 
 function Modal({ id, large = false, children }: { id: string; large?: boolean; children: ReactNode }) {
 	return (
@@ -25,27 +25,23 @@ function PickerModal({ id, rootId }: { id: string; rootId: string }) {
 	);
 }
 
+interface IndexPageAssets {
+	mainScriptPath: string;
+	stylesheetPath: string;
+}
+
 /** The inbox shell; everything inside it is mounted by the client bundle. */
-function IndexPage({ mainScriptPath }: { mainScriptPath: string }) {
+function IndexPage({ mainScriptPath, stylesheetPath }: IndexPageAssets) {
 	return (
 		<html lang="en">
-			<head>
-				<meta charSet="utf-8" />
-				<meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-				<meta name="viewport" content="width=device-width, initial-scale=1" />
-				<title>Nailbox</title>
-				<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap.min.css" />
-				<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.6/css/bootstrap-theme.min.css" />
-				<link rel="stylesheet" href="/public/index.css" />
-				<link rel="shortcut icon" type="image/png" href="/public/favicon.png" />
-			</head>
+			<Head title="Nailbox" stylesheetPath={stylesheetPath} />
 			<body>
 				<div className="container">
 					<div id="auth-shell-status-root" />
 					<div id="main-container">
-						<div id="auth-shell-controls-root" className="pull-right" />
-						<button className="btn btn-default" id="settings-btn">
-							<span className="glyphicon glyphicon-cog" />
+						<div id="auth-shell-controls-root" className="float-end" />
+						<button className="btn btn-outline-secondary" id="settings-btn">
+							<i className="bi bi-gear-fill" />
 							{' Email Grouping Settings'}
 						</button>
 						<div id="thread-list-root" />
@@ -62,16 +58,14 @@ function IndexPage({ mainScriptPath }: { mainScriptPath: string }) {
 				<PickerModal id="label-picker" rootId="label-picker-root" />
 				<Modal id="settings-modal" large>
 					<div className="modal-header">
-						<button type="button" className="close" data-dismiss="modal" aria-label="Close">
-							<span aria-hidden="true">&times;</span>
-						</button>
 						<h4 className="modal-title">Email Grouping Rules</h4>
+						<button type="button" className="btn-close" data-dismiss="modal" aria-label="Close" />
 					</div>
 					<div className="modal-body">
 						<div id="grouping-rules-root" />
 					</div>
 					<div className="modal-footer">
-						<button type="button" className="btn btn-default" data-dismiss="modal">Cancel</button>
+						<button type="button" className="btn btn-outline-secondary" data-dismiss="modal">Cancel</button>
 					</div>
 				</Modal>
 				<Modal id="grouping-rules-debug-modal" large>
@@ -86,6 +80,6 @@ function IndexPage({ mainScriptPath }: { mainScriptPath: string }) {
 	);
 }
 
-export function renderIndexPage(mainScriptPath: string): string {
-	return renderPage(<IndexPage mainScriptPath={mainScriptPath} />);
+export function renderIndexPage(assets: IndexPageAssets): string {
+	return renderPage(<IndexPage {...assets} />);
 }

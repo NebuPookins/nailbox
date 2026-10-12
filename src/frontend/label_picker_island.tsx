@@ -57,7 +57,7 @@ function LabelPickerApp({ notify, onDismiss, onMoveThread, onMoveBundle, state }
 	}
 
 	if (state.labels.length === 0) {
-		return <p className="text-muted">No visible labels available.</p>;
+		return <p className="text-body-secondary">No visible labels available.</p>;
 	}
 
 	const lowerFilter = filterText.toLowerCase();

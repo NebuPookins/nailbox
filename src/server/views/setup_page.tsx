@@ -1,27 +1,20 @@
-import { Notice, renderPage, type GoogleOAuthViewModel } from './page.js';
+import { Head, Notice, renderPage, type GoogleOAuthViewModel } from './page.js';
 
 // The redirect URI the server derives from the request can be wrong behind a
 // proxy, so the page shows the one matching the address bar instead.
 const SHOW_BROWSER_REDIRECT_URI = "document.getElementById('redirect-uri').textContent = window.location.origin + '/auth/google/callback';";
 
-function SetupPage({ googleOAuth, authStatus, defaultRedirectUri, notice }: GoogleOAuthViewModel) {
+function SetupPage({ stylesheetPath, googleOAuth, authStatus, defaultRedirectUri, notice }: GoogleOAuthViewModel) {
 	return (
 		<html lang="en">
-			<head>
-				<meta charSet="utf-8" />
-				<meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-				<meta name="viewport" content="width=device-width, initial-scale=1" />
-				<title>Nailbox - Setup</title>
-				<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossOrigin="anonymous" />
-				<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossOrigin="anonymous" />
-			</head>
+			<Head title="Nailbox - Setup" stylesheetPath={stylesheetPath} />
 			<body>
 				<div className="container">
-					<div id="status" className="jumbotron">
-						<h1>Nailbox</h1>
+					<div id="status" className="p-5 my-4 bg-body-tertiary rounded-3">
+						<h1 className="display-4">Nailbox</h1>
 						<hr />
 						<h2>The world's 2nd best e-mail client</h2>
-						<p>
+						<p className="lead">
 							Nailbox is inspired by the world's best e-mail client,
 							{' '}<a href="https://www.mailboxapp.com/">Mailbox</a>.
 						</p>
@@ -70,20 +63,20 @@ function SetupPage({ googleOAuth, authStatus, defaultRedirectUri, notice }: Goog
 							<li>Wait 5 minutes for the updates to propagate.</li>
 							<li>
 								Click this button to save the configuration here.
-								<button className="btn btn-default" type="submit">Save</button>
+								<button className="btn btn-outline-secondary ms-1" type="submit">Save</button>
 							</li>
 							<li>
 								Complete the Google connect flow:
 								{authStatus.connected ?
-									<a className="btn btn-success" href="/auth/google/start">Reconnect Gmail</a> :
-									<a className="btn btn-primary" href="/auth/google/start">Connect Gmail</a>}
+									<a className="btn btn-success ms-1" href="/auth/google/start">Reconnect Gmail</a> :
+									<a className="btn btn-primary ms-1" href="/auth/google/start">Connect Gmail</a>}
 							</li>
 						</ol>
 					</form>
 					{authStatus.connected ? (
-						<div className="panel panel-success">
-							<div className="panel-heading">Connected Account</div>
-							<div className="panel-body">
+						<div className="card border-success mb-3">
+							<div className="card-header bg-success-subtle text-success-emphasis">Connected Account</div>
+							<div className="card-body">
 								<p>
 									<strong>Gmail Account:</strong>
 									{' '}{authStatus.emailAddress || 'Connected'}
@@ -94,10 +87,10 @@ function SetupPage({ googleOAuth, authStatus, defaultRedirectUri, notice }: Goog
 							</div>
 						</div>
 					) : (
-						<div className="panel panel-default">
-							<div className="panel-heading">Connection Status</div>
-							<div className="panel-body">
-								<p>Gmail is not connected yet.</p>
+						<div className="card mb-3">
+							<div className="card-header">Connection Status</div>
+							<div className="card-body">
+								<p className="mb-0">Gmail is not connected yet.</p>
 							</div>
 						</div>
 					)}

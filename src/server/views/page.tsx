@@ -11,6 +11,7 @@ export interface PageNotice {
 
 /** What the setup and profile pages show about the Google OAuth connection. */
 export interface GoogleOAuthViewModel {
+	stylesheetPath: string;
 	googleOAuth: GoogleOAuthConfig;
 	authStatus: GoogleAuthStatusDto;
 	defaultRedirectUri: string;
@@ -19,6 +20,18 @@ export interface GoogleOAuthViewModel {
 
 export function renderPage(page: ReactElement): string {
 	return `<!DOCTYPE html>${renderToStaticMarkup(page)}`;
+}
+
+export function Head({ title, stylesheetPath }: { title: string; stylesheetPath: string }) {
+	return (
+		<head>
+			<meta charSet="utf-8" />
+			<meta name="viewport" content="width=device-width, initial-scale=1" />
+			<title>{title}</title>
+			<link rel="stylesheet" href={stylesheetPath} />
+			<link rel="icon" type="image/png" href="/public/favicon.png" />
+		</head>
+	);
 }
 
 export function Notice({ notice }: { notice?: PageNotice }) {

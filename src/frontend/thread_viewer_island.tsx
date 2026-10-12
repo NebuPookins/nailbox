@@ -122,11 +122,9 @@ function DeletedMessagesNotice({ num, threadId }: DeletedMessagesNoticeProps) {
 	const label = pluralize(num, 'message', 'messages');
 	const pronoun = pluralize(num, 'it', 'them');
 	return (
-		<div className="panel panel-danger">
-			<div className="panel-heading">
-				<div className="panel-title">{num} deleted {label}</div>
-			</div>
-			<div className="panel-body">
+		<div className="card border-danger mb-3">
+			<div className="card-header bg-danger-subtle text-danger-emphasis">{num} deleted {label}</div>
+			<div className="card-body">
 				This thread contains {num} deleted {label}.{' '}
 				You can view {pronoun} at{' '}
 				<a href={trashUrl} target="_blank" rel="noreferrer">{trashUrl}</a>.
@@ -218,15 +216,15 @@ function keepingModalFocus(handler: () => void): (event: React.MouseEvent<HTMLBu
 
 function RemoteImagesBar({ onLoadImages, onAlwaysLoadImages }: RemoteImagesBarProps) {
 	return (
-		<div className="small text-muted" style={{ padding: '2px 8px', background: '#fcf8e3' }}>
+		<div className="small text-body-secondary" style={{ padding: '2px 8px', background: '#fcf8e3' }}>
 			Remote images blocked &mdash;{' '}
-			<button type="button" className="btn btn-link btn-xs" style={{ padding: 0 }} onClick={keepingModalFocus(onLoadImages)}>
+			<button type="button" className="btn btn-link btn-sm" style={{ padding: 0 }} onClick={keepingModalFocus(onLoadImages)}>
 				Load images
 			</button>
 			{onAlwaysLoadImages !== undefined && (
 				<>
 					{' '}&middot;{' '}
-					<button type="button" className="btn btn-link btn-xs" style={{ padding: 0 }} onClick={keepingModalFocus(onAlwaysLoadImages)}>
+					<button type="button" className="btn btn-link btn-sm" style={{ padding: 0 }} onClick={keepingModalFocus(onAlwaysLoadImages)}>
 						Always load images from this sender
 					</button>
 				</>
@@ -256,7 +254,7 @@ function MessageBody({ message, mode, remoteContent, onLoadImages, onAlwaysLoadI
 	return (
 		<>
 			{frame.readerUnavailable && (
-				<div className="small text-muted">Reader view unavailable for this message</div>
+				<div className="small text-body-secondary">Reader view unavailable for this message</div>
 			)}
 			{remoteContent === 'blocked' && frame.mayReferenceRemoteContent && (
 				<RemoteImagesBar
@@ -304,13 +302,13 @@ interface RenderModeSwitchProps {
 
 function RenderModeSwitch({ mode, onChange }: RenderModeSwitchProps) {
 	return (
-		<div className="btn-group btn-group-xs pull-right" role="group" aria-label="Render mode">
+		<div className="btn-group btn-group-sm float-end" role="group" aria-label="Render mode">
 			{RENDER_MODES.map(function(candidate) {
 				return (
 					<button
 						key={candidate}
 						type="button"
-						className={'btn btn-default' + (candidate === mode ? ' active' : '')}
+						className={'btn btn-outline-secondary' + (candidate === mode ? ' active' : '')}
 						aria-pressed={candidate === mode}
 						onClick={function() { onChange(candidate); }}
 					>
@@ -337,53 +335,51 @@ interface MessagePanelProps {
 
 function MessagePanel({ message, renderMode, remoteContent, onAddSenderRule, onDownloadAttachment, onRenderModeChange, onLoadImages, onAlwaysLoadImages, onSummarize, isSummarizing }: MessagePanelProps) {
 	return (
-		<div className="message panel panel-default" data-message-id={message.messageId}>
-			<div className="panel-heading">
-				<div className="panel-title">
-					<div className="row">
-						<div className="col-xs-6">
-							<strong>From</strong>{' '}
-							<PeopleList people={message.from} onAddSenderRule={onAddSenderRule} />
-							{message.senderVerification === 'unverified' && (
-								<>{' '}<span className="glyphicon glyphicon-warning-sign text-warning" title="Gmail couldn't verify this sender" aria-label="Sender not verified" /></>
-							)}
-							{displayablePeople(message.to).length > 0
-								? <>{' '}<strong>To</strong>{' '}<PeopleList people={message.to} /></>
-								: null}
-						</div>
-						<div className="col-xs-2">{formatPrettyTimestamp(message.date)}</div>
-						<div className="col-xs-4">
-							{message.wordcount} words: {message.duration || ''}
-							{renderMode !== null && <RenderModeSwitch mode={renderMode} onChange={onRenderModeChange} />}
-						</div>
+		<div className="message card mb-3" data-message-id={message.messageId}>
+			<div className="card-header">
+				<div className="row">
+					<div className="col-6">
+						<strong>From</strong>{' '}
+						<PeopleList people={message.from} onAddSenderRule={onAddSenderRule} />
+						{message.senderVerification === 'unverified' && (
+							<>{' '}<span className="bi bi-exclamation-triangle-fill text-warning" title="Gmail couldn't verify this sender" aria-label="Sender not verified" /></>
+						)}
+						{displayablePeople(message.to).length > 0
+							? <>{' '}<strong>To</strong>{' '}<PeopleList people={message.to} /></>
+							: null}
+					</div>
+					<div className="col-2">{formatPrettyTimestamp(message.date)}</div>
+					<div className="col-4">
+						{message.wordcount} words: {message.duration || ''}
+						{renderMode !== null && <RenderModeSwitch mode={renderMode} onChange={onRenderModeChange} />}
 					</div>
 				</div>
 			</div>
-			<div className="panel-body">
-				<div className="ai-summary well well-sm">
-					{message.summary ? <><strong>Email summary</strong><div>{message.summary.summary}</div></> : <span className="text-muted">No AI summary yet.</span>}
+			<div className="card-body">
+				<div className="ai-summary bg-body-tertiary border rounded p-2 mb-3">
+					{message.summary ? <><strong>Email summary</strong><div>{message.summary.summary}</div></> : <span className="text-body-secondary">No AI summary yet.</span>}
 					<div>
-						<button type="button" className="btn btn-link btn-xs" onClick={onSummarize} disabled={isSummarizing} style={{paddingLeft: 0}}>
+						<button type="button" className="btn btn-link btn-sm" onClick={onSummarize} disabled={isSummarizing} style={{paddingLeft: 0}}>
 							{isSummarizing ? 'Summarizing…' : message.summary ? 'Regenerate summary' : 'Summarize with AI'}
 						</button>
 					</div>
 				</div>
 				<div className="row">
-					<div className="col-xs-12 message-body">
+					<div className="col-12 message-body">
 						{renderMode !== null && (
 							<MessageBody message={message} mode={renderMode} remoteContent={remoteContent} onLoadImages={onLoadImages} onAlwaysLoadImages={onAlwaysLoadImages} />
 						)}
 					</div>
 				</div>
 			</div>
-			<div className="panel-footer">
+			<div className="card-footer">
 				<div className="row">
-					<div className="col-xs-12 message-body">
+					<div className="col-12 message-body">
 						{(message.attachments || []).map(function(att) {
 							return (
 								<button
 									key={att.attachmentId}
-									className="btn btn-default dl-attachment"
+									className="btn btn-outline-secondary dl-attachment"
 									onClick={function() {
 										onDownloadAttachment({
 											messageId: message.messageId,
@@ -392,7 +388,7 @@ function MessagePanel({ message, renderMode, remoteContent, onAddSenderRule, onD
 										});
 									}}
 								>
-									<span className="glyphicon glyphicon-file" aria-hidden="true"></span>
+									<span className="bi bi-file-earmark-fill" aria-hidden="true"></span>
 									{att.filename} {formatFileSize(att.size)}
 								</button>
 							);
@@ -415,9 +411,9 @@ function ThreadIdLabel({ threadId }: ThreadIdLabelProps) {
 	}
 	return (
 		<span
-			className="thread-id"
+			className="thread-id me-auto"
 			title="Click to copy thread ID"
-			style={{ float: 'left', color: '#999', fontFamily: 'monospace', fontSize: '11px', lineHeight: '30px', cursor: 'copy', userSelect: 'text' }}
+			style={{ color: '#999', fontFamily: 'monospace', fontSize: '11px', lineHeight: '30px', cursor: 'copy', userSelect: 'text' }}
 			onClick={function() {
 				// Best-effort: the clipboard API is missing in insecure contexts and can reject.
 				navigator.clipboard?.writeText(threadId).catch(function() {});
@@ -491,26 +487,26 @@ function ThreadViewerApp({
 }: ThreadViewerAppProps) {
 	return (
 		<>
-			<div className="modal-header">
-				<button type="button" className="close" onClick={onClose} aria-label="Close">
-					<span aria-hidden="true">&times;</span>
-				</button>
-				<h4 className="modal-title">{subject}</h4>
-				<strong>Senders&nbsp;</strong>
-				<span className="senders">
-					<PeopleList people={senders} onAddSenderRule={onAddSenderRule} />
-				</span>
-				{' '}
-				<strong>Receivers&nbsp;</strong>
-				<span className="receivers">
-					<PeopleList people={receivers} />
-				</span>
+			<div className="modal-header align-items-start">
+				<div>
+					<h4 className="modal-title">{subject}</h4>
+					<strong>Senders&nbsp;</strong>
+					<span className="senders">
+						<PeopleList people={senders} onAddSenderRule={onAddSenderRule} />
+					</span>
+					{' '}
+					<strong>Receivers&nbsp;</strong>
+					<span className="receivers">
+						<PeopleList people={receivers} />
+					</span>
+				</div>
+				<button type="button" className="btn-close" onClick={onClose} aria-label="Close" />
 			</div>
 			<div className="modal-body">
 				{isLoading && (
 					<div className="loading-img">
 						<img
-							className="spin img-responsive center-block"
+							className="spin img-fluid d-block mx-auto"
 							src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Vector_Loading.svg/1024px-Vector_Loading.svg.png"
 							width="100px"
 							height="100px"
@@ -562,24 +558,24 @@ function ThreadViewerApp({
 			<div className="modal-footer">
 				<ThreadIdLabel threadId={threadId} />
 				<button className="btn btn-sm btn-success archive-thread" title="Done" onClick={onArchive}>
-					<span className="glyphicon glyphicon-ok"></span>
+					<span className="bi bi-check-lg"></span>
 				</button>
 				<button className="btn btn-sm btn-danger delete" title="Delete" onClick={onDelete}>
-					<span className="glyphicon glyphicon-remove"></span>
+					<span className="bi bi-x-lg"></span>
 				</button>
 				<button className="btn btn-sm btn-warning later" title="Later" onClick={onOpenLaterPicker}>
-					<span className="glyphicon glyphicon-time"></span>
+					<span className="bi bi-clock"></span>
 				</button>
 				<button className="btn btn-sm btn-primary label-thread" title="Label" onClick={onOpenLabelPicker}>
-					<span className="glyphicon glyphicon-list"></span>
+					<span className="bi bi-list-ul"></span>
 				</button>
 				<button className="btn btn-sm btn-info mark-spam" title="Report spam" onClick={onMarkSpam}>
-					<span className="glyphicon glyphicon-ban-circle"></span>
+					<span className="bi bi-slash-circle"></span>
 				</button>
-				<button className="btn btn-sm btn-default view-on-gmail" title="View on Gmail" onClick={onViewOnGmail}>
-					<span className="glyphicon glyphicon-option-horizontal"></span>
+				<button className="btn btn-sm btn-outline-secondary view-on-gmail" title="View on Gmail" onClick={onViewOnGmail}>
+					<span className="bi bi-three-dots"></span>
 				</button>
-				<button className="btn btn-default" type="button" onClick={onClose}>Close</button>
+				<button className="btn btn-outline-secondary" type="button" onClick={onClose}>Close</button>
 			</div>
 		</>
 	);

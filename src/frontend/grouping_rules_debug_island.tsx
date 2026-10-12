@@ -10,7 +10,7 @@ interface DebugAppProps {
 }
 
 function ConditionRow({condition}: {condition: ConditionTrace}) {
-	const iconClass = condition.matched ? 'glyphicon glyphicon-ok' : 'glyphicon glyphicon-remove';
+	const iconClass = condition.matched ? 'bi bi-check-lg' : 'bi bi-x-lg';
 	const iconColor = condition.matched ? '#3c763d' : '#a94442';
 	return (
 		<li style={{marginBottom: '6px'}}>
@@ -21,7 +21,7 @@ function ConditionRow({condition}: {condition: ConditionTrace}) {
 					{condition.details.map((detail, idx) => (
 						<li key={idx} style={{listStyle: 'none'}}>
 							<span
-								className={'glyphicon ' + (detail.matched ? 'glyphicon-arrow-right' : 'glyphicon-minus')}
+								className={'bi ' + (detail.matched ? 'bi-arrow-right' : 'bi-dash')}
 								style={{color: detail.matched ? '#3c763d' : '#999', marginRight: '6px', fontSize: '0.8em'}}
 							></span>
 							<code>{detail.value}</code>
@@ -42,7 +42,7 @@ function ThreadEvaluationBlock({evaluation, threadIndex}: {evaluation: ThreadEva
 		<div style={{borderLeft: `3px solid ${borderColor}`, paddingLeft: '10px', marginBottom: '10px'}}>
 			<div style={{marginBottom: '4px'}}>
 				<strong>Thread #{threadIndex + 1}</strong>{' '}
-				<small className="text-muted">{evaluation.threadId}</small>
+				<small className="text-body-secondary">{evaluation.threadId}</small>
 				<span style={{color: headerColor, fontWeight: 'bold', marginLeft: '8px'}}>{headerLabel}</span>
 			</div>
 			{evaluation.subject ? (
@@ -51,7 +51,7 @@ function ThreadEvaluationBlock({evaluation, threadIndex}: {evaluation: ThreadEva
 				</div>
 			) : null}
 			{evaluation.conditions.length === 0 ? (
-				<div className="text-muted">Rule has no conditions.</div>
+				<div className="text-body-secondary">Rule has no conditions.</div>
 			) : (
 				<ul style={{paddingLeft: '20px'}}>
 					{evaluation.conditions.map((condition, idx) => (
@@ -64,41 +64,41 @@ function ThreadEvaluationBlock({evaluation, threadIndex}: {evaluation: ThreadEva
 }
 
 function RulePanel({ruleTrace, ruleIndex, isBundle}: {ruleTrace: RuleTrace; ruleIndex: number; isBundle: boolean}) {
-	let panelClass = 'panel panel-default';
+	let panelClass = 'card mb-3';
 	let headerLabel = 'Did not match';
 	let headerColor = '#999';
 	if (ruleTrace.skipped) {
-		panelClass = 'panel panel-default';
+		panelClass = 'card mb-3';
 		headerLabel = 'Skipped';
 		headerColor = '#999';
 	} else if (ruleTrace.matched) {
-		panelClass = 'panel panel-success';
+		panelClass = 'card border-success mb-3';
 		headerLabel = 'Matched';
 		headerColor = '#3c763d';
 	}
 	return (
 		<div className={panelClass} style={{marginBottom: '10px'}}>
-			<div className="panel-heading">
+			<div className="card-header">
 				<strong>#{ruleIndex + 1}</strong>{' '}
 				<strong>{ruleTrace.ruleName || '(unnamed)'}</strong>{' '}
-				<small className="text-muted">priority {ruleTrace.priority}</small>{' '}
-				<span className="pull-right" style={{color: headerColor, fontWeight: 'bold'}}>
+				<small className="text-body-secondary">priority {ruleTrace.priority}</small>{' '}
+				<span className="float-end" style={{color: headerColor, fontWeight: 'bold'}}>
 					{headerLabel}
 				</span>
 			</div>
-			<div className="panel-body">
+			<div className="card-body">
 				{ruleTrace.skipped ? (
-					<div className="text-muted">{ruleTrace.skippedReason}</div>
+					<div className="text-body-secondary">{ruleTrace.skippedReason}</div>
 				) : isBundle ? (
 					(() => {
 						const evaluations = ruleTrace.threadEvaluations || [];
 						if (evaluations.length === 0) {
-							return <div className="text-muted">Bundle has no member threads to evaluate.</div>;
+							return <div className="text-body-secondary">Bundle has no member threads to evaluate.</div>;
 						}
 						return (
 							<>
 								<p style={{marginBottom: '10px'}}>
-									<small className="text-muted">
+									<small className="text-body-secondary">
 										A bundle matches this rule if <strong>any</strong> of its member threads matches.
 									</small>
 								</p>
@@ -109,7 +109,7 @@ function RulePanel({ruleTrace, ruleIndex, isBundle}: {ruleTrace: RuleTrace; rule
 						);
 					})()
 				) : (ruleTrace.conditions || []).length === 0 ? (
-					<div className="text-muted">Rule has no conditions, so it cannot match.</div>
+					<div className="text-body-secondary">Rule has no conditions, so it cannot match.</div>
 				) : (
 					<ul style={{paddingLeft: '20px'}}>
 						{(ruleTrace.conditions || []).map((condition, idx) => (
@@ -158,10 +158,8 @@ function DebugApp({item, groupingRules, onClose}: DebugAppProps) {
 	return (
 		<>
 			<div className="modal-header">
-				<button type="button" className="close" onClick={onClose} aria-label="Close">
-					<span aria-hidden="true">&times;</span>
-				</button>
 				<h4 className="modal-title">Grouping Rule Debug</h4>
+				<button type="button" className="btn-close" onClick={onClose} aria-label="Close" />
 			</div>
 			<div className="modal-body">
 				<ItemSummary item={item} />
@@ -179,7 +177,7 @@ function DebugApp({item, groupingRules, onClose}: DebugAppProps) {
 					)}
 				</div>
 				{trace.rules.length === 0 ? (
-					<p className="text-muted">No grouping rules are configured.</p>
+					<p className="text-body-secondary">No grouping rules are configured.</p>
 				) : (
 					trace.rules.map((ruleTrace, idx) => (
 						<RulePanel key={idx} ruleTrace={ruleTrace} ruleIndex={idx} isBundle={item.type === 'bundle'} />
@@ -187,7 +185,7 @@ function DebugApp({item, groupingRules, onClose}: DebugAppProps) {
 				)}
 			</div>
 			<div className="modal-footer">
-				<button className="btn btn-default" type="button" onClick={onClose}>Close</button>
+				<button className="btn btn-outline-secondary" type="button" onClick={onClose}>Close</button>
 			</div>
 		</>
 	);

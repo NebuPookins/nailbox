@@ -164,10 +164,10 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 	return (
 		<div className="grouping-rules-app">
 			<div className="row">
-				<div className="col-xs-12">
+				<div className="col-12">
 					<p>Configure how emails are grouped and prioritized. Rules are checked in order, and the first matching rule determines the group.</p>
 					<button className="btn btn-success" onClick={addRule} type="button">
-						<span className="glyphicon glyphicon-plus" /> Add New Rule
+						<span className="bi bi-plus-lg" /> Add New Rule
 					</button>
 				</div>
 			</div>
@@ -176,23 +176,23 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 			) : null}
 			<div style={{ marginTop: '15px', maxHeight: '500px', overflowY: 'auto' }}>
 				{loading ? (
-					<p className="text-muted">Loading rules...</p>
+					<p className="text-body-secondary">Loading rules...</p>
 				) : rules.length === 0 ? (
-					<p className="text-muted">No rules defined yet.</p>
+					<p className="text-body-secondary">No rules defined yet.</p>
 				) : rules.map((rule, ruleIndex) => (
-					<div className="panel panel-default" key={`${ruleIndex}-${reloadToken}`} style={{ marginBottom: '15px' }}>
+					<div className="card mb-3" key={`${ruleIndex}-${reloadToken}`} style={{ marginBottom: '15px' }}>
 						<div
 							aria-expanded={expanded[ruleIndex] ? true : false}
-							className="panel-heading"
+							className="card-header"
 							onClick={() => toggleExpanded(ruleIndex)}
 							style={{ cursor: 'pointer', position: 'relative' }}
 						>
 							<span
-								className={`glyphicon glyphicon-chevron-${expanded[ruleIndex] ? 'down' : 'right'}`}
+								className={`bi bi-chevron-${expanded[ruleIndex] ? 'down' : 'right'}`}
 								style={{ position: 'absolute', top: '14px', right: '14px', color: '#888' }}
 							/>
 							<div className="row">
-								<div className="col-xs-12 col-sm-3">
+								<div className="col-12 col-sm-3">
 									<label onClick={(event) => event.stopPropagation()}>
 										Label
 										<input
@@ -204,7 +204,7 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 										/>
 									</label>
 								</div>
-								<div className="col-xs-12 col-sm-2">
+								<div className="col-12 col-sm-2">
 									<label onClick={(event) => event.stopPropagation()}>
 										Priority
 										<input
@@ -219,11 +219,11 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 										/>
 									</label>
 								</div>
-								<div className="col-xs-12 col-sm-3">
+								<div className="col-12 col-sm-3">
 									<label onClick={(event) => event.stopPropagation()}>
 										Sort by
 										<select
-											className="form-control"
+											className="form-select"
 											onChange={(event) => updateRule(ruleIndex, (currentRule) => ({ ...currentRule, sortType: event.target.value as SortType }))}
 											value={rule.sortType}
 										>
@@ -232,22 +232,22 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 										</select>
 									</label>
 								</div>
-								<div className="col-xs-12 col-sm-2" onClick={(event) => event.stopPropagation()}>
+								<div className="col-12 col-sm-2" onClick={(event) => event.stopPropagation()}>
 									<button className="btn btn-danger btn-sm" onClick={() => removeRule(ruleIndex)} type="button">
-										<span className="glyphicon glyphicon-trash" /> Remove Rule
+										<span className="bi bi-trash-fill" /> Remove Rule
 									</button>
 								</div>
 							</div>
 						</div>
 						{expanded[ruleIndex] ? (
-						<div className="panel-body">
+						<div className="card-body">
 							{rule.conditions.length === 0 ? (
-								<p className="text-muted">No conditions defined.</p>
+								<p className="text-body-secondary">No conditions defined.</p>
 							) : rule.conditions.map((condition, conditionIndex) => (
 								<div className="row" key={`${ruleIndex}-${conditionIndex}`} style={{ marginBottom: '10px' }}>
-									<div className="col-xs-12 col-sm-3">
+									<div className="col-12 col-sm-3">
 										<select
-											className="form-control"
+											className="form-select"
 											onChange={(event) => updateCondition(ruleIndex, conditionIndex, (currentCondition) => ({
 												...currentCondition,
 												type: event.target.value as ConditionType,
@@ -259,7 +259,7 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 											<option value="subject">Subject</option>
 										</select>
 									</div>
-									<div className="col-xs-12 col-sm-7">
+									<div className="col-12 col-sm-7">
 										<input
 											className="form-control"
 											onChange={(event) => updateCondition(ruleIndex, conditionIndex, (currentCondition) => ({
@@ -271,15 +271,15 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 											value={condition.value}
 										/>
 									</div>
-									<div className="col-xs-12 col-sm-2">
-										<button className="btn btn-default btn-sm" onClick={() => removeCondition(ruleIndex, conditionIndex)} type="button">
-											<span className="glyphicon glyphicon-remove" /> Remove
+									<div className="col-12 col-sm-2">
+										<button className="btn btn-outline-secondary btn-sm" onClick={() => removeCondition(ruleIndex, conditionIndex)} type="button">
+											<span className="bi bi-x-lg" /> Remove
 										</button>
 									</div>
 								</div>
 							))}
 							<button className="btn btn-info btn-sm" onClick={() => addCondition(ruleIndex)} type="button">
-								<span className="glyphicon glyphicon-plus" /> Add Condition
+								<span className="bi bi-plus-lg" /> Add Condition
 							</button>
 						</div>
 						) : null}

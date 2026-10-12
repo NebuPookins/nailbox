@@ -4,7 +4,7 @@ import { LATER_PRESET_OPTIONS, resolveHideUntilPreset } from './later_picker_pre
 import type { HideUntilValue } from './api.js';
 
 interface LaterPresetOption {
-	glyph: string;
+	icon: string;
 	label: string;
 	value: string;
 }
@@ -70,14 +70,14 @@ function LaterPickerApp({ notify, onDismiss, state }: LaterPickerAppProps) {
 			{chunkPresetOptions(presetOptions, 3).map((row, rowIndex) => (
 				<div className="row" key={`later-picker-row-${rowIndex}`}>
 					{row.map((option) => (
-						<div className="col-xs-4" key={option.value}>
+						<div className="col-4" key={option.value}>
 							<button
-								className="button btn btn-default"
+								className="button btn btn-outline-secondary"
 								disabled={!hasTarget || pendingPreset.length > 0}
 								onClick={() => handlePresetClick(option.value)}
 								type="button"
 							>
-								<span className={`glyphicon glyphicon-${option.glyph}`} />
+								<span className={`bi bi-${option.icon}`} />
 								<div className="later-label noselect">
 									{pendingPreset === option.value ? 'Working...' : option.label}
 								</div>

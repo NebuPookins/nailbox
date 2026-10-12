@@ -19,7 +19,7 @@ function StatusBanner({ state }: StatusBannerProps) {
 	}
 	if (state.type === 'setup-needed') {
 		return (
-			<div className="jumbotron">
+			<div className="p-5 mb-4 bg-body-tertiary rounded-3">
 				<h1>Google OAuth setup required</h1>
 				<p>{state.message || 'Configure Google OAuth before Nailbox can talk to Gmail.'}</p>
 				<p><a className="btn btn-primary" href="/setup">Open setup</a></p>
@@ -28,19 +28,19 @@ function StatusBanner({ state }: StatusBannerProps) {
 	}
 	if (state.type === 'disconnected') {
 		return (
-			<div className="jumbotron">
+			<div className="p-5 mb-4 bg-body-tertiary rounded-3">
 				<h1>Connect Gmail</h1>
 				<p>{state.message || 'Gmail is not connected.'}</p>
 				<p>
 					<a className="btn btn-primary" href="/auth/google/start">Connect Gmail</a>{' '}
-					<a className="btn btn-default" href="/setup">Review setup</a>
+					<a className="btn btn-outline-secondary" href="/setup">Review setup</a>
 				</p>
 			</div>
 		);
 	}
 	if (state.type === 'connected-loading') {
 		return (
-			<div className="jumbotron">
+			<div className="p-5 mb-4 bg-body-tertiary rounded-3">
 				<h1>Loading Nailbox</h1>
 				<p>Reading cached mail and refreshing Gmail in the background...</p>
 			</div>
@@ -48,7 +48,7 @@ function StatusBanner({ state }: StatusBannerProps) {
 	}
 	if (state.type === 'empty') {
 		return (
-			<div className="jumbotron">
+			<div className="p-5 mb-4 bg-body-tertiary rounded-3">
 				<h1>No mail in cache yet</h1>
 				<p>Use &ldquo;Sync Gmail&rdquo; to download mail into the local cache.</p>
 			</div>
@@ -56,7 +56,7 @@ function StatusBanner({ state }: StatusBannerProps) {
 	}
 	if (state.type === 'error') {
 		return (
-			<div className="jumbotron">
+			<div className="p-5 mb-4 bg-body-tertiary rounded-3">
 				<h1>Failed to load cached mail</h1>
 				<p>Check the server logs, then try syncing Gmail again.</p>
 			</div>
@@ -82,11 +82,11 @@ function AuthControls({ state, onDisconnect, onRefreshNow }: AuthControlsProps) 
 	}
 	return (
 		<span>
-			<a className="text-muted" href="/profile" style={{ marginRight: '10px' }}>
+			<a className="text-body-secondary" href="/profile" style={{ marginRight: '10px' }}>
 				{state.emailAddress || 'Profile'}
 			</a>
 			<button
-				className="btn btn-default btn-sm"
+				className="btn btn-outline-secondary btn-sm"
 				onClick={onRefreshNow}
 				type="button"
 			>

@@ -112,15 +112,13 @@ function SenderRuleApp({ api, senderEmail, onClose, onSaved }: SenderRuleAppProp
 	return (
 		<>
 			<div className="modal-header">
-				<button type="button" className="close" onClick={onClose} aria-label="Close">
-					<span aria-hidden="true">&times;</span>
-				</button>
 				<h4 className="modal-title">{MODAL_TITLES[conditionType]}</h4>
+				<button type="button" className="btn-close" onClick={onClose} aria-label="Close" />
 			</div>
 			<div className="modal-body">
-				<label htmlFor="sender-rule-condition-type">Match</label>
+				<label className="form-label" htmlFor="sender-rule-condition-type">Match</label>
 				<select
-					className="form-control"
+					className="form-select"
 					id="sender-rule-condition-type"
 					onChange={function(e) { setConditionType(e.target.value as ConditionType); }}
 					style={{ marginBottom: '10px' }}
@@ -130,7 +128,7 @@ function SenderRuleApp({ api, senderEmail, onClose, onSaved }: SenderRuleAppProp
 						return <option key={value} value={value}>{label}</option>;
 					})}
 				</select>
-				<label htmlFor="sender-rule-pattern">Value to match</label>
+				<label className="form-label" htmlFor="sender-rule-pattern">Value to match</label>
 				<input
 					autoFocus
 					className="form-control"
@@ -139,7 +137,7 @@ function SenderRuleApp({ api, senderEmail, onClose, onSaved }: SenderRuleAppProp
 					type="text"
 					value={pattern}
 				/>
-				<p className="text-muted" style={{ marginTop: '6px' }}>
+				<p className="text-body-secondary" style={{ marginTop: '6px' }}>
 					This is a case-sensitive substring match, so shortening it widens what it matches.{' '}
 					{CONDITION_TYPE_EXAMPLES[conditionType]}
 				</p>
@@ -148,14 +146,14 @@ function SenderRuleApp({ api, senderEmail, onClose, onSaved }: SenderRuleAppProp
 				) : null}
 				<hr />
 				{loading ? (
-					<p className="text-muted">Loading rules...</p>
+					<p className="text-body-secondary">Loading rules...</p>
 				) : config === null ? (
-					<p className="text-muted">
+					<p className="text-body-secondary">
 						The rules could not be loaded, so there is nothing to add this sender to.
 						Close and reopen this window to try again.
 					</p>
 				) : rules.length === 0 ? (
-					<p className="text-muted">
+					<p className="text-body-secondary">
 						No grouping rules defined yet. Create one under "Email Grouping Settings" first.
 					</p>
 				) : (
@@ -166,7 +164,7 @@ function SenderRuleApp({ api, senderEmail, onClose, onSaved }: SenderRuleAppProp
 								const existing = describeConditions(rule, conditionType);
 								return (
 									<button
-										className="btn btn-default sender-rule-choice"
+										className="btn btn-outline-secondary sender-rule-choice"
 										disabled={trimmedPattern.length === 0 || pendingRuleIndex !== null}
 										key={ruleIndex}
 										onClick={function() { handleRuleClick(ruleIndex); }}
@@ -182,7 +180,7 @@ function SenderRuleApp({ api, senderEmail, onClose, onSaved }: SenderRuleAppProp
 				)}
 			</div>
 			<div className="modal-footer">
-				<button className="btn btn-default" type="button" onClick={onClose}>Cancel</button>
+				<button className="btn btn-outline-secondary" type="button" onClick={onClose}>Cancel</button>
 			</div>
 		</>
 	);

@@ -149,7 +149,7 @@ function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onAdd
 			onClick={handleRowClick}
 		>
 			<div className="row">
-				<div className="col-xs-10">
+				<div className="col-10">
 					{showCheckbox ? (
 						<input
 							type="checkbox"
@@ -175,19 +175,19 @@ function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onAdd
 						</React.Fragment>
 					) : null}
 				</div>
-				<div className="col-xs-2">
+				<div className="col-2">
 					{(thread.messageIds || []).length}
-					<span className="glyphicon glyphicon-envelope"></span>&nbsp;
+					<span className="bi bi-envelope-fill"></span>&nbsp;
 					{formatPrettyTimestamp(thread.lastUpdated)}
 				</div>
 			</div>
 			<div className="row">
-				<div className="col-xs-10">
+				<div className="col-10">
 					<strong className="subject">{thread.subject || ''}</strong>
 					<span>
 						{mainDisplayedLabelIds.map(function(labelId: string) {
 							return (
-								<span key={labelId} className="badge">
+								<span key={labelId} className="badge rounded-pill text-bg-secondary">
 									{getLabelName(labelId, labels) as string}
 								</span>
 							);
@@ -195,13 +195,13 @@ function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onAdd
 					</span>
 					<p className="snippet">{thread.snippet || ''}</p>
 				</div>
-				<div className="col-xs-2">
+				<div className="col-2">
 					<small>Total:</small>
-					<span className="glyphicon glyphicon-time"></span>{' '}
+					<span className="bi bi-clock"></span>{' '}
 					{formatReadTime(thread.totalTimeToReadSeconds) as string}
 					<br />
 					<small>Recent:</small>
-					<span className="glyphicon glyphicon-time"></span>{' '}
+					<span className="bi bi-clock"></span>{' '}
 					{formatReadTime(thread.recentMessageReadTimeSeconds) as string}
 					<br />
 					{!showCheckbox ? (
@@ -211,52 +211,52 @@ function ThreadRow({ thread, labels, isRemoving, showCheckbox, isSelected, onAdd
 								title="Done"
 								onClick={function(e) { e.stopPropagation(); onArchive(thread.threadId); }}
 							>
-								<span className="glyphicon glyphicon-ok"></span>
+								<span className="bi bi-check-lg"></span>
 							</button>
 							<button
 								className="btn btn-sm btn-danger delete"
 								title="Delete"
 								onClick={function(e) { e.stopPropagation(); onDelete(thread.threadId); }}
 							>
-								<span className="glyphicon glyphicon-remove"></span>
+								<span className="bi bi-x-lg"></span>
 							</button>
 							<button
 								className="btn btn-sm btn-warning later"
 								title="Later"
 								onClick={function(e) { e.stopPropagation(); onOpenLaterPicker({ threadId: thread.threadId, subject: thread.subject || '' }); }}
 							>
-								<span className="glyphicon glyphicon-time"></span>
+								<span className="bi bi-clock"></span>
 							</button>
 							<button
 								className="btn btn-sm btn-primary label-thread"
 								title="Label"
 								onClick={function(e) { e.stopPropagation(); onOpenLabelPicker({ threadId: thread.threadId, subject: thread.subject || '' }); }}
 							>
-								<span className="glyphicon glyphicon-list"></span>
+								<span className="bi bi-list-ul"></span>
 							</button>
 							<button
 								className="btn btn-sm btn-info mark-spam"
 								title="Report spam"
 								onClick={function(e) { e.stopPropagation(); onMarkSpam(thread.threadId); }}
 							>
-								<span className="glyphicon glyphicon-ban-circle"></span>
+								<span className="bi bi-slash-circle"></span>
 							</button>
 							<a
-								className="btn btn-sm btn-default view-on-gmail"
+								className="btn btn-sm btn-outline-secondary view-on-gmail"
 								title="View on Gmail"
 								href={'https://mail.google.com/mail/u/0/#inbox/' + thread.threadId}
 								target="_blank"
 								rel="noreferrer"
 								onClick={function(e) { e.stopPropagation(); }}
 							>
-								<span className="glyphicon glyphicon-option-horizontal"></span>
+								<span className="bi bi-three-dots"></span>
 							</a>
 							<button
-								className="btn btn-sm btn-default debug-grouping"
+								className="btn btn-sm btn-outline-secondary debug-grouping"
 								title="Debug grouping rules"
 								onClick={function(e) { e.stopPropagation(); onDebugGrouping(thread); }}
 							>
-								<span className="glyphicon glyphicon-search"></span>
+								<span className="bi bi-search"></span>
 							</button>
 						</React.Fragment>
 					) : null}
@@ -310,7 +310,7 @@ function BundleRow({ bundle, isExpanded, isRemoving, children, showCheckbox, isS
 			onClick={handleRowClick}
 		>
 			<div className="row">
-				<div className="col-xs-10">
+				<div className="col-10">
 					{showCheckbox ? (
 						<input
 							type="checkbox"
@@ -320,32 +320,32 @@ function BundleRow({ bundle, isExpanded, isRemoving, children, showCheckbox, isS
 							style={{marginRight: '8px'}}
 						/>
 					) : null}
-					<span className="glyphicon glyphicon-duplicate" title="Bundle" style={{marginRight: '6px'}}></span>
+					<span className="bi bi-files" title="Bundle" style={{marginRight: '6px'}}></span>
 					<strong>From&nbsp;</strong>
 					<SenderSummary
 						senders={senders}
 						title={senders.map(formatPerson).join(', ')}
 						onAddSenderRule={onAddSenderRule}
 					/>
-					<span className="badge" style={{marginLeft: '6px'}}>{bundle.threadCount} threads</span>
+					<span className="badge rounded-pill text-bg-secondary" style={{marginLeft: '6px'}}>{bundle.threadCount} threads</span>
 				</div>
-				<div className="col-xs-2">
-					<span className="glyphicon glyphicon-folder-open"></span>&nbsp;
+				<div className="col-2">
+					<span className="bi bi-folder2-open"></span>&nbsp;
 					{formatPrettyTimestamp(bundle.lastUpdated)}
 				</div>
 			</div>
 			<div className="row">
-				<div className="col-xs-10">
+				<div className="col-10">
 					{bundle.subject ? <strong className="subject">{bundle.subject}</strong> : null}
 					{bundle.snippet ? <p className="snippet">{bundle.snippet}</p> : null}
 				</div>
-				<div className="col-xs-2">
+				<div className="col-2">
 					<small>Total:</small>
-					<span className="glyphicon glyphicon-time"></span>{' '}
+					<span className="bi bi-clock"></span>{' '}
 					{formatReadTime(bundle.totalTimeToReadSeconds) as string}
 					<br />
 					<small>Recent:</small>
-					<span className="glyphicon glyphicon-time"></span>{' '}
+					<span className="bi bi-clock"></span>{' '}
 					{formatReadTime(bundle.recentMessageReadTimeSeconds) as string}
 					<br />
 					<button
@@ -353,42 +353,42 @@ function BundleRow({ bundle, isExpanded, isRemoving, children, showCheckbox, isS
 						title="Archive all"
 						onClick={function(e) { e.stopPropagation(); onArchive(bundle.bundleId); }}
 					>
-						<span className="glyphicon glyphicon-ok"></span>
+						<span className="bi bi-check-lg"></span>
 					</button>
 					<button
 						className="btn btn-sm btn-warning later"
 						title="Later"
 						onClick={function(e) { e.stopPropagation(); onOpenLaterPicker({ bundleId: bundle.bundleId }); }}
 					>
-						<span className="glyphicon glyphicon-time"></span>
+						<span className="bi bi-clock"></span>
 					</button>
 					<button
 						className="btn btn-sm btn-primary label-bundle"
 						title="Label all"
 						onClick={function(e) { e.stopPropagation(); onOpenLabelPicker({ bundleId: bundle.bundleId }); }}
 					>
-						<span className="glyphicon glyphicon-list"></span>
+						<span className="bi bi-list-ul"></span>
 					</button>
 					<button
 						className="btn btn-sm btn-info"
 						title="Edit bundle membership"
 						onClick={function(e) { e.stopPropagation(); onEdit(bundle); }}
 					>
-						<span className="glyphicon glyphicon-pencil"></span>
+						<span className="bi bi-pencil-fill"></span>
 					</button>
 					<button
-						className="btn btn-sm btn-default"
+						className="btn btn-sm btn-outline-secondary"
 						title="Ungroup"
 						onClick={function(e) { e.stopPropagation(); onUngroup(bundle.bundleId); }}
 					>
-						<span className="glyphicon glyphicon-scissors"></span>
+						<span className="bi bi-scissors"></span>
 					</button>
 					<button
-						className="btn btn-sm btn-default debug-grouping"
+						className="btn btn-sm btn-outline-secondary debug-grouping"
 						title="Debug grouping rules"
 						onClick={function(e) { e.stopPropagation(); onDebugGrouping(bundle); }}
 					>
-						<span className="glyphicon glyphicon-search"></span>
+						<span className="bi bi-search"></span>
 					</button>
 				</div>
 			</div>
@@ -418,12 +418,12 @@ function SelectionBar({ selectedCount, editingBundleId, onBundle, onCancel }: Se
 				disabled={selectedCount < 2}
 				onClick={onBundle}
 			>
-				<span className="glyphicon glyphicon-duplicate"></span>
+				<span className="bi bi-files"></span>
 				{isEditing
 					? ' Update Bundle (' + selectedCount + ')'
 					: ' Bundle (' + selectedCount + ')'}
 			</button>
-			<button className="btn btn-sm btn-default" onClick={onCancel}>Cancel</button>
+			<button className="btn btn-sm btn-outline-secondary" onClick={onCancel}>Cancel</button>
 		</div>
 	);
 }
@@ -614,20 +614,20 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 			<div style={{position: 'sticky', top: 0, zIndex: 10, background: '#fff'}}>
 				<div className="thread-list-header" style={{display: 'flex', justifyContent: 'space-between', padding: '4px 8px'}}>
 					<button
-						className={'btn btn-xs ' + (viewMode === 'quick-deal' ? 'btn-primary' : 'btn-default')}
+						className={'btn btn-sm ' + (viewMode === 'quick-deal' ? 'btn-primary' : 'btn-outline-secondary')}
 						title="Show all emails sorted by recent read time, with 'When I have time' emails at the bottom"
 						onClick={() => setViewMode(viewMode === 'quick-deal' ? 'classic' : 'quick-deal')}
 					>
-						<span className="glyphicon glyphicon-flash"></span>{' '}
+						<span className="bi bi-lightning-fill"></span>{' '}
 						{viewMode === 'quick-deal' ? 'Classic View' : 'Quick Deal'}
 					</button>
 					{!selectionMode ? (
 						<button
-							className="btn btn-xs btn-default"
+							className="btn btn-sm btn-outline-secondary"
 							title="Select threads to bundle"
 							onClick={() => setSelectionMode(true)}
 						>
-							<span className="glyphicon glyphicon-check"></span> Select
+							<span className="bi bi-check2-square"></span> Select
 						</button>
 					) : null}
 				</div>
