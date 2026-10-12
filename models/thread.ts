@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import _ from 'lodash';
+import {maxBy, uniqBy} from '../helpers/arrays.js';
 import nebulog from 'nebulog';
 
 import { Message, GmailMessageData, EmailAddress, GmailHeader } from './message.js';
@@ -33,7 +33,7 @@ export class Thread {
 		const people = this._messages
 			.map(m => m.emailAddresses(fnFilter))
 			.reduce((a, b) => a.concat(b));
-		return _.uniqBy(people, person => person.email);
+		return uniqBy(people, person => person.email);
 	}
 
 	/**
@@ -47,7 +47,7 @@ export class Thread {
 		const people = this._messages
 			.map(m => m.sender())
 			.filter((person): person is EmailAddress => person !== null);
-		return _.uniqBy(people, person => person.email);
+		return uniqBy(people, person => person.email);
 	}
 
 	/**
@@ -61,7 +61,7 @@ export class Thread {
 		const people = this._messages
 			.map(m => m.recipients())
 			.reduce((a, b) => a.concat(b));
-		return _.uniqBy(people, person => person.email);
+		return uniqBy(people, person => person.email);
 	}
 
 	/**
@@ -69,7 +69,7 @@ export class Thread {
 	 * a message got added to this thread.
 	 */
 	lastUpdated(): number {
-		return _.max(this._messages.map(m => m.timestamp())) ?? 0;
+		return maxBy(this._messages, m => m.timestamp())?.timestamp() ?? 0;
 	}
 
 	/**
@@ -83,7 +83,7 @@ export class Thread {
 		if (satisfyingMessages.length === 0) {
 			return null;
 		}
-		return _.maxBy(satisfyingMessages, message => message.timestamp()) ?? null;
+		return maxBy(satisfyingMessages, message => message.timestamp()) ?? null;
 	}
 
 	/**
@@ -131,7 +131,7 @@ export class Thread {
 		const labelsWithDuplicates = this._messages
 			.map(m => m.labelIds())
 			.reduce((a, b) => a.concat(b));
-		return _.uniq(labelsWithDuplicates);
+		return [...new Set(labelsWithDuplicates)];
 	}
 
 	/**

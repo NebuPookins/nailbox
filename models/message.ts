@@ -1,9 +1,10 @@
-import _ from 'lodash';
 import assert from 'assert';
 import {encode} from 'html-entities';
 import nebulog from 'nebulog';
 import mimelib from 'mimelib';
 import util from 'util';
+
+import {maxBy} from '../helpers/arrays.js';
 
 const logger = nebulog.make({filename: 'models/message.ts', level: 'debug'});
 
@@ -115,7 +116,7 @@ function formatPartAsHtml(messagePart: GmailMessagePart, threadId: string): stri
  * was passed in, if it contains no subparts).
  */
 function selectedBestPart(messagePart: GmailMessagePart, threadId: string): GmailMessagePart {
-	if (_.isArray(messagePart.parts) && messagePart.parts.length > 0) {
+	if (Array.isArray(messagePart.parts) && messagePart.parts.length > 0) {
 		/*
 		 * Without needing to understand what the mimetype is (I've seen fucked up
 		 * stuff like "text/related"), if we have multiple parts, recursively pick
@@ -127,11 +128,11 @@ function selectedBestPart(messagePart: GmailMessagePart, threadId: string): Gmai
 		}
 		const bestHtmlParts = bestParts.filter(part => part.mimeType === 'text/html');
 		if (bestHtmlParts.length > 0) {
-			return _.maxBy(bestHtmlParts, part => parseInt(String(part.body.size))) ?? bestHtmlParts[0];
+			return maxBy(bestHtmlParts, part => parseInt(String(part.body.size))) ?? bestHtmlParts[0];
 		}
 		const bestPlainTextParts = bestParts.filter(part => part.mimeType === 'text/plain');
 		if (bestPlainTextParts.length > 0) {
-			return _.maxBy(bestPlainTextParts, part => parseInt(String(part.body.size))) ?? bestPlainTextParts[0];
+			return maxBy(bestPlainTextParts, part => parseInt(String(part.body.size))) ?? bestPlainTextParts[0];
 		}
 		logger.warn(`In thread ${threadId}, couldn't figure out the best part of ${messagePart.mimeType}. Arbitrarily returning the first part. Parts were ${util.inspect(bestParts)}`);
 		return bestParts[0];

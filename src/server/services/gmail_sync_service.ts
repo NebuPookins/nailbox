@@ -1,5 +1,3 @@
-import _ from 'lodash';
-
 import {mapWithConcurrency} from '../../../helpers/map_with_concurrency.js';
 import {removeThreadFromBundle} from '../../../models/bundle.js';
 import {isInInbox} from '../validation/contracts.js';
@@ -229,11 +227,11 @@ export async function syncRecentThreadsFromGmail({
 	// Fresh changes first, in the order found (newest inbox mail first), then
 	// earlier leftovers, least-failed first.
 	const foundThreadIdSet = new Set(foundThreadIds);
-	const dueLeftoverThreadIds = _.sortBy(
-		[...pending].filter(([threadId, refresh]) => !foundThreadIdSet.has(threadId) && refresh.retryAt <= startedAt),
-		([, refresh]) => refresh.failures,
-	).map(([threadId]) => threadId);
-	const uniqueThreadIds = [..._.uniq(foundThreadIds), ...dueLeftoverThreadIds]
+	const dueLeftoverThreadIds = [...pending]
+		.filter(([threadId, refresh]) => !foundThreadIdSet.has(threadId) && refresh.retryAt <= startedAt)
+		.toSorted(([, a], [, b]) => a.failures - b.failures)
+		.map(([threadId]) => threadId);
+	const uniqueThreadIds = [...foundThreadIdSet, ...dueLeftoverThreadIds]
 		.slice(0, MAX_THREAD_REFRESHES_PER_SYNC);
 	const threadSaveResults = await mapWithConcurrency(uniqueThreadIds, MAX_CONCURRENT_THREAD_REFRESHES, async (threadId) => {
 		try {

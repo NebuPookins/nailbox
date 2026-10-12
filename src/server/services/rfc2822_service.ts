@@ -1,10 +1,12 @@
 import util from 'util';
 
-import _ from 'lodash';
 import mailcomposer from 'mailcomposer';
 import {marked} from 'marked';
 import hljs from 'highlight.js';
 import posthtml from 'posthtml';
+import {encode} from 'html-entities';
+
+import {uniqBy} from '../../../helpers/arrays.js';
 
 // A fence's language tag is free text, and hljs.highlight throws on names it
 // doesn't know, so anything unrecognized falls back to auto-detection.
@@ -65,7 +67,7 @@ marked.use({
 	renderer: {
 		code({text, lang}: {text: string; lang?: string}): string {
 			const highlighted = renderHighlightedCode(text, lang ?? '');
-			const langClass = lang ? ` class="language-${_.escape(lang)}"` : '';
+			const langClass = lang ? ` class="language-${encode(lang)}"` : '';
 			return `<pre><code${langClass}>${highlighted}</code></pre>`;
 		},
 	},
@@ -101,7 +103,7 @@ function collectReplyRecipients({thread, replyMessage, myEmail}: {
 	myEmail: string;
 }): any[] {
 	const normalizedMyEmail = normalizeEmailAddress(myEmail);
-	return _.uniqBy(
+	return uniqBy(
 		thread.senders()
 			.concat(thread.recipients(), replyMessage.replyTo())
 			.filter((person: any) => person != null && normalizeEmailAddress(person.email).length > 0)

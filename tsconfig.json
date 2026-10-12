@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
@@ -12,7 +12,7 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "jsx": "react-jsx",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
   },
   "include": [
     "src/**/*.ts",

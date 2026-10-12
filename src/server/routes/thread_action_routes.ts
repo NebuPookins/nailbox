@@ -1,7 +1,5 @@
 import util from 'util';
 
-import _ from 'lodash';
-
 import type {Application, Request, Response} from 'express';
 
 import {removeThreadFromBundle} from '../../../models/bundle.js';
@@ -79,8 +77,10 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 				return;
 			}
 			const labels = Array.isArray(labelsResponse.labels) ? labelsResponse.labels : [];
-			res.status(200).send(_.sortBy(labels, function(label: any) {
-				return (label.type === 'system' ? 'A' : 'B') + label.name.toLowerCase();
+			const sortKey = (label: any): string => (label.type === 'system' ? 'A' : 'B') + label.name.toLowerCase();
+			res.status(200).send(labels.toSorted((a: any, b: any) => {
+				const [keyA, keyB] = [sortKey(a), sortKey(b)];
+				return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
 			}));
 		} catch (error) {
 			logger.error(util.inspect(error));
