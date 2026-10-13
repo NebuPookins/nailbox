@@ -6,6 +6,12 @@
 html {
 	font-size: 87.5%;
 }
+/* Bootstrap 5 locks page scrolling behind a modal from its JavaScript, which
+   native_modal.ts replaces, so lock it here. html, not body, so the
+   narrow-screen overflow-x rule below can't leave the viewport scrollable. */
+html:has(> body.modal-open) {
+	overflow: hidden;
+}
 /* Bootstrap 3's default modal width, which the pickers were laid out for */
 .modal {
 	--bs-modal-width: 600px;
