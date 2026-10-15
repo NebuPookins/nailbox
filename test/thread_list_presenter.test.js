@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+	formatGroupReadTimeStats,
 	formatReadTime,
 	getLabelName,
 	getThreadMainDisplayedLabelIds,
@@ -23,4 +24,19 @@ test('getLabelName humanizes Gmail category labels', () => {
 	assert.equal(getLabelName('CATEGORY_PERSONAL', [
 		{id: 'CATEGORY_PERSONAL', name: 'CATEGORY_PERSONAL', type: 'system'},
 	]), 'Personal');
+});
+
+test('formatGroupReadTimeStats counts items and sums their read times', () => {
+	assert.equal(formatGroupReadTimeStats([
+		{threadId: 'a', totalTimeToReadSeconds: 120, recentMessageReadTimeSeconds: 30},
+		{type: 'bundle', bundleId: 'b', totalTimeToReadSeconds: 200, recentMessageReadTimeSeconds: 50},
+	]), '2 items · Total: 5 min read · Recent: 1 min read');
+});
+
+test('formatGroupReadTimeStats handles empty and single-item groups', () => {
+	assert.equal(formatGroupReadTimeStats([]), '0 items · Total: 0 sec read · Recent: 0 sec read');
+	assert.equal(
+		formatGroupReadTimeStats([{threadId: 'a', totalTimeToReadSeconds: 45, recentMessageReadTimeSeconds: 45}]),
+		'1 item · Total: 45 sec read · Recent: 45 sec read',
+	);
 });

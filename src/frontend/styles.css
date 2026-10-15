@@ -76,6 +76,42 @@ html:has(> body.modal-open) {
 	font-size: 120%;
 	border-bottom: solid 2px black;
 }
+.group-nav {
+	display: none;
+}
+/* Wide screens get a sticky panel of group names, beside the list, that
+   jumps to each group. The container widens by the panel's width so the
+   list keeps the width Bootstrap's xxl container gives it. */
+@media (min-width: 1600px) {
+	.container:has(.group-nav) {
+		max-width: calc(1320px + 220px + 16px);
+	}
+	.thread-list-layout {
+		display: flex;
+		gap: 16px;
+		align-items: flex-start;
+	}
+	.thread-list-main {
+		flex: 1;
+		min-width: 0;
+	}
+	.group-nav {
+		display: block;
+		flex: 0 0 220px;
+		position: sticky;
+		top: 0;
+		max-height: 100vh;
+		overflow-y: auto;
+		padding-top: 4px;
+	}
+	.group-nav li {
+		margin-bottom: 8px;
+	}
+	.group-nav-stats {
+		display: block;
+		color: #666;
+	}
+}
 .thread {
 	border-bottom: solid 1px black;
 }

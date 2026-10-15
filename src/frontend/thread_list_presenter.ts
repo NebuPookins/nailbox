@@ -1,3 +1,5 @@
+import type { ThreadRowItem } from './thread_grouping.js';
+
 interface Label { id: string; name?: string; type?: string; }
 interface ThreadData { labelIds?: string[]; }
 
@@ -16,6 +18,15 @@ export function formatReadTime(totalSeconds: number): string {
 		return '1 min read';
 	}
 	return minutes + ' min read';
+}
+
+/** Item count and summed read times shown beside a group's name: "3 items · Total: 5 min read · Recent: 1 min read" */
+export function formatGroupReadTimeStats(items: readonly ThreadRowItem[]): string {
+	const totalSeconds = items.reduce((sum, item) => sum + item.totalTimeToReadSeconds, 0);
+	const recentSeconds = items.reduce((sum, item) => sum + item.recentMessageReadTimeSeconds, 0);
+	return items.length + ' item' + (items.length !== 1 ? 's' : '') +
+		' · Total: ' + formatReadTime(totalSeconds) +
+		' · Recent: ' + formatReadTime(recentSeconds);
 }
 
 export function getThreadMainDisplayedLabelIds(thread: ThreadData): string[] {

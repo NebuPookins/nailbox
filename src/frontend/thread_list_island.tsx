@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { formatPrettyTimestamp } from './display_format.js';
 import {
+	formatGroupReadTimeStats,
 	formatReadTime,
 	getThreadMainDisplayedLabelIds,
 	getLabelName,
@@ -428,6 +429,44 @@ function SelectionBar({ selectedCount, editingBundleId, onBundle, onCancel }: Se
 	);
 }
 
+function groupElementId(groupIdx: number): string {
+	return 'thread-group-' + groupIdx;
+}
+
+interface GroupNavEntry {
+	label: string;
+	stats: string;
+}
+
+interface GroupNavProps {
+	groups: readonly GroupNavEntry[];
+	/** Scrolls the list so the group's header sits just below the sticky list header. */
+	onSelectGroup: (groupIdx: number) => void;
+}
+
+/** Side panel of group names and read times; styles.css only shows it on wide screens. */
+function GroupNav({ groups, onSelectGroup }: GroupNavProps) {
+	return (
+		<nav className="group-nav" aria-label="Email groups">
+			<ul className="list-unstyled">
+				{groups.map(function(group, groupIdx) {
+					return (
+						<li key={groupIdx}>
+							<a
+								href={'#' + groupElementId(groupIdx)}
+								onClick={function(e) { e.preventDefault(); onSelectGroup(groupIdx); }}
+							>
+								{group.label}
+							</a>
+							<small className="group-nav-stats">{group.stats}</small>
+						</li>
+					);
+				})}
+			</ul>
+		</nav>
+	);
+}
+
 interface ThreadListAppProps {
 	groups: readonly ThreadGroup[];
 	labels: LabelInfo[];
@@ -456,6 +495,7 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 	const [expandedBundleIds, setExpandedBundleIds] = useState<Set<string>>(new Set());
 	const [editingBundleId, setEditingBundleId] = useState<string | null>(null);
 	const [viewMode, setViewMode] = useState<'classic' | 'quick-deal'>('classic');
+	const stickyHeaderRef = useRef<HTMLDivElement>(null);
 
 	if (!groups || groups.length === 0) {
 		return null;
@@ -539,6 +579,22 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 		setExpandedBundleIds(next);
 	}
 
+	function handleSelectGroup(groupIdx: number) {
+		const groupEl = document.getElementById(groupElementId(groupIdx));
+		if (!groupEl) {
+			return;
+		}
+		const stickyHeaderHeight = stickyHeaderRef.current?.offsetHeight ?? 0;
+		window.scrollTo({
+			top: groupEl.getBoundingClientRect().top + window.scrollY - stickyHeaderHeight,
+			behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+		});
+	}
+
+	const groupNavEntries: readonly GroupNavEntry[] = viewMode === 'classic' ? groups.map(function(group) {
+		return { label: group.label || '', stats: formatGroupReadTimeStats(group.items) };
+	}) : [];
+
 	function renderItemRow(item: ThreadRowItem): React.ReactElement {
 		if (item.type === 'bundle') {
 			const bundle = item as BundleSummary;
@@ -610,70 +666,62 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 	}
 
 	return (
-		<React.Fragment>
-			<div style={{position: 'sticky', top: 0, zIndex: 10, background: '#fff'}}>
-				<div className="thread-list-header" style={{display: 'flex', justifyContent: 'space-between', padding: '4px 8px'}}>
-					<button
-						className={'btn btn-sm ' + (viewMode === 'quick-deal' ? 'btn-primary' : 'btn-outline-secondary')}
-						title="Show all emails sorted by recent read time, with 'When I have time' emails at the bottom"
-						onClick={() => setViewMode(viewMode === 'quick-deal' ? 'classic' : 'quick-deal')}
-					>
-						<span className="bi bi-lightning-fill"></span>{' '}
-						{viewMode === 'quick-deal' ? 'Classic View' : 'Quick Deal'}
-					</button>
-					{!selectionMode ? (
+		<div className="thread-list-layout">
+			{viewMode === 'classic' ? <GroupNav groups={groupNavEntries} onSelectGroup={handleSelectGroup} /> : null}
+			<div className="thread-list-main">
+				<div ref={stickyHeaderRef} style={{position: 'sticky', top: 0, zIndex: 10, background: '#fff'}}>
+					<div className="thread-list-header" style={{display: 'flex', justifyContent: 'space-between', padding: '4px 8px'}}>
 						<button
-							className="btn btn-sm btn-outline-secondary"
-							title="Select threads to bundle"
-							onClick={() => setSelectionMode(true)}
+							className={'btn btn-sm ' + (viewMode === 'quick-deal' ? 'btn-primary' : 'btn-outline-secondary')}
+							title="Show all emails sorted by recent read time, with 'When I have time' emails at the bottom"
+							onClick={() => setViewMode(viewMode === 'quick-deal' ? 'classic' : 'quick-deal')}
 						>
-							<span className="bi bi-check2-square"></span> Select
+							<span className="bi bi-lightning-fill"></span>{' '}
+							{viewMode === 'quick-deal' ? 'Classic View' : 'Quick Deal'}
 						</button>
+						{!selectionMode ? (
+							<button
+								className="btn btn-sm btn-outline-secondary"
+								title="Select threads to bundle"
+								onClick={() => setSelectionMode(true)}
+							>
+								<span className="bi bi-check2-square"></span> Select
+							</button>
+						) : null}
+					</div>
+					{selectionMode ? (
+						<SelectionBar
+							selectedCount={selectedThreadIds.size}
+							editingBundleId={editingBundleId}
+							onBundle={handleBundle}
+							onCancel={handleCancelSelection}
+						/>
 					) : null}
 				</div>
-				{selectionMode ? (
-					<SelectionBar
-						selectedCount={selectedThreadIds.size}
-						editingBundleId={editingBundleId}
-						onBundle={handleBundle}
-						onCancel={handleCancelSelection}
-					/>
-				) : null}
+				{viewMode === 'quick-deal' ? (function() {
+					const allItems = groups.flatMap(function(g) { return g.items; });
+					const normalItems = allItems.filter(function(item) { return item.visibility !== 'when-i-have-time'; });
+					const laterItems = allItems.filter(function(item) { return item.visibility === 'when-i-have-time'; });
+					function byRecentTime(a: ThreadRowItem, b: ThreadRowItem) {
+						return a.recentMessageReadTimeSeconds - b.recentMessageReadTimeSeconds;
+					}
+					const sortedItems = [...normalItems.sort(byRecentTime), ...laterItems.sort(byRecentTime)];
+					return sortedItems.map(renderItemRow);
+				})() : groups.map(function(group, groupIdx) {
+					return (
+						<React.Fragment key={groupIdx}>
+							<div className="group" id={groupElementId(groupIdx)}>
+								{groupNavEntries[groupIdx].label}
+								<span style={{marginLeft: '8px', fontWeight: 'normal', fontSize: '0.85em', color: '#666'}}>
+									{groupNavEntries[groupIdx].stats}
+								</span>
+							</div>
+							{group.items.map(renderItemRow)}
+						</React.Fragment>
+					);
+				})}
 			</div>
-			{viewMode === 'quick-deal' ? (function() {
-				const allItems = groups.flatMap(function(g) { return g.items; });
-				const normalItems = allItems.filter(function(item) { return item.visibility !== 'when-i-have-time'; });
-				const laterItems = allItems.filter(function(item) { return item.visibility === 'when-i-have-time'; });
-				function byRecentTime(a: ThreadRowItem, b: ThreadRowItem) {
-					return a.recentMessageReadTimeSeconds - b.recentMessageReadTimeSeconds;
-				}
-				const sortedItems = [...normalItems.sort(byRecentTime), ...laterItems.sort(byRecentTime)];
-				return sortedItems.map(renderItemRow);
-			})() : groups.map(function(group, groupIdx) {
-				const items: ThreadRowItem[] = group.items;
-
-				const groupTotalTime = items.reduce(function(sum, item) {
-					return sum + item.totalTimeToReadSeconds;
-				}, 0);
-				const groupRecentTime = items.reduce(function(sum, item) {
-					return sum + item.recentMessageReadTimeSeconds;
-				}, 0);
-
-				return (
-					<React.Fragment key={groupIdx}>
-						<div className="group">
-							{group.label || ''}
-							<span style={{marginLeft: '8px', fontWeight: 'normal', fontSize: '0.85em', color: '#666'}}>
-								{items.length} item{items.length !== 1 ? 's' : ''}
-								{' · '}Total: {formatReadTime(groupTotalTime)}
-								{' · '}Recent: {formatReadTime(groupRecentTime)}
-							</span>
-						</div>
-						{items.map(renderItemRow)}
-					</React.Fragment>
-				);
-			})}
-		</React.Fragment>
+		</div>
 	);
 }
 
