@@ -10,8 +10,13 @@
 const CONTAINER_ID = 'nailbox-messenger-container';
 const AUTO_DISMISS_MS = 5000;
 
+export interface ToastAction {
+	label: string;
+	onClick: () => void;
+}
+
 export interface MsgHandle {
-	update(opts: { type: string; message: string }): MsgHandle;
+	update(opts: { type: string; message: string; action?: ToastAction | null }): MsgHandle;
 }
 
 function getOrCreateContainer(): HTMLElement {
@@ -46,17 +51,36 @@ function showToast(initialMessage: string, initialType: string): MsgHandle {
 	const textSpan = document.createElement('span');
 	textSpan.textContent = initialMessage;
 
+	const actionBtn = document.createElement('button');
+	actionBtn.type = 'button';
+	actionBtn.className = 'btn btn-link btn-sm';
+	actionBtn.style.display = 'none';
+	actionBtn.style.marginLeft = '8px';
+
 	el.appendChild(textSpan);
+	el.appendChild(actionBtn);
 	el.appendChild(closeBtn);
 	container.appendChild(el);
 
 	let autoTimer: ReturnType<typeof setTimeout> = setTimeout(function() { el.remove(); }, AUTO_DISMISS_MS);
+	let actionHandler: (() => void) | null = null;
+	actionBtn.addEventListener('click', function() {
+		if (actionHandler) actionHandler();
+	});
 
 	const msgHandle: MsgHandle = {
-		update: function({ type, message }) {
+		update: function({ type, message, action }) {
 			clearTimeout(autoTimer);
 			el.className = 'alert alert-dismissible ' + typeToClass(type);
 			textSpan.textContent = message;
+			if (action) {
+				actionBtn.textContent = action.label;
+				actionBtn.style.display = '';
+				actionHandler = action.onClick;
+			} else {
+				actionBtn.style.display = 'none';
+				actionHandler = null;
+			}
 			autoTimer = setTimeout(function() { el.remove(); }, AUTO_DISMISS_MS);
 			return msgHandle;
 		},
