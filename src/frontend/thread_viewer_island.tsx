@@ -14,6 +14,7 @@ import {
 	type RemoteContent,
 } from './email_srcdoc.js';
 import { forwardKeydownToParent, observeContentHeight, whenFrameDocumentReady } from './iframe_autosize.js';
+import { ensureReadableContrast } from './email_contrast.js';
 import { linkifySegments } from './linkify.js';
 import { parseWithReadability } from './readability_parser.js';
 import { readerViewFor } from './reader_view.js';
@@ -158,6 +159,7 @@ function SandboxedFrame({ srcdoc, title }: SandboxedFrameProps) {
 		}
 		let stopObserving = function() {};
 		let stopForwarding = function() {};
+		let stopContrastRepair = function() {};
 		const cancelWaiting = whenFrameDocumentReady(
 			frame,
 			function(doc) { return doc !== observedDocument.current; },
@@ -165,12 +167,14 @@ function SandboxedFrame({ srcdoc, title }: SandboxedFrameProps) {
 				observedDocument.current = doc;
 				stopObserving = observeContentHeight(frame, setHeight);
 				stopForwarding = forwardKeydownToParent(frame);
+				stopContrastRepair = ensureReadableContrast(doc);
 			},
 		);
 		return function() {
 			cancelWaiting();
 			stopObserving();
 			stopForwarding();
+			stopContrastRepair();
 		};
 	}, [frame, srcdoc]);
 	return (
