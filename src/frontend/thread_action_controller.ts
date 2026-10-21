@@ -9,8 +9,13 @@ interface Label {
 	hue?: number;
 }
 
+interface ToastAction {
+	label: string;
+	onClick: () => void;
+}
+
 interface MsgHandle {
-	update(opts: { type: string; message: string }): void;
+	update(opts: { type: string; message: string; action?: ToastAction | null }): void;
 }
 
 interface Messenger {
@@ -36,13 +41,14 @@ interface SwitchToLabelPickerOpts extends OpenLabelPickerOpts {
 	hideThreadViewer(): void;
 }
 
-function updateMessenger(actionMessenger: MsgHandle | null, type: string, message: string): void {
+function updateMessenger(actionMessenger: MsgHandle | null, type: string, message: string, action?: ToastAction | null): void {
 	if (!actionMessenger || typeof actionMessenger.update !== 'function') {
 		return;
 	}
 	actionMessenger.update({
 		type,
 		message,
+		action: action ?? null,
 	});
 }
 
@@ -126,11 +132,17 @@ export function createThreadActionController({
 		startMessage,
 		successMessage,
 		request,
+		undoRequest,
+		undoStartMessage,
+		undoSuccessMessage,
 	}: {
 		threadId: string;
 		startMessage: string;
 		successMessage: string;
 		request: () => Promise<Result<JsonValue>>;
+		undoRequest?: () => Promise<Result<JsonValue>>;
+		undoStartMessage?: string;
+		undoSuccessMessage?: string;
 	}): Promise<ActionResult> {
 		const actionMessenger = createActionMessenger(messengerGetter, startMessage);
 		if (!threadId) {
@@ -140,7 +152,19 @@ export function createThreadActionController({
 		if (!result.ok) {
 			return reportFailedRequest(actionMessenger, result.error);
 		}
-		updateMessenger(actionMessenger, 'success', successMessage);
+		const undoAction: ToastAction | null = undoRequest ? {
+			label: 'Undo',
+			onClick: async () => {
+				updateMessenger(actionMessenger, 'info', undoStartMessage || 'Undoing...');
+				const undoResult = await attemptRequest(undoRequest);
+				if (!undoResult.ok) {
+					updateMessenger(actionMessenger, 'error', undoResult.error.message || 'Undo failed.');
+				} else {
+					updateMessenger(actionMessenger, 'success', undoSuccessMessage || 'Undone.');
+				}
+			},
+		} : null;
+		updateMessenger(actionMessenger, 'success', successMessage, undoAction);
 		return {
 			ok: true,
 		};
@@ -151,12 +175,15 @@ export function createThreadActionController({
 		startMessage,
 		successMessage,
 		request,
+		makeUndo,
 	}: {
 		bundleId: string;
 		startMessage: string;
 		successMessage: string;
 		/** Must not reject; failures are reported through the Result. */
 		request: () => Promise<Result<JsonValue>>;
+		/** Builds the undo action from the successful result, if undo is available. */
+		makeUndo?: (result: Result<JsonValue>) => ToastAction | null;
 	}): Promise<ActionResult> {
 		const actionMessenger = createActionMessenger(messengerGetter, startMessage);
 		if (!bundleId) {
@@ -167,8 +194,27 @@ export function createThreadActionController({
 		if (!result.ok) {
 			return reportFailedRequest(actionMessenger, result.error);
 		}
-		updateMessenger(actionMessenger, 'success', successMessage);
+		const undoAction = makeUndo ? makeUndo(result) : null;
+		updateMessenger(actionMessenger, 'success', successMessage, undoAction);
 		return {ok: true};
+	}
+
+	function extractThreadIds(result: Result<JsonValue>): string[] {
+		if (!result.ok) return [];
+		const v = result.value as {threadIds?: unknown};
+		return Array.isArray(v.threadIds) ? v.threadIds.filter((id): id is string => typeof id === 'string') : [];
+	}
+
+	async function undoThreadList(threadIds: string[], actionMessenger: MsgHandle | null, startMsg: string, doneMsg: string): Promise<void> {
+		updateMessenger(actionMessenger, 'info', startMsg);
+		for (const threadId of threadIds) {
+			const r = await attemptRequest(() => appApi.unarchiveThread(threadId));
+			if (!r.ok) {
+				updateMessenger(actionMessenger, 'error', `Undo failed for thread ${threadId}.`);
+				return;
+			}
+		}
+		updateMessenger(actionMessenger, 'success', doneMsg);
 	}
 
 	return {
@@ -178,6 +224,9 @@ export function createThreadActionController({
 				startMessage: `Archiving thread ${threadId}...`,
 				successMessage: defaultSuccessMessage('archived', threadId),
 				request: () => appApi.archiveThread(threadId),
+				undoRequest: () => appApi.unarchiveThread(threadId),
+				undoStartMessage: `Restoring thread ${threadId}...`,
+				undoSuccessMessage: `Restored thread ${threadId} to inbox.`,
 			});
 		},
 		deleteThread(threadId: string) {
@@ -186,6 +235,9 @@ export function createThreadActionController({
 				startMessage: `Deleting thread ${threadId}...`,
 				successMessage: `Successfully deleted message ${threadId}`,
 				request: () => appApi.deleteThread(threadId),
+				undoRequest: () => appApi.untrashThread(threadId),
+				undoStartMessage: `Restoring thread ${threadId}...`,
+				undoSuccessMessage: `Restored thread ${threadId} to inbox.`,
 			});
 		},
 		markThreadAsSpam(threadId: string) {
@@ -194,6 +246,9 @@ export function createThreadActionController({
 				startMessage: `Reporting thread ${threadId} as spam...`,
 				successMessage: `Successfully reported thread ${threadId} as spam.`,
 				request: () => appApi.markThreadAsSpam(threadId),
+				undoRequest: () => appApi.unspamThread(threadId),
+				undoStartMessage: `Removing spam report for thread ${threadId}...`,
+				undoSuccessMessage: `Removed spam report for thread ${threadId}.`,
 			});
 		},
 		archiveBundle(bundleId: string) {
@@ -202,6 +257,17 @@ export function createThreadActionController({
 				startMessage: `Archiving bundle ${bundleId}...`,
 				successMessage: `Successfully archived bundle.`,
 				request: () => runRemoval({ kind: 'bundle', bundleId }, () => appApi.archiveBundle(bundleId)),
+				makeUndo: (result) => {
+					const threadIds = extractThreadIds(result);
+					if (threadIds.length === 0) return null;
+					return {
+						label: 'Undo',
+						onClick: async () => {
+							const m = createActionMessenger(messengerGetter, `Restoring bundle threads...`);
+							await undoThreadList(threadIds, m, `Restoring ${threadIds.length} threads...`, `Restored ${threadIds.length} threads to inbox.`);
+						},
+					};
+				},
 			});
 		},
 		deleteBundle(bundleId: string) {
@@ -210,6 +276,23 @@ export function createThreadActionController({
 				startMessage: `Ungrouping bundle ${bundleId}...`,
 				successMessage: `Bundle ungrouped.`,
 				request: () => attemptRequest(() => appApi.deleteBundle(bundleId)),
+				makeUndo: (result) => {
+					const threadIds = extractThreadIds(result);
+					if (threadIds.length === 0) return null;
+					return {
+						label: 'Undo',
+						onClick: async () => {
+							const m = createActionMessenger(messengerGetter, `Regrouping bundle...`);
+							updateMessenger(m, 'info', `Regrouping ${threadIds.length} threads...`);
+							const r = await attemptRequest(() => appApi.createBundle(threadIds));
+							if (!r.ok) {
+								updateMessenger(m, 'error', 'Failed to regroup bundle.');
+							} else {
+								updateMessenger(m, 'success', 'Bundle regrouped.');
+							}
+						},
+					};
+				},
 			});
 		},
 		moveThreadToLabel(threadId: string, labelId: string) {
@@ -218,6 +301,9 @@ export function createThreadActionController({
 				startMessage: `Moving thread ${threadId} to label...`,
 				successMessage: `Successfully moved thread ${threadId} to label.`,
 				request: () => appApi.moveThreadToLabel(threadId, labelId),
+				undoRequest: () => appApi.unarchiveThread(threadId),
+				undoStartMessage: `Moving thread ${threadId} back to inbox...`,
+				undoSuccessMessage: `Moved thread ${threadId} back to inbox.`,
 			});
 		},
 		openLabelPicker({

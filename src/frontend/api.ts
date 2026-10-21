@@ -465,6 +465,21 @@ export function createAppApi() {
 				method: 'POST',
 			});
 		},
+		untrashThread(threadId: string): Promise<Result<JsonValue>> {
+			return request(`/api/threads/${threadId}/untrash`, {
+				method: 'POST',
+			});
+		},
+		unarchiveThread(threadId: string): Promise<Result<JsonValue>> {
+			return request(`/api/threads/${threadId}/unarchive`, {
+				method: 'POST',
+			});
+		},
+		unspamThread(threadId: string): Promise<Result<JsonValue>> {
+			return request(`/api/threads/${threadId}/unspam`, {
+				method: 'POST',
+			});
+		},
 		moveThreadToLabel(threadId: string, labelId: string): Promise<Result<JsonValue>> {
 			return request(`/api/threads/${threadId}/move`, {
 				body: JSON.stringify({labelId}),

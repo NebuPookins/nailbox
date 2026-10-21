@@ -203,6 +203,66 @@ export default function registerThreadActionRoutes(app: Application, dependencie
 		}
 	});
 
+	/**
+	 * Reverses a Gmail label change and refreshes the thread from Gmail so it
+	 * reappears in the local cache (and inbox). Used to undo archive/move/spam.
+	 * For undoing trash, pass untrash=true to call Gmail's untrash first.
+	 */
+	async function restoreThreadToInboxAndCache(
+		res: Response,
+		threadId: string,
+		modifyJson: {addLabelIds?: string[]; removeLabelIds?: string[]},
+		untrash: boolean = false,
+	): Promise<void> {
+		try {
+			const result = await withGmailApi(res, async (gmailRequest: any) => {
+				if (untrash) {
+					await gmailRequest({
+						method: 'POST',
+						path: `/threads/${threadId}/untrash`,
+					});
+				}
+				const gmailResponse = await gmailRequest({
+					method: 'POST',
+					path: `/threads/${threadId}/modify`,
+					json: modifyJson,
+				});
+				const refreshResult = await refreshSingleThreadFromGmail({
+					gmailRequest,
+					threadId,
+					lastRefresheds,
+					threadRepository,
+					threadService,
+					bundles,
+				});
+				return {gmailResponse, refreshResult};
+			});
+			if (result == null) {
+				return;
+			}
+			notifyThreadsChanged?.('thread-refresh');
+			res.status(200).send(result);
+		} catch (error) {
+			logger.error(util.inspect(error));
+			res.sendStatus(500);
+		}
+	}
+
+	app.post(/^\/api\/threads\/([a-z0-9]+)\/untrash$/, async function(req: Request, res: Response) {
+		const threadId = req.params[0];
+		await restoreThreadToInboxAndCache(res, threadId, {addLabelIds: ['INBOX']}, true);
+	});
+
+	app.post(/^\/api\/threads\/([a-z0-9]+)\/unarchive$/, async function(req: Request, res: Response) {
+		const threadId = req.params[0];
+		await restoreThreadToInboxAndCache(res, threadId, {addLabelIds: ['INBOX']});
+	});
+
+	app.post(/^\/api\/threads\/([a-z0-9]+)\/unspam$/, async function(req: Request, res: Response) {
+		const threadId = req.params[0];
+		await restoreThreadToInboxAndCache(res, threadId, {removeLabelIds: ['SPAM'], addLabelIds: ['INBOX']});
+	});
+
 	app.post('/api/threads/messages/send', async function(req: Request, res: Response) {
 		try {
 			const messagePayload = normalizeGmailSendMessageDto(req.body);

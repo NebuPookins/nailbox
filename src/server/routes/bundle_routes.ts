@@ -119,10 +119,11 @@ export default function registerBundleRoutes(app: Application, dependencies: any
 				res.sendStatus(404);
 				return;
 			}
+			const ungroupedThreadIds = [...bundle.threadIds];
 			bundles.deleteBundle(bundleId);
 			await bundles.save();
 			logger.info(`Dissolved bundle ${bundleId}.`);
-			res.sendStatus(204);
+			res.status(200).send({threadIds: ungroupedThreadIds});
 		} catch (error) {
 			logger.error(util.inspect(error));
 			res.sendStatus(500);
