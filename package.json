@@ -31,7 +31,7 @@
     "posthtml": "^0.16.7",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "sanitize-html": "^2.18.0",
+    "sanitize-html": "^2.18.1",
     "zod": "^4.6.6"
   },
   "devDependencies": {
