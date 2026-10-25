@@ -2,7 +2,6 @@ import util from 'util';
 
 import {marked} from 'marked';
 import hljs from 'highlight.js';
-import posthtml from 'posthtml';
 import {encode} from 'html-entities';
 import MailComposer from 'nodemailer/lib/mail-composer';
 import type MimeNode from 'nodemailer/lib/mime-node';
@@ -52,12 +51,21 @@ const HLJS_CLASS_STYLES: ReadonlyMap<string, string> = new Map([
 
 const PRE_STYLE = 'background:#002b36; color:#839496';
 
+// Adds the inline style to each highlight.js span that has a known class.
+function inlineHighlightStyles(highlightedHtml: string): string {
+	return highlightedHtml.replace(/<span class="([^"]*)">/g, (tag, className: string) => {
+		const style = HLJS_CLASS_STYLES.get(className);
+		return style ? `<span class="${className}" style="${style}">` : tag;
+	});
+}
+
 // A fence's language tag is free text, and hljs.highlight throws on names it
 // doesn't know, so anything unrecognized falls back to auto-detection.
 function renderHighlightedCode(code: string, lang: string): string {
-	return hljs.getLanguage(lang) ?
+	const highlighted = hljs.getLanguage(lang) ?
 		hljs.highlight(code, {language: lang, ignoreIllegals: true}).value :
 		hljs.highlightAuto(code).value;
+	return inlineHighlightStyles(highlighted);
 }
 
 marked.use({
@@ -65,26 +73,16 @@ marked.use({
 		code({text, lang}: {text: string; lang?: string}): string {
 			const highlighted = renderHighlightedCode(text, lang ?? '');
 			const langClass = lang ? ` class="language-${encode(lang)}"` : '';
-			return `<pre><code${langClass}>${highlighted}</code></pre>`;
+			return `<pre style="${PRE_STYLE}"><code${langClass}>${highlighted}</code></pre>`;
 		},
 	},
 });
 
 async function markdownToHtml(bodyPlusSignature: string): Promise<string> {
-	const content = await marked.parse(bodyPlusSignature, {
+	return marked.parse(bodyPlusSignature, {
 		gfm: true,
 		breaks: true,
 	});
-	const result = await posthtml()
-		.use((tree) => {
-			tree.match({tag: 'pre'}, (node) => ({...node, attrs: {style: PRE_STYLE}}));
-			tree.match({tag: 'span'}, (node) => {
-				const style = HLJS_CLASS_STYLES.get(node.attrs?.class ?? '');
-				return style ? {...node, attrs: {...node.attrs, style}} : node;
-			});
-		})
-		.process(content);
-	return result.html;
 }
 
 function normalizeEmailAddress(emailAddress: unknown): string {
