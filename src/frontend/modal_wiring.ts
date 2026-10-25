@@ -1,13 +1,5 @@
 import { showModal, hideModal } from './native_modal.js';
-
-interface MsgHandle {
-	update(opts: { type: string; message: string }): void;
-}
-
-interface Messenger {
-	info(message: string): MsgHandle;
-	error(message: string): MsgHandle;
-}
+import type { Messenger, MsgHandle } from './messenger_shim.js';
 
 interface ThreadViewerController {
 	handleKeydown(opts: {

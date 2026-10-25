@@ -29,8 +29,9 @@ function createMessengerGetter() {
 						message,
 					});
 					return {
-						update(payload) {
-							events.push(payload);
+						update({ type, message, action }) {
+							// An omitted action means "no action", same as null.
+							events.push({ type, message, action: action ?? null });
 						},
 					};
 				},
@@ -386,4 +387,39 @@ test('archiveThread describes a rejection that is not an Error', async () => {
 		{ type: 'info', message: 'Archiving thread abc123...' },
 		{ type: 'error', message: 'connection reset', action: null },
 	]);
+});
+
+test('clicking the Undo of an archived bundle replaces that announcement\'s action', async () => {
+	const events = [];
+	let handleCount = 0;
+	const messengerGetter = () => ({
+		error() {},
+		info(message) {
+			const handle = ++handleCount;
+			events.push({ handle, type: 'info', message, action: null });
+			return {
+				update({ type, message, action }) {
+					events.push({ handle, type, message, action: action ?? null });
+				},
+			};
+		},
+	});
+	const controller = createThreadActionController({
+		appApi: {
+			async archiveBundle() { return { ok: true, value: { threadIds: ['t1', 't2'] } }; },
+			async unarchiveThread() { return { ok: true, value: {} }; },
+		},
+		messengerGetter,
+		...createRemovalTracker().hooks,
+	});
+
+	await controller.archiveBundle('bundle-1');
+	const withUndo = events.filter(e => e.action !== null);
+	assert.equal(withUndo.length, 1);
+	const original = withUndo[0];
+	await original.action.onClick();
+
+	const latestOnOriginal = events.filter(e => e.handle === original.handle).at(-1);
+	assert.equal(latestOnOriginal.action, null);
+	assert.equal(handleCount, 1);
 });

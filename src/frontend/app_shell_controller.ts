@@ -1,10 +1,5 @@
 import { type Result, type AppApi } from './api.js';
-import { type MsgHandle } from './messenger_shim.js';
-
-interface Messenger {
-	info(message: string): MsgHandle;
-	error(message: string): MsgHandle;
-}
+import { type Messenger, type MsgHandle } from './messenger_shim.js';
 
 interface AuthStatus {
 	configured?: boolean;

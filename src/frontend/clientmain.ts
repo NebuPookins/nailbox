@@ -1,6 +1,6 @@
 import frontendApi from './index.js';
 import { showModal, hideModal } from './native_modal.js';
-import { createMessenger, type MsgHandle } from './messenger_shim.js';
+import { createMessenger, silentUnlessFailed, type MsgHandle } from './messenger_shim.js';
 import { createAppShellController } from './app_shell_controller.js';
 import { createThreadListController } from './thread_list_controller.js';
 import {
@@ -232,6 +232,7 @@ function renderSetupNeededState(message?: string): void {
 		const result = await appApi.loadGroupedThreads();
 		if (!result.ok) {
 			authShellIsland.setError();
+			console.error('Failed to load threads from the server', result.error);
 			updateMessenger.update({
 				type: 'error',
 				message: 'Failed to load threads: ' + (result.error?.message || String(result.error))
@@ -254,6 +255,7 @@ function renderSetupNeededState(message?: string): void {
 	async function refreshThreadsFromServerCoalesced(updateMessenger: MsgHandle): Promise<void> {
 		if (threadRefreshInFlight) {
 			pendingThreadRefresh = true;
+			updateMessenger.update({ type: 'success', message: 'A refresh is already running; the thread list will update again when it finishes.' });
 			return;
 		}
 		threadRefreshInFlight = true;
@@ -263,7 +265,7 @@ function renderSetupNeededState(message?: string): void {
 			threadRefreshInFlight = false;
 			if (pendingThreadRefresh) {
 				pendingThreadRefresh = false;
-				await refreshThreadsFromServerCoalesced(messengerGetter().info('Refreshing threads from cache...'));
+				await refreshThreadsFromServerCoalesced(silentUnlessFailed(messengerGetter()));
 			}
 		}
 	}
@@ -376,9 +378,8 @@ function renderSetupNeededState(message?: string): void {
 	}
 
 	function refreshThreadList(): void {
-		refreshThreadsFromServerCoalesced(
-			messengerGetter().info('Refreshing threads from cache...')
-		).catch(function(error: unknown) {
+		refreshThreadsFromServerCoalesced(silentUnlessFailed(messengerGetter())).catch(function(error: unknown) {
+			console.error('Background thread list refresh failed', error);
 			messengerGetter().error(error instanceof Error ? error.message : String(error));
 		});
 	}
@@ -389,9 +390,8 @@ function renderSetupNeededState(message?: string): void {
 			if (!authStatus.connected) {
 				return;
 			}
-			refreshThreadsFromServerCoalesced(
-				messengerGetter().info('Refreshing threads from cache...')
-			).catch(function(error: unknown) {
+			refreshThreadsFromServerCoalesced(silentUnlessFailed(messengerGetter())).catch(function(error: unknown) {
+				console.error('Background thread list refresh (websocket) failed', error);
 				messengerGetter().error(error instanceof Error ? error.message : String(error));
 			});
 		},

@@ -1,4 +1,5 @@
 import { AppApi, JsonValue, Result } from "./api.js";
+import type { Messenger, MsgHandle, AnnouncementAction } from "./messenger_shim.js";
 import type { RemovalTarget } from "./thread_list_state.js";
 
 interface Label {
@@ -8,21 +9,6 @@ interface Label {
 	labelListVisibility?: string;
 	hue?: number;
 }
-
-interface ToastAction {
-	label: string;
-	onClick: () => void;
-}
-
-interface MsgHandle {
-	update(opts: { type: string; message: string; action?: ToastAction | null }): void;
-}
-
-interface Messenger {
-	info(message: string): MsgHandle;
-	error(message: string): MsgHandle;
-}
-
 
 export interface ActionResult {
 	ok: boolean;
@@ -41,34 +27,16 @@ interface SwitchToLabelPickerOpts extends OpenLabelPickerOpts {
 	hideThreadViewer(): void;
 }
 
-function updateMessenger(actionMessenger: MsgHandle | null, type: string, message: string, action?: ToastAction | null): void {
-	if (!actionMessenger || typeof actionMessenger.update !== 'function') {
-		return;
-	}
-	actionMessenger.update({
-		type,
-		message,
-		action: action ?? null,
-	});
-}
-
-function createActionMessenger(messengerGetter: (() => Messenger) | null | undefined, message: string): MsgHandle | null {
-	if (!messengerGetter) {
-		return null;
-	}
-	return messengerGetter().info(message);
-}
-
-function reportMissingThreadId(actionMessenger: MsgHandle | null): ActionResult {
-	updateMessenger(actionMessenger, 'error', 'Missing thread id.');
+function reportMissingThreadId(actionMessenger: MsgHandle): ActionResult {
+	actionMessenger.update({ type: 'error', message: 'Missing thread id.' });
 	return {
 		ok: false,
 		reason: 'missing-thread-id',
 	};
 }
 
-function reportFailedRequest(actionMessenger: MsgHandle | null, error: Error): ActionResult {
-	updateMessenger(actionMessenger, 'error', error.message || 'The request failed.');
+function reportFailedRequest(actionMessenger: MsgHandle, error: Error): ActionResult {
+	actionMessenger.update({ type: 'error', message: error.message || 'The request failed.' });
 	return {
 		ok: false,
 		reason: 'request-failed',
@@ -144,7 +112,7 @@ export function createThreadActionController({
 		undoStartMessage?: string;
 		undoSuccessMessage?: string;
 	}): Promise<ActionResult> {
-		const actionMessenger = createActionMessenger(messengerGetter, startMessage);
+		const actionMessenger = messengerGetter().info(startMessage);
 		if (!threadId) {
 			return reportMissingThreadId(actionMessenger);
 		}
@@ -152,19 +120,19 @@ export function createThreadActionController({
 		if (!result.ok) {
 			return reportFailedRequest(actionMessenger, result.error);
 		}
-		const undoAction: ToastAction | null = undoRequest ? {
+		const undoAction: AnnouncementAction | null = undoRequest ? {
 			label: 'Undo',
 			onClick: async () => {
-				updateMessenger(actionMessenger, 'info', undoStartMessage || 'Undoing...');
+				actionMessenger.update({ type: 'info', message: undoStartMessage || 'Undoing...' });
 				const undoResult = await attemptRequest(undoRequest);
 				if (!undoResult.ok) {
-					updateMessenger(actionMessenger, 'error', undoResult.error.message || 'Undo failed.');
+					actionMessenger.update({ type: 'error', message: undoResult.error.message || 'Undo failed.' });
 				} else {
-					updateMessenger(actionMessenger, 'success', undoSuccessMessage || 'Undone.');
+					actionMessenger.update({ type: 'success', message: undoSuccessMessage || 'Undone.' });
 				}
 			},
 		} : null;
-		updateMessenger(actionMessenger, 'success', successMessage, undoAction);
+		actionMessenger.update({ type: 'success', message: successMessage, action: undoAction });
 		return {
 			ok: true,
 		};
@@ -183,19 +151,19 @@ export function createThreadActionController({
 		/** Must not reject; failures are reported through the Result. */
 		request: () => Promise<Result<JsonValue>>;
 		/** Builds the undo action from the successful result, if undo is available. */
-		makeUndo?: (result: Result<JsonValue>) => ToastAction | null;
+		makeUndo?: (result: Result<JsonValue>, actionMessenger: MsgHandle) => AnnouncementAction | null;
 	}): Promise<ActionResult> {
-		const actionMessenger = createActionMessenger(messengerGetter, startMessage);
+		const actionMessenger = messengerGetter().info(startMessage);
 		if (!bundleId) {
-			updateMessenger(actionMessenger, 'error', 'Missing bundle id.');
+			actionMessenger.update({ type: 'error', message: 'Missing bundle id.' });
 			return {ok: false, reason: 'missing-bundle-id'};
 		}
 		const result = await request();
 		if (!result.ok) {
 			return reportFailedRequest(actionMessenger, result.error);
 		}
-		const undoAction = makeUndo ? makeUndo(result) : null;
-		updateMessenger(actionMessenger, 'success', successMessage, undoAction);
+		const undoAction = makeUndo ? makeUndo(result, actionMessenger) : null;
+		actionMessenger.update({ type: 'success', message: successMessage, action: undoAction });
 		return {ok: true};
 	}
 
@@ -205,16 +173,16 @@ export function createThreadActionController({
 		return Array.isArray(v.threadIds) ? v.threadIds.filter((id): id is string => typeof id === 'string') : [];
 	}
 
-	async function undoThreadList(threadIds: string[], actionMessenger: MsgHandle | null, startMsg: string, doneMsg: string): Promise<void> {
-		updateMessenger(actionMessenger, 'info', startMsg);
+	async function undoThreadList(threadIds: string[], actionMessenger: MsgHandle, startMsg: string, doneMsg: string): Promise<void> {
+		actionMessenger.update({ type: 'info', message: startMsg });
 		for (const threadId of threadIds) {
 			const r = await attemptRequest(() => appApi.unarchiveThread(threadId));
 			if (!r.ok) {
-				updateMessenger(actionMessenger, 'error', `Undo failed for thread ${threadId}.`);
+				actionMessenger.update({ type: 'error', message: `Undo failed for thread ${threadId}.` });
 				return;
 			}
 		}
-		updateMessenger(actionMessenger, 'success', doneMsg);
+		actionMessenger.update({ type: 'success', message: doneMsg });
 	}
 
 	return {
@@ -257,14 +225,13 @@ export function createThreadActionController({
 				startMessage: `Archiving bundle ${bundleId}...`,
 				successMessage: `Successfully archived bundle.`,
 				request: () => runRemoval({ kind: 'bundle', bundleId }, () => appApi.archiveBundle(bundleId)),
-				makeUndo: (result) => {
+				makeUndo: (result, actionMessenger) => {
 					const threadIds = extractThreadIds(result);
 					if (threadIds.length === 0) return null;
 					return {
 						label: 'Undo',
 						onClick: async () => {
-							const m = createActionMessenger(messengerGetter, `Restoring bundle threads...`);
-							await undoThreadList(threadIds, m, `Restoring ${threadIds.length} threads...`, `Restored ${threadIds.length} threads to inbox.`);
+							await undoThreadList(threadIds, actionMessenger, `Restoring ${threadIds.length} threads...`, `Restored ${threadIds.length} threads to inbox.`);
 						},
 					};
 				},
@@ -276,19 +243,18 @@ export function createThreadActionController({
 				startMessage: `Ungrouping bundle ${bundleId}...`,
 				successMessage: `Bundle ungrouped.`,
 				request: () => attemptRequest(() => appApi.deleteBundle(bundleId)),
-				makeUndo: (result) => {
+				makeUndo: (result, actionMessenger) => {
 					const threadIds = extractThreadIds(result);
 					if (threadIds.length === 0) return null;
 					return {
 						label: 'Undo',
 						onClick: async () => {
-							const m = createActionMessenger(messengerGetter, `Regrouping bundle...`);
-							updateMessenger(m, 'info', `Regrouping ${threadIds.length} threads...`);
+							actionMessenger.update({ type: 'info', message: `Regrouping ${threadIds.length} threads...` });
 							const r = await attemptRequest(() => appApi.createBundle(threadIds));
 							if (!r.ok) {
-								updateMessenger(m, 'error', 'Failed to regroup bundle.');
+								actionMessenger.update({ type: 'error', message: 'Failed to regroup bundle.' });
 							} else {
-								updateMessenger(m, 'success', 'Bundle regrouped.');
+								actionMessenger.update({ type: 'success', message: 'Bundle regrouped.' });
 							}
 						},
 					};

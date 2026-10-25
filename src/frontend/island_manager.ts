@@ -1,3 +1,4 @@
+import type { Messenger, MsgHandle } from './messenger_shim.js';
 import { filterSelectableLabels } from './thread_action_controller.js';
 import type { GroupingRulesConfig, ThreadGroup, ThreadOpenPayload, ThreadRowItem } from './thread_grouping.js';
 import type { HideUntilValue } from './api.js';
@@ -10,15 +11,6 @@ interface LabelData {
 	type?: string;
 	labelListVisibility?: string;
 	hue?: number;
-}
-
-interface MsgHandle {
-	update(opts: { type: string; message: string }): void;
-}
-
-interface Messenger {
-	info(message: string): MsgHandle;
-	error(message: string): void;
 }
 
 interface ThreadActionController {

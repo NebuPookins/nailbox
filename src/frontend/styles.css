@@ -100,7 +100,7 @@ html:has(> body.modal-open) {
 		flex: 0 0 220px;
 		position: sticky;
 		top: 0;
-		max-height: 100vh;
+		max-height: calc(100vh - var(--status-footer-height));
 		overflow-y: auto;
 		padding-top: 4px;
 	}
@@ -199,5 +199,88 @@ html:has(> body.modal-open) {
 		padding: 8px 12px;
 		font-size: 14px;
 		margin-bottom: 4px;
+	}
+}
+
+/* Status footer (messenger_shim.ts): an always-visible thin strip for the newest announcement, plus a history panel. */
+:root {
+	--status-footer-height: 1.75rem;
+}
+body.has-status-footer {
+	padding-bottom: var(--status-footer-height);
+}
+#railbox-status-footer {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	/* Above Bootstrap's modal backdrop (1050) and modals (1055), so messages (and Undo) stay reachable while a dialog is open. */
+	z-index: 1060;
+	font-size: 0.85rem;
+}
+.status-footer-bar,
+.status-footer-content,
+.status-footer-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.status-footer-bar {
+	height: var(--status-footer-height);
+	box-sizing: border-box;
+	padding: 2px 10px;
+	background-color: var(--bs-tertiary-bg);
+	border-top: 1px solid var(--bs-border-color);
+	color: var(--bs-body-color);
+}
+.status-footer-content {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+.status-footer-row {
+	padding: 2px 10px;
+}
+.status-footer-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.status-footer-action {
+	flex: 0 0 auto;
+	padding: 0 4px;
+	font-size: inherit;
+	line-height: 1;
+}
+.status-footer-history {
+	flex: 0 0 auto;
+	padding: 0 6px;
+	font-size: inherit;
+	line-height: 1;
+	color: var(--bs-secondary-color);
+}
+.status-footer-panel {
+	position: absolute;
+	bottom: 100%;
+	right: 0;
+	width: min(480px, 100%);
+	max-height: 40vh;
+	overflow-y: auto;
+	border-radius: 0;
+}
+.status-footer-panel[hidden] {
+	display: none;
+}
+@keyframes status-footer-flash {
+	from { background-color: var(--status-footer-flash-color); }
+	to { background-color: var(--bs-tertiary-bg); }
+}
+.status-footer-flash {
+	animation: status-footer-flash 1.5s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+	.status-footer-flash {
+		animation: none;
 	}
 }

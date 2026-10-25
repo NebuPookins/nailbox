@@ -2,15 +2,7 @@ import { humanizeDuration } from './display_format.js';
 import type { PersonDto, ThreadMessageDto } from '../server/types/thread.js';
 import type { ThreadOpenPayload } from './thread_grouping.js';
 import type { Result, ThreadDataResponse } from './api.js';
-
-interface MsgHandle {
-	update(opts: { type: string; message: string }): void;
-}
-
-interface Messenger {
-	info(message: string): MsgHandle;
-	error(message: string): MsgHandle;
-}
+import type { Messenger, MsgHandle } from './messenger_shim.js';
 
 type RenderedMessage = ThreadMessageDto & { duration: string };
 
@@ -86,16 +78,6 @@ interface AppApi {
 	buildRfc2822(payload: Rfc2822Payload): Promise<Result<string>>;
 	sendMessage(payload: { threadId: string; raw: string }): Promise<Result<{id?: string}>>;
 	getAttachment(messageId: string, attachmentId: string): Promise<Result<{data: string}>>;
-}
-
-function updateMessenger(actionMessenger: MsgHandle | null | undefined, type: string, message: string): void {
-	if (!actionMessenger || typeof actionMessenger.update !== 'function') {
-		return;
-	}
-	actionMessenger.update({
-		type,
-		message,
-	});
 }
 
 export function normalizeBase64AttachmentData(data: string): string {
@@ -196,7 +178,7 @@ export function createThreadViewerController({
 					};
 					options.appendMessage(renderedMessage);
 				});
-				updateMessenger(actionMessenger, 'success', 'Successfully downloaded thread data for ' + threadId + '.');
+				actionMessenger.update({ type: 'success', message: 'Successfully downloaded thread data for ' + threadId + '.' });
 			} catch (error) {
 				showError(error);
 			}
