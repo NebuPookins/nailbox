@@ -6,6 +6,11 @@ import {
 	filterSelectableLabels,
 } from '../src/frontend/thread_action_controller.js';
 
+/** Drops the undo callback so events can be compared by type and message. */
+function stripActions(events) {
+	return events.map(({ action, ...rest }) => rest);
+}
+
 function createMessengerGetter() {
 	const events = [];
 	return {
@@ -86,10 +91,11 @@ test('deleteThread confirms the thread removal after the API call succeeds', asy
 	assert.deepEqual(result, { ok: true });
 	assert.deepEqual(removals.confirmed, [{ kind: 'thread', threadId: 'abc123' }]);
 	assert.deepEqual(removals.failed, []);
-	assert.deepEqual(events, [
+	assert.deepEqual(stripActions(events), [
 		{ type: 'info', message: 'Deleting thread abc123...' },
 		{ type: 'success', message: 'Successfully deleted message abc123' },
 	]);
+	assert.equal(events.at(-1).action.label, 'Undo');
 });
 
 test('archiveThread reports a missing thread id without calling the API', async () => {
@@ -113,7 +119,7 @@ test('archiveThread reports a missing thread id without calling the API', async 
 	});
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Archiving thread ...' },
-		{ type: 'error', message: 'Missing thread id.' },
+		{ type: 'error', message: 'Missing thread id.', action: null },
 	]);
 });
 
@@ -138,7 +144,7 @@ test('moveThreadToLabel updates Gmail then removes the thread from the current l
 	assert.deepEqual(result, { ok: true });
 	assert.deepEqual(removals.confirmed, [{ kind: 'thread', threadId: 'abc123' }]);
 	assert.deepEqual(removals.failed, []);
-	assert.deepEqual(events, [
+	assert.deepEqual(stripActions(events), [
 		{ type: 'info', message: 'Moving thread abc123 to label...' },
 		{ type: 'success', message: 'Successfully moved thread abc123 to label.' },
 	]);
@@ -193,10 +199,11 @@ test('markThreadAsSpam confirms the thread removal after the API call succeeds',
 	assert.deepEqual(result, { ok: true });
 	assert.deepEqual(removals.confirmed, [{ kind: 'thread', threadId: 'abc123' }]);
 	assert.deepEqual(removals.failed, []);
-	assert.deepEqual(events, [
+	assert.deepEqual(stripActions(events), [
 		{ type: 'info', message: 'Reporting thread abc123 as spam...' },
 		{ type: 'success', message: 'Successfully reported thread abc123 as spam.' },
 	]);
+	assert.equal(events.at(-1).action.label, 'Undo');
 });
 
 test('markThreadAsSpam reports a missing thread id without calling the API', async () => {
@@ -217,7 +224,7 @@ test('markThreadAsSpam reports a missing thread id without calling the API', asy
 	assert.deepEqual(result, { ok: false, reason: 'missing-thread-id' });
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Reporting thread  as spam...' },
-		{ type: 'error', message: 'Missing thread id.' },
+		{ type: 'error', message: 'Missing thread id.', action: null },
 	]);
 });
 
@@ -241,7 +248,7 @@ test('markThreadAsSpam keeps the thread in the UI and reports the error when the
 	assert.deepEqual(removals.failed, [{ kind: 'thread', threadId: 'abc123' }]);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Reporting thread abc123 as spam...' },
-		{ type: 'error', message: 'Gmail said no.' },
+		{ type: 'error', message: 'Gmail said no.', action: null },
 	]);
 });
 
@@ -265,7 +272,7 @@ test('archiveThread keeps the thread in the UI and reports the error when the AP
 	assert.deepEqual(removals.failed, [{ kind: 'thread', threadId: 'abc123' }]);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Archiving thread abc123...' },
-		{ type: 'error', message: 'Network unreachable.' },
+		{ type: 'error', message: 'Network unreachable.', action: null },
 	]);
 });
 
@@ -285,7 +292,7 @@ test('deleteThread falls back to a generic message when the error carries none',
 	assert.deepEqual(result, { ok: false, reason: 'request-failed' });
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Deleting thread abc123...' },
-		{ type: 'error', message: 'The request failed.' },
+		{ type: 'error', message: 'The request failed.', action: null },
 	]);
 });
 
@@ -309,7 +316,7 @@ test('archiveBundle keeps the bundle in the UI and reports the error when the AP
 	assert.deepEqual(removals.failed, [{ kind: 'bundle', bundleId: 'bundle-1' }]);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Archiving bundle bundle-1...' },
-		{ type: 'error', message: 'Gmail rejected the batch.' },
+		{ type: 'error', message: 'Gmail rejected the batch.', action: null },
 	]);
 });
 
@@ -333,7 +340,7 @@ test('markThreadAsSpam reports a rejected request on the original messenger and 
 	assert.deepEqual(removals.failed, [{ kind: 'thread', threadId: 'abc123' }]);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Reporting thread abc123 as spam...' },
-		{ type: 'error', message: 'Failed to fetch' },
+		{ type: 'error', message: 'Failed to fetch', action: null },
 	]);
 });
 
@@ -357,7 +364,7 @@ test('archiveBundle reports a rejected request on the original messenger and kee
 	assert.deepEqual(removals.failed, [{ kind: 'bundle', bundleId: 'bundle-1' }]);
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Archiving bundle bundle-1...' },
-		{ type: 'error', message: 'Failed to fetch' },
+		{ type: 'error', message: 'Failed to fetch', action: null },
 	]);
 });
 
@@ -377,6 +384,6 @@ test('archiveThread describes a rejection that is not an Error', async () => {
 	assert.deepEqual(result, { ok: false, reason: 'request-failed' });
 	assert.deepEqual(events, [
 		{ type: 'info', message: 'Archiving thread abc123...' },
-		{ type: 'error', message: 'connection reset' },
+		{ type: 'error', message: 'connection reset', action: null },
 	]);
 });
