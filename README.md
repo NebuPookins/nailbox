@@ -22,27 +22,41 @@ The software is in an extremely early beta.
 
 ## I didn't read anything in the above section. How do I use it?
 
-* Install vagrant on your host machine https://www.vagrantup.com/
+Nailbox is a Node.js server with a browser front end. You need Node.js (the
+test suite was last run on Node.js 26) and npm, which ships with Node.js.
+
+The steps below use the Vagrant virtual machine included in this repo. If you
+already have a Node.js machine, skip to "Install and run" and run the same
+commands there.
+
+### Option A: Vagrant virtual machine
+
+* Install [VirtualBox](https://www.virtualbox.org/) and
+  [Vagrant](https://www.vagrantup.com/) on your host machine.
 * Clone this git repo to your local computer.
-* By default, the Nailbox VM will listens to port 3000. If you want to change
-  that port to another value, edit the Vagrantfile.
-* Go into the directory where the vagrant file is, and run `vagrant up` on your
-  host machine. This will create a virtual machine aka your "guest machine".
-* SSH into the newly created guest machine by running `vagrant ssh`
-* Install nodejs on your guest machine by running:
-  * `curl -sL https://deb.nodesource.com/setup_18.x | sudo -E bash -`
-  * `sudo apt-get install -y nodejs`
-* Install yarn (an alternative to npm that works better in VirtualBox because
-  it handles symlinks differently) by running:
-  * `curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -`
-  * `echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list`
-  * `sudo apt-get update && sudo apt-get install -y yarn`
-* Change into the nailbox directory by running `cd /home/vagrant/nailbox` on
-  your guest machine.
-* Install all of Nailbox's dependencies by running `yarn install`
-  (or `yarn install --no-bin-links` if your host OS is Windows or otherwise has
-  problems with symlinks) on your guest machine.
-* Build the frontend bundle by running `npm run build:frontend`.
-* Start the server by running `node main.mjs` on your guest machine.
-* Open http://localhost:3000 in your webbrowser on your host machine (or
-  whatever port you chose if you changed the setting in the vagrant file).
+* In the repo directory, run `vagrant up`. This creates the guest machine and
+  syncs the repo into it at `/home/vagrant/nailbox`.
+* Run `vagrant ssh` to open a shell in the guest machine.
+* Change into the synced directory with `cd /home/vagrant/nailbox`.
+* Install Node.js on the guest machine. The `apt` package is often too old, so
+  use [nodejs.org](https://nodejs.org/) or [nvm](https://github.com/nvm-sh/nvm).
+
+### Install and run
+
+* Install the dependencies with `npm install`.
+* Build the frontend bundle with `npm run build:frontend`. Rebuild after
+  changing anything in `src/frontend`, or use `npm run dev:frontend` to rebuild
+  on every change.
+* Start the server with `npm start`.
+* Open http://localhost:3000 in your web browser on your host machine. The
+  first visit opens the setup page, which walks you through connecting Gmail.
+
+The server reads its settings from `data/config.json`. The port defaults to
+3000. If you change it, also change the forwarded port in the Vagrantfile so
+the host can still reach the server.
+
+### Development
+
+* `npm run dev` restarts the server whenever a server-side file changes.
+* `npm test` runs the test suite.
+* `npx tsc -p tsconfig.json` type-checks the project.
