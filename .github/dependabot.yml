@@ -1,0 +1,14 @@
+# Opens pull requests for npm dependency updates. Minor and patch updates are
+# grouped into one pull request per week; major updates get one pull request
+# each so breaking changes can be reviewed on their own.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
