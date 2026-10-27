@@ -54,6 +54,12 @@ abstract class HideUntil {
 	 * @return [boolean] true if this is an instance of HideUntilIHaveTime, false otherwise.
 	 */
 	abstract isWhenIHaveTime(): boolean;
+
+	/**
+	 * @return [boolean] true if the thread got a new message since it was
+	 *   hidden (or was never hidden), which puts it back among new threads.
+	 */
+	abstract isUpdatedSince(threadLastUpdated: number): boolean;
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -84,7 +90,7 @@ class HideUntilTimestamp extends HideUntil {
 
 	/** @override */
 	getVisibility(threadLastUpdated: number, now: number): Visibility {
-		if (threadLastUpdated > this._data.hiddenOn) {
+		if (this.isUpdatedSince(threadLastUpdated)) {
 			if (now - threadLastUpdated > MESSAGE_IS_STALE_AFTER) {
 				return 'stale';
 			}  else {
@@ -101,6 +107,11 @@ class HideUntilTimestamp extends HideUntil {
 	/** @override */
 	isWhenIHaveTime(): boolean {
 		return false;
+	}
+
+	/** @override */
+	isUpdatedSince(threadLastUpdated: number): boolean {
+		return threadLastUpdated > this._data.hiddenOn;
 	}
 }
 
@@ -122,7 +133,7 @@ class HideUntilIHaveTime extends HideUntil {
 
 	/** @override */
 	getVisibility(threadLastUpdated: number, now: number): Visibility {
-		if (threadLastUpdated > this._data.hiddenOn) {
+		if (this.isUpdatedSince(threadLastUpdated)) {
 			if (now - threadLastUpdated > MESSAGE_IS_STALE_AFTER) {
 				return 'stale';
 			}  else {
@@ -135,6 +146,11 @@ class HideUntilIHaveTime extends HideUntil {
 	/** @override */
 	isWhenIHaveTime(): boolean {
 		return true;
+	}
+
+	/** @override */
+	isUpdatedSince(threadLastUpdated: number): boolean {
+		return threadLastUpdated > this._data.hiddenOn;
 	}
 }
 
@@ -154,7 +170,14 @@ class EmptyHideUntil extends HideUntil {
 	isWhenIHaveTime(): boolean {
 		return false;
 	}
+
+	/** @override */
+	isUpdatedSince(): boolean {
+		return true;
+	}
 }
+
+const EMPTY_HIDE_UNTIL = new EmptyHideUntil();
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -190,7 +213,7 @@ export class HideUntilData {
 					throw `Don't know how to handle type ${(data as HideUntilEntry).type}`;
 			}
 		} else {
-			return new EmptyHideUntil();
+			return EMPTY_HIDE_UNTIL;
 		}
 	}
 
@@ -242,8 +265,8 @@ export class HideUntilData {
 	 * Then messages which were hidden, but their hidden-until expired are shown,
 	 * ordered by the date on which the hiding was performed.
 	 *
-	 * Finally, any messages that were hidden "until I have time" are shown, in a
-	 * shuffled order.
+	 * Finally, any messages that were hidden "until I have time" (and not
+	 * updated since) are shown, in a shuffled order.
 	 *
 	 * The returned function takes 2 params and expects them to be objects with
 	 * properties "threadId" and "lastUpdated".
@@ -257,12 +280,21 @@ interface HideUntilDataLike {
 	get(thread: ThreadSortInfo): HideUntil;
 }
 
+/**
+ * The hide-until a thread sorts by. A thread updated since it was hidden,
+ * whichever way, is back among new threads, so it sorts as if never hidden.
+ */
+function sortingHideUntilFor(hideUntilData: HideUntilDataLike, thread: ThreadSortInfo): HideUntil {
+	const hideUntil = hideUntilData.get(thread);
+	return hideUntil.isUpdatedSince(thread.lastUpdated) ? EMPTY_HIDE_UNTIL : hideUntil;
+}
+
 const comparatorFactory = function(mockableHideUntilData: HideUntilDataLike) {
 	const retVal = (a: ThreadSortInfo, b: ThreadSortInfo): number => {
 		const BFirst = 1;
 		const AFirst = -1;
-		const hideAUntil = mockableHideUntilData.get(a);
-		const hideBUntil = mockableHideUntilData.get(b);
+		const hideAUntil = sortingHideUntilFor(mockableHideUntilData, a);
+		const hideBUntil = sortingHideUntilFor(mockableHideUntilData, b);
 
 		if (hideBUntil instanceof HideUntilIHaveTime) {
 			if (hideAUntil instanceof HideUntilIHaveTime) {
@@ -283,46 +315,23 @@ const comparatorFactory = function(mockableHideUntilData: HideUntilDataLike) {
 		}
 		if (hideBUntil instanceof HideUntilTimestamp) {
 			if (hideAUntil instanceof HideUntilTimestamp) {
-				if (a.lastUpdated > hideAUntil.hiddenOn) {
-					if (b.lastUpdated > hideBUntil.hiddenOn) {
-						//Both were updated, so show the most recently updated one first.
-						return a.lastUpdated > b.lastUpdated ? AFirst : BFirst;
-					} else {
-						//A was updated but B was not. Show A first.
-						return AFirst;
-					}
-				} else {
-					if (b.lastUpdated > hideBUntil.hiddenOn) {
-						//B was updated but A was not. Show B first.
-						return BFirst;
-					} else {
-						/*
-						 * Neither have been updated since they were hidden, so show the
-						 * one that's been hidden the longest first.
-						 */
-						return hideAUntil.hiddenOn < hideBUntil.hiddenOn ?
-							AFirst : BFirst;
-					}
-				}
+				/*
+				 * Neither have been updated since they were hidden, so show the
+				 * one that's been hidden the longest first.
+				 */
+				return hideAUntil.hiddenOn < hideBUntil.hiddenOn ?
+					AFirst : BFirst;
 			} else {
 				return -retVal(b, a);
 			}
 		}
 		if (hideAUntil instanceof HideUntilTimestamp) {
 			if (hideBUntil instanceof EmptyHideUntil) {
-				if (a.lastUpdated > hideAUntil.hiddenOn) {
-					/*
-					 * A has been updated and B is a new thread, so show most recently
-					 * updated first.
-					 */
-					return a.lastUpdated > b.lastUpdated ? AFirst : BFirst;
-				} else {
-					/*
-					 * A hasn't been updated since it was hidden, while B is brand new
-					 * thread, so show B first.
-					 */
-					return BFirst;
-				}
+				/*
+				 * A hasn't been updated since it was hidden, while B is new or
+				 * updated, so show B first.
+				 */
+				return BFirst;
 			} else {
 				logger.error(`Don't know how to sort with ${util.inspect(hideBUntil)}.`);
 				return 0;
@@ -330,8 +339,7 @@ const comparatorFactory = function(mockableHideUntilData: HideUntilDataLike) {
 		}
 		if (hideAUntil instanceof EmptyHideUntil) {
 			if (hideBUntil instanceof EmptyHideUntil) {
-				return a.lastUpdated < b.lastUpdated ?
-					BFirst : AFirst;
+				return Math.sign(b.lastUpdated - a.lastUpdated);
 			} else {
 				logger.error(`Don't know how to sort with ${util.inspect(hideBUntil)}.`);
 				return 0;
