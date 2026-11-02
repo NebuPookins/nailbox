@@ -1,6 +1,6 @@
 import type {ThreadSortInfo} from '../../../models/hide_until.js';
 import type {AppConfig} from '../types/config.js';
-import type {GroupingRule, GroupingRulesConfig} from '../types/grouping_rules.js';
+import {groupLabelsFor, WHEN_I_HAVE_TIME_SUFFIX, type GroupingRule, type GroupingRulesConfig} from '../types/grouping_rules.js';
 import type {ThreadSummaryDto, BundleSummaryDto, ThreadRowItem, ThreadGroupDto} from '../types/thread.js';
 import type {BundleDto} from '../types/bundle.js';
 import {normalizeGroupingRulesConfig} from '../validation/contracts.js';
@@ -109,7 +109,6 @@ export function groupThreads(
 		return hideUntilComparator(sortKeyOf(a), sortKeyOf(b));
 	}
 	const groupedItems: Record<string, ThreadRowItem[]> = {};
-	const whenIHaveTimeSuffix = ' - When I Have Time';
 
 	// Build a set of all bundled thread IDs so we can exclude them from solo display
 	const bundledThreadIds = new Set<string>();
@@ -142,32 +141,17 @@ export function groupThreads(
 	// Combine solo threads and bundle items into a single list of row items
 	const allItems: ThreadRowItem[] = [...soloThreads, ...bundleItems];
 
-	function addToGroupedItems(group: string, item: ThreadRowItem): void {
-		const key = item.visibility === 'when-i-have-time' ? `${group}${whenIHaveTimeSuffix}` : group;
-		if (!Array.isArray(groupedItems[key])) {
-			groupedItems[key] = [];
-		}
-		groupedItems[key].push(item);
-	}
-
 	allItems.forEach((item) => {
-		let foundAGroup = false;
-		for (const rule of groupingRules.rules) {
-			if (itemMatchesRule(item, rule)) {
-				addToGroupedItems(rule.name, item);
-				foundAGroup = true;
-				break;
-			}
-		}
-		if (!foundAGroup) {
-			addToGroupedItems('Others', item);
-		}
+		const matchedRuleNames = groupingRules.rules.filter((rule) => itemMatchesRule(item, rule)).map((rule) => rule.name);
+		groupLabelsFor(item.visibility === 'when-i-have-time', matchedRuleNames).forEach((key) => {
+			(groupedItems[key] ??= []).push(item);
+		});
 	});
 
 	const orderedGroupThreads: ThreadGroupDto[] = Object.keys(groupedItems).map((group) => {
 		let sortType: 'mostRecent' | 'shortest' = 'mostRecent';
 		for (const rule of groupingRules.rules) {
-			if (rule.name === group || (group.endsWith(whenIHaveTimeSuffix) && rule.name === group.replace(whenIHaveTimeSuffix, ''))) {
+			if (rule.name === group || (group.endsWith(WHEN_I_HAVE_TIME_SUFFIX) && rule.name === group.replace(WHEN_I_HAVE_TIME_SUFFIX, ''))) {
 				sortType = rule.sortType || 'mostRecent';
 				break;
 			}
@@ -198,8 +182,8 @@ export function groupThreads(
 	});
 
 	orderedGroupThreads.sort((groupA, groupB) => {
-		const labelA = groupA.label.replace(whenIHaveTimeSuffix, '');
-		const labelB = groupB.label.replace(whenIHaveTimeSuffix, '');
+		const labelA = groupA.label.replace(WHEN_I_HAVE_TIME_SUFFIX, '');
+		const labelB = groupB.label.replace(WHEN_I_HAVE_TIME_SUFFIX, '');
 		const whenIHaveTimeA = labelA !== groupA.label;
 		const whenIHaveTimeB = labelB !== groupB.label;
 		if (whenIHaveTimeA && !whenIHaveTimeB) {

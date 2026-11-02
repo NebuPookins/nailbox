@@ -166,3 +166,16 @@ test('groups left empty by a removal are dropped', () => {
 test('there is nothing to show before the first snapshot arrives', () => {
 	assert.deepEqual(visibleGroups(initialThreadListState()), []);
 });
+
+test('removing a thread that appears in several groups hides it from all of them', () => {
+	const [requested, requestedAt] = snapshotRequested(initialThreadListState());
+	const withSnapshot = snapshotReceived(requested, [
+		{ label: 'Work', items: [makeThread('a'), makeThread('b')] },
+		{ label: 'Bills', items: [makeThread('a'), makeThread('c')] },
+	], requestedAt);
+	const state = removalStarted(withSnapshot, 'removal-1', { kind: 'thread', threadId: 'a' });
+	assert.deepEqual(
+		visibleGroups(state).map((group) => [group.label, group.items.map((item) => item.threadId)]),
+		[['Work', ['b']], ['Bills', ['c']]],
+	);
+});

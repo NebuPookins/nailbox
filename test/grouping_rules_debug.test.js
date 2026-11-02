@@ -46,15 +46,13 @@ test('traceGrouping returns Others when no rules match', () => {
 			conditions: [{ type: 'sender_email', value: '@work.com' }],
 		}],
 	});
-	assert.equal(trace.matchedRuleName, null);
-	assert.equal(trace.finalGroupLabel, 'Others');
+	assert.deepEqual(trace.finalGroupLabels, ['Others']);
 	assert.equal(trace.rules.length, 1);
 	assert.equal(trace.rules[0].matched, false);
-	assert.equal(trace.rules[0].skipped, false);
 	assert.equal(trace.rules[0].conditions[0].matched, false);
 });
 
-test('traceGrouping marks the matching rule and skips later rules', () => {
+test('traceGrouping marks which rules match', () => {
 	const thread = makeThread({ senders: [{ name: 'Alice', email: 'alice@example.com' }] });
 	const trace = traceGrouping(thread, {
 		rules: [
@@ -72,13 +70,9 @@ test('traceGrouping marks the matching rule and skips later rules', () => {
 			},
 		],
 	});
-	assert.equal(trace.matchedRuleName, 'Personal');
-	assert.equal(trace.finalGroupLabel, 'Personal');
+	assert.deepEqual(trace.finalGroupLabels, ['Personal']);
 	assert.equal(trace.rules[0].matched, true);
-	assert.equal(trace.rules[0].skipped, false);
 	assert.equal(trace.rules[1].matched, false);
-	assert.equal(trace.rules[1].skipped, true);
-	assert.match(trace.rules[1].skippedReason || '', /already matched/i);
 });
 
 test('traceGrouping reports per-sender details for sender conditions', () => {
@@ -117,7 +111,7 @@ test('traceGrouping for bundles matches when any member thread matches a subject
 			conditions: [{ type: 'subject', value: 'report' }],
 		}],
 	});
-	assert.equal(trace.matchedRuleName, 'BySubject');
+	assert.deepEqual(trace.finalGroupLabels, ['BySubject']);
 	assert.equal(trace.rules[0].matched, true);
 	assert.equal(trace.rules[0].threadEvaluations.length, 2);
 	assert.equal(trace.rules[0].threadEvaluations[0].matched, true);
@@ -140,7 +134,7 @@ test('traceGrouping for bundles does not match when no member thread matches', (
 			conditions: [{ type: 'sender_email', value: '@work.com' }],
 		}],
 	});
-	assert.equal(trace.matchedRuleName, null);
+	assert.deepEqual(trace.finalGroupLabels, ['Others']);
 	assert.equal(trace.rules[0].matched, false);
 	assert.equal(trace.rules[0].threadEvaluations.length, 2);
 	assert.equal(trace.rules[0].threadEvaluations.every((e) => !e.matched), true);
@@ -160,7 +154,7 @@ test('traceGrouping for bundles matches when any member thread matches a sender 
 			conditions: [{ type: 'sender_email', value: '@work.com' }],
 		}],
 	});
-	assert.equal(trace.matchedRuleName, 'Work');
+	assert.deepEqual(trace.finalGroupLabels, ['Work']);
 	assert.equal(trace.rules[0].matched, true);
 	assert.equal(trace.rules[0].threadEvaluations[0].matched, false);
 	assert.equal(trace.rules[0].threadEvaluations[1].matched, true);
@@ -179,8 +173,7 @@ test('traceGrouping appends "When I Have Time" suffix when item visibility is wh
 			conditions: [{ type: 'sender_email', value: '@example.com' }],
 		}],
 	});
-	assert.equal(trace.matchedRuleName, 'Personal');
-	assert.equal(trace.finalGroupLabel, 'Personal - When I Have Time');
+	assert.deepEqual(trace.finalGroupLabels, ['Personal - When I Have Time']);
 });
 
 test('traceGrouping with empty conditions does not match', () => {
@@ -193,7 +186,7 @@ test('traceGrouping with empty conditions does not match', () => {
 			conditions: [],
 		}],
 	});
-	assert.equal(trace.matchedRuleName, null);
+	assert.deepEqual(trace.finalGroupLabels, ['Others']);
 	assert.equal(trace.rules[0].matched, false);
 	assert.equal(trace.rules[0].conditions.length, 0);
 });
@@ -201,7 +194,19 @@ test('traceGrouping with empty conditions does not match', () => {
 test('traceGrouping handles configs with no rules', () => {
 	const thread = makeThread();
 	const trace = traceGrouping(thread, { rules: [] });
-	assert.equal(trace.matchedRuleName, null);
-	assert.equal(trace.finalGroupLabel, 'Others');
+	assert.deepEqual(trace.finalGroupLabels, ['Others']);
 	assert.equal(trace.rules.length, 0);
+});
+
+test('traceGrouping evaluates every rule and lists every group whose rule matches', () => {
+	const thread = makeThread({ senders: [{ name: 'Alice', email: 'alice@example.com' }], subject: 'Invoice' });
+	const trace = traceGrouping(thread, {
+		rules: [
+			{ name: 'Personal', priority: 10, sortType: 'mostRecent', conditions: [{ type: 'sender_email', value: '@example.com' }] },
+			{ name: 'Work', priority: 20, sortType: 'mostRecent', conditions: [{ type: 'sender_email', value: '@work.com' }] },
+			{ name: 'Bills', priority: 30, sortType: 'mostRecent', conditions: [{ type: 'subject', value: 'Invoice' }] },
+		],
+	});
+	assert.deepEqual(trace.rules.map((rule) => rule.matched), [true, false, true]);
+	assert.deepEqual(trace.finalGroupLabels, ['Personal', 'Bills']);
 });

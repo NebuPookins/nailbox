@@ -64,16 +64,9 @@ function ThreadEvaluationBlock({evaluation, threadIndex}: {evaluation: ThreadEva
 }
 
 function RulePanel({ruleTrace, ruleIndex, isBundle}: {ruleTrace: RuleTrace; ruleIndex: number; isBundle: boolean}) {
-	let panelClass = 'card';
-	let headerLabel = 'Did not match';
-	let headerColor = '#999';
-	if (ruleTrace.skipped) {
-		headerLabel = 'Skipped';
-	} else if (ruleTrace.matched) {
-		panelClass = 'card border-success';
-		headerLabel = 'Matched';
-		headerColor = '#3c763d';
-	}
+	const {panelClass, headerLabel, headerColor} = ruleTrace.matched
+		? {panelClass: 'card border-success', headerLabel: 'Matched', headerColor: '#3c763d'}
+		: {panelClass: 'card', headerLabel: 'Did not match', headerColor: '#999'};
 	return (
 		<div className={panelClass} style={{marginBottom: '10px'}}>
 			<div className="card-header">
@@ -85,9 +78,7 @@ function RulePanel({ruleTrace, ruleIndex, isBundle}: {ruleTrace: RuleTrace; rule
 				</span>
 			</div>
 			<div className="card-body">
-				{ruleTrace.skipped ? (
-					<div className="text-body-secondary">{ruleTrace.skippedReason}</div>
-				) : isBundle ? (
+				{isBundle ? (
 					(() => {
 						const evaluations = ruleTrace.threadEvaluations || [];
 						if (evaluations.length === 0) {
@@ -162,17 +153,14 @@ function DebugApp({item, groupingRules, onClose}: DebugAppProps) {
 			<div className="modal-body">
 				<ItemSummary item={item} />
 				<div className="alert alert-info">
-					{trace.matchedRuleName !== null ? (
-						<>
-							<strong>Result:</strong> Matched rule <strong>"{trace.matchedRuleName}"</strong>
-							{' '}&rarr; placed in group <strong>"{trace.finalGroupLabel}"</strong>.
-						</>
-					) : (
-						<>
-							<strong>Result:</strong> No rules matched. Placed in group{' '}
-							<strong>"{trace.finalGroupLabel}"</strong>.
-						</>
-					)}
+					<strong>Result:</strong>{' '}
+					{trace.matchedRuleNames.length > 0 ? '' : 'No rules matched. '}
+					Placed in {trace.finalGroupLabels.length === 1 ? 'group' : 'groups'}{' '}
+					{trace.finalGroupLabels.map((label, idx) => (
+						<React.Fragment key={label}>
+							{idx > 0 ? ', ' : null}<strong>"{label}"</strong>
+						</React.Fragment>
+					))}.
 				</div>
 				{trace.rules.length === 0 ? (
 					<p className="text-body-secondary">No grouping rules are configured.</p>

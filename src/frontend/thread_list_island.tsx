@@ -9,7 +9,8 @@ import {
 } from './thread_list_presenter.js';
 import { AddSenderRuleButton } from './add_sender_rule_button.js';
 import { formatPerson } from './person_presenter.js';
-import { goneItems, groupsWithAnimatingRows, itemKey, type AnimatingRow } from './animating_rows.js';
+import { uniqBy } from '../../helpers/arrays.js';
+import { animatingRowKey, goneItems, groupsWithAnimatingRows, itemKey, type AnimatingRow } from './animating_rows.js';
 import {
 	type BundleSummary,
 	type ThreadGroup,
@@ -699,7 +700,8 @@ function ThreadListApp({ groups, labels, removingThreadIds, removingBundleIds, o
 					) : null}
 				</div>
 				{viewMode === 'quick-deal' ? (function() {
-					const allItems = groups.flatMap(function(g) { return g.items; });
+					// An item in several groups is listed once.
+					const allItems = uniqBy(groups.flatMap(function(g) { return g.items; }), itemKey);
 					const normalItems = allItems.filter(function(item) { return item.visibility !== 'when-i-have-time'; });
 					const laterItems = allItems.filter(function(item) { return item.visibility === 'when-i-have-time'; });
 					function byRecentTime(a: ThreadRowItem, b: ThreadRowItem) {
@@ -748,7 +750,7 @@ interface MountThreadListIslandDeps {
 export function mountThreadListIsland({ container, onAddSenderRule, onArchive, onDelete, onMarkSpam, onOpenLaterPicker, onOpenLabelPicker, onOpenThread, onCreateBundle, onEditBundle, onArchiveBundle, onOpenLaterPickerForBundle, onOpenLabelPickerForBundle, onUngroup, onDebugGrouping }: MountThreadListIslandDeps) {
 	const root = createRoot(container);
 	let latestGroups: readonly ThreadGroup[] = [];
-	/** Rows that left the latest groups and are still animating out, by item key. */
+	/** Rows that left the latest groups and are still animating out, by animatingRowKey. */
 	let animatingRows: ReadonlyMap<string, AnimatingRow> = new Map();
 	let nextAnimationToken = 0;
 	let labels: LabelInfo[] = [];
@@ -800,7 +802,7 @@ export function mountThreadListIsland({ container, onAddSenderRule, onArchive, o
 		setGroups: function(newGroups: readonly ThreadGroup[]) {
 			const displayedBefore = groupsWithAnimatingRows(latestGroups, animatingRows);
 			const stillGone = new Map(goneItems(displayedBefore, newGroups).map(function(row) {
-				return [itemKey(row.item), row];
+				return [animatingRowKey(row), row];
 			}));
 			// Rows already animating keep their animation; rows that came back stop animating.
 			const kept = [...animatingRows].filter(function([key]) { return stillGone.has(key); });

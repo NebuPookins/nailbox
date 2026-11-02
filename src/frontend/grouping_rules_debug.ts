@@ -1,3 +1,4 @@
+import { groupLabelsFor } from '../server/types/grouping_rules.js';
 import { CONDITION_TYPE_CONTAINS_LABELS } from './thread_grouping.js';
 import type {
 	ConditionType,
@@ -33,8 +34,6 @@ export interface RuleTrace {
 	ruleName: string;
 	priority: number;
 	matched: boolean;
-	skipped: boolean;
-	skippedReason?: string;
 	/** Populated when the item being traced is a single thread. */
 	conditions?: ConditionTrace[];
 	/** Populated when the item being traced is a bundle. One entry per member thread. */
@@ -43,11 +42,11 @@ export interface RuleTrace {
 
 export interface GroupingTrace {
 	rules: RuleTrace[];
-	matchedRuleName: string | null;
-	finalGroupLabel: string;
+	/** Names of the matching rules, without duplicates; empty when none match. */
+	matchedRuleNames: string[];
+	/** Every group the item appears in: one per matching rule name, or just "Others" when none match. */
+	finalGroupLabels: string[];
 }
-
-const WHEN_I_HAVE_TIME_SUFFIX = ' - When I Have Time';
 
 function describeCondition(condition: GroupingCondition): string {
 	return `${CONDITION_TYPE_CONTAINS_LABELS[condition.type]} "${condition.value}"`;
@@ -146,42 +145,17 @@ function evaluateRule(item: ThreadRowItem, rule: GroupingRule): {
 
 export function traceGrouping(item: ThreadRowItem, groupingRules: GroupingRulesConfig): GroupingTrace {
 	const rules = Array.isArray(groupingRules?.rules) ? groupingRules.rules : [];
-	const ruleTraces: RuleTrace[] = [];
-	let matchedRuleName: string | null = null;
-
-	for (const rule of rules) {
-		if (matchedRuleName !== null) {
-			ruleTraces.push({
-				ruleName: rule.name,
-				priority: rule.priority,
-				matched: false,
-				skipped: true,
-				skippedReason: `An earlier rule already matched.`,
-			});
-			continue;
-		}
-		const evaluation = evaluateRule(item, rule);
-		ruleTraces.push({
-			ruleName: rule.name,
-			priority: rule.priority,
-			matched: evaluation.matched,
-			skipped: false,
-			conditions: evaluation.conditions,
-			threadEvaluations: evaluation.threadEvaluations,
-		});
-		if (evaluation.matched) {
-			matchedRuleName = rule.name;
-		}
-	}
-
-	const baseLabel = matchedRuleName ?? 'Others';
-	const finalGroupLabel = item.visibility === 'when-i-have-time'
-		? `${baseLabel}${WHEN_I_HAVE_TIME_SUFFIX}`
-		: baseLabel;
+	const ruleTraces: RuleTrace[] = rules.map((rule) => ({
+		ruleName: rule.name,
+		priority: rule.priority,
+		...evaluateRule(item, rule),
+	}));
+	const matchedRuleNames = [...new Set(ruleTraces.filter((trace) => trace.matched).map((trace) => trace.ruleName))];
+	const finalGroupLabels = groupLabelsFor(item.visibility === 'when-i-have-time', matchedRuleNames);
 
 	return {
 		rules: ruleTraces,
-		matchedRuleName,
-		finalGroupLabel,
+		matchedRuleNames,
+		finalGroupLabels,
 	};
 }

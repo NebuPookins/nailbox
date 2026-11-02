@@ -165,7 +165,7 @@ function GroupingRulesApp({ api, onSaved, reloadToken }: {
 		<div className="grouping-rules-app">
 			<div className="row">
 				<div className="col-12">
-					<p>Configure how emails are grouped and prioritized. Rules are checked in order, and the first matching rule determines the group.</p>
+					<p>Configure how emails are grouped and prioritized. Each rule is a group: a thread appears in every group whose rule it matches, and in "Others" only if it matches none. Priority sets the order the groups are shown in.</p>
 					<button className="btn btn-success" onClick={addRule} type="button">
 						<span className="bi bi-plus-lg" /> Add New Rule
 					</button>

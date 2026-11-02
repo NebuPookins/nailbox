@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { goneItems, groupsWithAnimatingRows, itemKey } from '../src/frontend/animating_rows.js';
+import { animatingRowKey, goneItems, groupsWithAnimatingRows, itemKey } from '../src/frontend/animating_rows.js';
 
 function thread(threadId) {
 	return { type: 'thread', threadId };
@@ -16,7 +16,7 @@ function group(label, items) {
 }
 
 function animating(entries) {
-	return new Map(entries.map(function(row) { return [itemKey(row.item), row]; }));
+	return new Map(entries.map(function(row) { return [animatingRowKey(row), row]; }));
 }
 
 function ids(groups) {
@@ -90,4 +90,11 @@ test('goneItems reports a bundle when neither it nor its members remain', () => 
 	const latest = [group('A', [thread('t3')])];
 	const gone = goneItems(previous, latest);
 	assert.deepEqual(gone.map(function(row) { return itemKey(row.item); }), ['bundle:b1']);
+});
+
+test('a thread removed from several groups animates out of each of them', () => {
+	const previous = [group('A', [thread('t1'), thread('t2')]), group('B', [thread('t2'), thread('t3')])];
+	const latest = [group('A', [thread('t1')]), group('B', [thread('t3')])];
+	const rows = animating(goneItems(previous, latest).map(function(row, index) { return { ...row, token: index }; }));
+	assert.deepEqual(ids(groupsWithAnimatingRows(latest, rows)), [['t1', 't2'], ['t2', 't3']]);
 });

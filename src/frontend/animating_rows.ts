@@ -14,6 +14,14 @@ export function itemKey(item: ThreadRowItem): string {
 	return item.type === 'bundle' ? 'bundle:' + item.bundleId : 'thread:' + item.threadId;
 }
 
+/**
+ * Identifies an animating row. An item can sit in several groups at once, and it animates out of
+ * each of them, so the group is part of the key.
+ */
+export function animatingRowKey(row: Pick<AnimatingRow, 'item' | 'groupLabel'>): string {
+	return JSON.stringify([row.groupLabel, itemKey(row.item)]);
+}
+
 function threadIdsOf(items: readonly ThreadRowItem[]): Set<string> {
 	return new Set(items.flatMap(function(item) {
 		return item.type === 'bundle' ? item.threadIds : [item.threadId];

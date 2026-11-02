@@ -274,3 +274,53 @@ test('groupThreads counts a bundle as a single item toward the group limit', () 
 
 	assert.deepEqual(itemIdsOf(groups[0]), ['bundle', 'd']);
 });
+
+test('groupThreads places a thread in every group whose rule it matches', () => {
+	const thread = {
+		threadId: 'a',
+		senders: [{name: 'Alice', email: 'alice@work.com'}],
+		subject: 'Invoice',
+		visibility: 'updated',
+		totalTimeToReadSeconds: 10,
+		lastUpdated: 1,
+	};
+	const groups = groupThreads(
+		[thread],
+		[],
+		{
+			rules: [
+				{name: 'Work', priority: 10, sortType: 'mostRecent', conditions: [{type: 'sender_email', value: '@work.com'}]},
+				{name: 'Bills', priority: 20, sortType: 'mostRecent', conditions: [{type: 'subject', value: 'Invoice'}]},
+				{name: 'Personal', priority: 30, sortType: 'mostRecent', conditions: [{type: 'sender_email', value: '@home.com'}]},
+			],
+		},
+		(a, b) => b.lastUpdated - a.lastUpdated,
+	);
+
+	assert.deepEqual(groups.map((group) => group.label), ['Work', 'Bills']);
+	assert.deepEqual(groups.map((group) => group.items.map((item) => item.threadId)), [['a'], ['a']]);
+});
+
+test('groupThreads places a thread in a rule\'s group once even when rules share a name', () => {
+	const thread = {
+		threadId: 'a',
+		senders: [{name: 'Alice', email: 'alice@work.com'}],
+		subject: 'Invoice',
+		visibility: 'updated',
+		totalTimeToReadSeconds: 10,
+		lastUpdated: 1,
+	};
+	const groups = groupThreads(
+		[thread],
+		[],
+		{
+			rules: [
+				{name: 'Work', priority: 10, sortType: 'mostRecent', conditions: [{type: 'sender_email', value: '@work.com'}]},
+				{name: 'Work', priority: 10, sortType: 'mostRecent', conditions: [{type: 'subject', value: 'Invoice'}]},
+			],
+		},
+		(a, b) => b.lastUpdated - a.lastUpdated,
+	);
+
+	assert.deepEqual(groups.map((group) => [group.label, group.items.length]), [['Work', 1]]);
+});
