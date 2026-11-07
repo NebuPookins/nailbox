@@ -7,6 +7,7 @@ import {
 	createThreadActionController,
 } from './thread_action_controller.js';
 import { createThreadViewerController } from './thread_viewer_controller.js';
+import { retryWithBackoff } from './retry.js';
 import { createIslandManager } from './island_manager.js';
 import { wireModals } from './modal_wiring.js';
 import { createThreadUpdatesSocket } from './thread_updates_socket.js';
@@ -270,23 +271,23 @@ function renderSetupNeededState(message?: string): void {
 		}
 	}
 
-	async function getThreadData(threadId: string, attemptNumber: number, updateMessenger: MsgHandle): Promise<Result<ThreadDataResponse>> {
-		const result = await appApi.getThreadData(threadId);
-		if (!result.ok) {
-			if (attemptNumber < 60) {
+	const THREAD_DATA_MAX_ATTEMPTS = 5;
+	const THREAD_DATA_RETRY_BASE_DELAY_MS = 500;
+
+	// Retries only transient failures (network errors, 5xx). The caller reports the final
+	// error on the handle, so this only announces the retries.
+	function getThreadData(threadId: string, updateMessenger: MsgHandle): Promise<Result<ThreadDataResponse>> {
+		return retryWithBackoff(function() { return appApi.getThreadData(threadId); }, {
+			maxAttempts: THREAD_DATA_MAX_ATTEMPTS,
+			baseDelayMs: THREAD_DATA_RETRY_BASE_DELAY_MS,
+			sleep: function(ms) { return new Promise<void>(function(resolve) { setTimeout(resolve, ms); }); },
+			onRetry: function({ failedAttempt, maxAttempts }) {
 				updateMessenger.update({
 					type: 'info',
-					message: 'Failed to get thread data, retrying...'
+					message: 'Failed to get thread data, retrying (attempt ' + (failedAttempt + 1) + ' of ' + maxAttempts + ')...'
 				});
-				return getThreadData(threadId, attemptNumber + 1, updateMessenger);
-			}
-			updateMessenger.update({
-				type: 'error',
-				message: 'Failed to get thread data after too many retries.'
-			});
-			return { ok: false, error: result.error };
-		}
-		return { ok: true, value: result.value };
+			},
+		});
 	}
 
 	function showLaterPicker(threadId: string, subject: string): boolean {

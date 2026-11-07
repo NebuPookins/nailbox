@@ -7,6 +7,7 @@ import MailComposer from 'nodemailer/lib/mail-composer';
 import type MimeNode from 'nodemailer/lib/mime-node';
 
 import {uniqBy} from '../../../helpers/arrays.js';
+import {isHeaderNamed, type Message} from '../../../models/message.js';
 import type {Logger} from '../../../helpers/logger.js';
 
 // Email clients drop <style> blocks, so highlight.js's classes are turned into
@@ -89,19 +90,41 @@ function normalizeEmailAddress(emailAddress: unknown): string {
 	return typeof emailAddress === 'string' ? emailAddress.trim().toLowerCase() : '';
 }
 
+// True only when the message was sent by me to nobody but me: its From is me, it has at least
+// one visible To/Cc address and all of them (and any Bcc) are mine. A message with a group-only
+// To ("undisclosed-recipients:;") or Bcc'd recipients was not genuinely addressed to just me.
+function isAddressedOnlyToMyself(message: Message, normalizedMyEmail: string): boolean {
+	const addressesOf = (headerName: string) => message
+		.emailAddresses(isHeaderNamed(headerName))
+		.map((person) => normalizeEmailAddress(person.email));
+	const from = addressesOf('From');
+	const visibleRecipients = addressesOf('To').concat(addressesOf('Cc'));
+	const hidden = addressesOf('Bcc');
+	const isMe = (address: string) => address === normalizedMyEmail;
+	return from.length === 1 && from.every(isMe) &&
+		visibleRecipients.length > 0 && visibleRecipients.every(isMe) &&
+		hidden.every(isMe);
+}
+
 function collectReplyRecipients({thread, replyMessage, myEmail}: {
 	thread: any;
 	replyMessage: any;
 	myEmail: string;
 }): any[] {
 	const normalizedMyEmail = normalizeEmailAddress(myEmail);
-	return uniqBy(
+	const participants = uniqBy(
 		thread.senders()
 			.concat(thread.recipients(), replyMessage.replyTo())
-			.filter((person: any) => person != null && normalizeEmailAddress(person.email).length > 0)
-			.filter((person: any) => normalizeEmailAddress(person.email) !== normalizedMyEmail),
+			.filter((person: any) => person != null && normalizeEmailAddress(person.email).length > 0),
 		(person: any) => normalizeEmailAddress(person.email)
 	);
+	const others = participants.filter((person: any) => normalizeEmailAddress(person.email) !== normalizedMyEmail);
+	if (others.length > 0) {
+		return others;
+	}
+	// A message I genuinely sent only to myself (e.g. notifications my own scripts
+	// send me) has no one else to reply to, so the reply goes back to me.
+	return isAddressedOnlyToMyself(replyMessage, normalizedMyEmail) ? participants : [];
 }
 
 // Per RFC 5322 section 3.6.4, a reply's References is the parent's References
@@ -131,7 +154,7 @@ function buildMail({thread, htmlizedMarkdown, bodyPlusSignature, myEmail, replyM
 	if (recipients.length === 0) {
 		throw {
 			status: 400,
-			message: 'Could not determine recipients for reply.',
+			message: 'Could not determine recipients for reply: no recipients other than you are visible (was it sent with Bcc?).',
 		};
 	}
 	const toLine = recipients.map((person: any) => util.format('%s <%s>', person.name, person.email));

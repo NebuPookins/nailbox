@@ -243,10 +243,18 @@ async function request(url: string, options: RequestOptions = {}): Promise<Resul
 	if (fetchOptions.body && !headers['Content-Type']) {
 		headers['Content-Type'] = 'application/json';
 	}
-	const response = await fetch(url, {
-		...fetchOptions,
-		headers,
-	});
+	// fetch rejects on network failure; return that as a failed Result so
+	// callers relying on the Result contract always see the error.
+	let response: Response;
+	try {
+		response = await fetch(url, {
+			...fetchOptions,
+			headers,
+		});
+	} catch (error) {
+		console.error('Request failed before a response arrived', { url, method: fetchOptions.method ?? 'GET' }, error);
+		return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
+	}
 	if (response.status === 204) {
 		return { ok: true, value: null };
 	}

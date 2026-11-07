@@ -446,6 +446,7 @@ interface ThreadViewerAppProps {
 	onAlwaysLoadImages: (senderKey: string) => void;
 	onAddSenderRule: (senderEmail: string) => void;
 	onReplyTextChange: (text: string) => void;
+	isReplySending: boolean;
 	onReplyAll: (body: string, inReplyTo: string | null) => void;
 	onDownloadAttachment: (opts: { messageId: string; attachmentId: string; attachmentName: string }) => void;
 	onDelete: () => void;
@@ -477,6 +478,7 @@ function ThreadViewerApp({
 	onAlwaysLoadImages,
 	onAddSenderRule,
 	onReplyTextChange,
+	isReplySending,
 	onReplyAll,
 	onDownloadAttachment,
 	onDelete,
@@ -553,6 +555,7 @@ function ThreadViewerApp({
 					/>
 					<button
 						className="btn btn-primary reply-all"
+						disabled={isReplySending}
 						onClick={function() { onReplyAll(replyText, lastMessageId); }}
 					>
 						Reply all
@@ -689,6 +692,8 @@ export function mountThreadViewerIsland({
 }: MountThreadViewerIslandDeps) {
 	const root = createRoot(container);
 
+	// True while a reply is being sent, so Reply all can't be triggered twice.
+	let replySending = false;
 	let state: ThreadViewerState = emptyThreadState({ senderRenderModes: null, trustedImageSenders: [] });
 
 	function render() {
@@ -753,7 +758,13 @@ export function mountThreadViewerIsland({
 					state.replyText = text;
 					render();
 				}}
+				isReplySending={replySending}
 				onReplyAll={function(body, inReplyTo) {
+					if (replySending) {
+						return;
+					}
+					replySending = true;
+					render();
 					onReplyAll({
 						body: body,
 						threadId: state.threadId,
@@ -764,7 +775,10 @@ export function mountThreadViewerIsland({
 							render();
 						},
 						hideModal: hideModal,
-					}).catch(reportError);
+					}).catch(reportError).finally(function() {
+						replySending = false;
+						render();
+					});
 				}}
 				onDownloadAttachment={function(opts) {
 					onDownloadAttachment(opts).catch(reportError);

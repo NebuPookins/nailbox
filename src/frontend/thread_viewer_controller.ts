@@ -108,10 +108,56 @@ export function createThreadViewerController({
 	threadActionController,
 }: {
 	appApi: AppApi;
-	getThreadData(threadId: string, attempt: number, messenger: MsgHandle): Promise<Result<ThreadDataResponse>>;
+	getThreadData(threadId: string, messenger: MsgHandle): Promise<Result<ThreadDataResponse>>;
 	messengerGetter(): Messenger;
 	threadActionController: ThreadActionController;
 }) {
+	// Guards against a double-click sending the same reply twice.
+	let replyInFlight = false;
+
+	async function sendReply(options: ReplyAllOptions): Promise<Result<{ messageId: string }>> {
+		var threadId = options.threadId;
+		if (!threadId || !options.emailAddress) {
+			return {
+				ok: false,
+				error: new Error('Missing thread id or authenticated email address.'),
+			};
+		}
+		//TODO: We currently buildRfc2822 and sendMessage separately, which results in two round-trips to the server. We should consider combining these into a single API method.
+		const rfcResult = await appApi.buildRfc2822({
+			myEmail: options.emailAddress,
+			threadId: threadId,
+			body: options.body,
+			inReplyTo: options.inReplyTo,
+		});
+		if (!rfcResult.ok) {
+			return {
+				ok: false,
+				error: rfcResult.error,
+			};
+		}
+		const base64EncodedEmail = rfcResult.value;
+		const sendResult = await appApi.sendMessage({
+			threadId: threadId,
+			raw: base64EncodedEmail,
+		});
+		if (!sendResult.ok) {
+			return {
+				ok: false,
+				error: sendResult.error,
+			};
+		}
+		const resp = sendResult.value;
+		options.clearReply();
+		options.hideModal();
+		return {
+			ok: true,
+			value: {
+				messageId: resp.id ?? '',
+			},
+		};
+	}
+
 	function showError(error: unknown): void {
 		messengerGetter().error(error instanceof Error ? error.message : String(error));
 	}
@@ -150,14 +196,20 @@ export function createThreadViewerController({
 			options.setThreadsLoadingText(options.snippet || '');
 			options.showLoading();
 			options.showModal();
+			function failDownload(error: unknown): void {
+				const message = error instanceof Error ? error.message : String(error);
+				console.error('Failed to download thread data', { threadId }, error);
+				actionMessenger.update({ type: 'error', message: 'Failed to download thread data for ' + threadId + ': ' + message });
+			}
 			try {
-				const threadDataResult = await getThreadData(threadId, 0, actionMessenger);
+				const threadDataResult = await getThreadData(threadId, actionMessenger);
 				if (!threadDataResult.ok) {
-					showError(threadDataResult.error);
+					failDownload(threadDataResult.error);
 					return;
 				}
 				var threadData = threadDataResult.value;
 				if (options.getCurrentThreadId() !== threadId) {
+					actionMessenger.update({ type: 'success', message: 'Downloaded thread data for ' + threadId + ' (another thread is now open).' });
 					return;
 				}
 				options.hideLoading();
@@ -180,51 +232,36 @@ export function createThreadViewerController({
 				});
 				actionMessenger.update({ type: 'success', message: 'Successfully downloaded thread data for ' + threadId + '.' });
 			} catch (error) {
-				showError(error);
+				failDownload(error);
 			}
 		},
 
+		// Reports progress and the outcome (including the server's error message)
+		// in the status strip, so clicking Reply all always gives visible feedback.
 		async replyAll(options: ReplyAllOptions): Promise<Result<{ messageId: string }>> {
-			var threadId = options.threadId;
-			if (!threadId || !options.emailAddress) {
-				return {
-					ok: false,
-					error: new Error('Missing thread id or authenticated email address.'),
-				};
+			if (replyInFlight) {
+				console.warn('Ignoring Reply all: a reply is already being sent', { threadId: options.threadId });
+				return { ok: false, error: new Error('A reply is already being sent.') };
 			}
-			//TODO: We currently buildRfc2822 and sendMessage separately, which results in two round-trips to the server. We should consider combining these into a single API method.
-			const rfcResult = await appApi.buildRfc2822({
-				myEmail: options.emailAddress,
-				threadId: threadId,
-				body: options.body,
-				inReplyTo: options.inReplyTo,
-			});
-			if (!rfcResult.ok) {
-				return {
-					ok: false,
-					error: rfcResult.error,
-				};
+			replyInFlight = true;
+			const handle = messengerGetter().info('Sending reply...');
+			try {
+				const result = await sendReply(options);
+				if (result.ok) {
+					handle.update({ type: 'success', message: 'Reply sent.' });
+				} else {
+					console.error('Failed to send reply', { threadId: options.threadId, inReplyTo: options.inReplyTo }, result.error);
+					handle.update({ type: 'error', message: 'Failed to send reply: ' + result.error.message });
+				}
+				return result;
+			} catch (error) {
+				console.error('Failed to send reply', { threadId: options.threadId, inReplyTo: options.inReplyTo }, error);
+				const failure = error instanceof Error ? error : new Error(String(error));
+				handle.update({ type: 'error', message: 'Failed to send reply: ' + failure.message });
+				return { ok: false, error: failure };
+			} finally {
+				replyInFlight = false;
 			}
-			const base64EncodedEmail = rfcResult.value;
-			const sendResult = await appApi.sendMessage({
-				threadId: threadId,
-				raw: base64EncodedEmail,
-			});
-			if (!sendResult.ok) {
-				return {
-					ok: false,
-					error: sendResult.error,
-				};
-			}
-			const resp = sendResult.value;
-			options.clearReply();
-			options.hideModal();
-			return {
-				ok: true,
-				value: {
-					messageId: resp.id ?? '',
-				},
-			};
 		},
 
 		async downloadAttachment(options: DownloadAttachmentOptions) {

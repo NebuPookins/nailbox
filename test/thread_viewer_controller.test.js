@@ -160,7 +160,14 @@ test('openThread renders deleted-message notice and non-deleted messages', async
 });
 
 test('replyAll validates thread context before sending', async () => {
-	const { controller, events } = createController();
+	const apiCalls = [];
+	const { controller, events } = createController({
+		appApi: {
+			async buildRfc2822() { apiCalls.push('buildRfc2822'); return { ok: true, value: 'raw' }; },
+			async getAttachment() { throw new Error('unused'); },
+			async sendMessage() { apiCalls.push('sendMessage'); return { ok: true, value: {} }; },
+		},
+	});
 
 	const result = await controller.replyAll({
 		body: 'Reply body',
@@ -175,7 +182,11 @@ test('replyAll validates thread context before sending', async () => {
 		ok: false,
 		error: new Error('Missing thread id or authenticated email address.'),
 	});
-	assert.deepEqual(events, []);
+	assert.deepEqual(events.at(-1), {
+		type: 'error',
+		message: 'Failed to send reply: Missing thread id or authenticated email address.',
+	});
+	assert.deepEqual(apiCalls, []);
 });
 
 test('replyAll builds and sends the message, then clears and closes the modal', async () => {
@@ -229,8 +240,50 @@ test('replyAll builds and sends the message, then clears and closes the modal', 
 		['clearReply'],
 		['hideModal'],
 	]);
-	assert.deepEqual(events, []);
+	assert.deepEqual(events, [
+		{ type: 'info', message: 'Sending reply...' },
+		{ type: 'success', message: 'Reply sent.' },
+	]);
 });
+
+for (const { name, buildRfc2822, sendMessage, expectedMessage } of [
+	{
+		name: 'building the message',
+		buildRfc2822: { ok: false, error: new Error('Could not determine recipients for reply.') },
+		sendMessage: { ok: true, value: { id: 'unused' } },
+		expectedMessage: 'Failed to send reply: Could not determine recipients for reply.',
+	},
+	{
+		name: 'sending the message',
+		buildRfc2822: { ok: true, value: 'raw-message' },
+		sendMessage: { ok: false, error: new TypeError('Failed to fetch') },
+		expectedMessage: 'Failed to send reply: Failed to fetch',
+	},
+]) {
+	test(`replyAll reports a failure ${name} and keeps the reply open`, async () => {
+		const calls = [];
+		const { controller, events } = createController({
+			appApi: {
+				async buildRfc2822() { return buildRfc2822; },
+				async getAttachment() { throw new Error('unused'); },
+				async sendMessage() { return sendMessage; },
+			},
+		});
+
+		const result = await controller.replyAll({
+			body: 'Reply body',
+			clearReply() { calls.push('clearReply'); },
+			emailAddress: 'me@example.com',
+			hideModal() { calls.push('hideModal'); },
+			inReplyTo: 'msg-1',
+			threadId: 'thread-1',
+		});
+
+		assert.equal(result.ok, false);
+		assert.deepEqual(calls, []);
+		assert.deepEqual(events.at(-1), { type: 'error', message: expectedMessage });
+	});
+}
 
 test('handleKeydown deletes the current thread on Delete when reply is not focused', async () => {
 	const calls = [];
@@ -261,4 +314,111 @@ test('handleKeydown deletes the current thread on Delete when reply is not focus
 		['delete', 'thread-1'],
 		['hideModal'],
 	]);
+});
+
+function openOptions(overrides = {}) {
+	let currentThreadId = null;
+	return {
+		appendDeletedMessages() {},
+		appendMessage() {},
+		clearThreads() {},
+		getCurrentThreadId() { return currentThreadId; },
+		hideLoading() {},
+		setReceivers() {},
+		setSenders() {},
+		setThreadId(value) { currentThreadId = value; },
+		setThreadsLoadingText() {},
+		setTitle() {},
+		showLoading() {},
+		showModal() {},
+		threadId: 'thread-1',
+		...overrides,
+	};
+}
+
+test('openThread resolves the download announcement to a single error when fetching fails', async (t) => {
+	t.mock.method(console, 'error', () => {});
+	const { controller, events } = createController({
+		getThreadData: async () => ({ ok: false, error: new Error('Thread not found') }),
+	});
+
+	await controller.openThread(openOptions());
+
+	assert.deepEqual(events, [
+		{ type: 'info', message: 'Downloading thread data for thread-1...' },
+		{ type: 'error', message: 'Failed to download thread data for thread-1: Thread not found' },
+	]);
+});
+
+test('openThread resolves the download announcement to an error when rendering throws', async (t) => {
+	t.mock.method(console, 'error', () => {});
+	const { controller, events } = createController();
+
+	await controller.openThread(openOptions({ appendMessage() { throw new Error('render exploded'); } }));
+
+	assert.deepEqual(events, [
+		{ type: 'info', message: 'Downloading thread data for thread-1...' },
+		{ type: 'error', message: 'Failed to download thread data for thread-1: render exploded' },
+	]);
+});
+
+test('openThread resolves the announcement when another thread was opened meanwhile', async () => {
+	const { controller, events } = createController();
+
+	await controller.openThread(openOptions({ getCurrentThreadId() { return 'thread-2'; } }));
+
+	assert.equal(events.length, 2);
+	assert.equal(events[0].type, 'info');
+	assert.equal(events[1].type, 'success');
+});
+
+test('replyAll resolves the announcement to an error and returns a failed Result when a callback throws', async (t) => {
+	t.mock.method(console, 'error', () => {});
+	const { controller, events } = createController();
+
+	const result = await controller.replyAll({
+		body: 'Reply body',
+		clearReply() { throw new Error('clear exploded'); },
+		emailAddress: 'me@example.com',
+		hideModal() {},
+		inReplyTo: 'msg-1',
+		threadId: 'thread-1',
+	});
+
+	assert.equal(result.ok, false);
+	assert.equal(result.error.message, 'clear exploded');
+	assert.deepEqual(events.at(-1), { type: 'error', message: 'Failed to send reply: clear exploded' });
+});
+
+test('replyAll ignores a second call while one is in flight and accepts a new one afterwards', async (t) => {
+	t.mock.method(console, 'warn', () => {});
+	let sendCount = 0;
+	let releaseSend;
+	const sendGate = new Promise((resolve) => { releaseSend = resolve; });
+	const { controller } = createController({
+		appApi: {
+			async buildRfc2822() { return { ok: true, value: 'raw' }; },
+			async getAttachment() { throw new Error('unused'); },
+			async sendMessage() { sendCount++; await sendGate; return { ok: true, value: { id: 'sent' } }; },
+		},
+	});
+	const options = {
+		body: 'Reply body',
+		clearReply() {},
+		emailAddress: 'me@example.com',
+		hideModal() {},
+		inReplyTo: 'msg-1',
+		threadId: 'thread-1',
+	};
+
+	const first = controller.replyAll(options);
+	const second = await controller.replyAll(options);
+	releaseSend();
+	const firstResult = await first;
+	const third = await controller.replyAll(options);
+
+	assert.equal(second.ok, false);
+	assert.equal(firstResult.ok, true);
+	assert.equal(third.ok, true);
+	assert.equal(sendCount, 2);
 });

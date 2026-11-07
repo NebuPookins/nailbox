@@ -62,32 +62,92 @@ test('buildRfc2822Message includes recipients from thread participants', async (
 	assert.match(mimeText, /In-Reply-To: <message-1@example\.com>/);
 });
 
-test('buildRfc2822Message rejects replies with no recipient other than myself', async () => {
-	const replyMessage = {
-		header() {
-			return null;
-		},
-		replyTo() {
-			return { name: 'Me', email: 'me@example.com' };
-		},
-	};
+function buildSelfReplyService(headers) {
+	const me = { name: 'Me', email: 'me@example.com' };
+	const replyMessage = new Message({
+		id: 'message-1',
+		threadId: 'thread-1',
+		labelIds: ['SENT'],
+		snippet: '',
+		internalDate: '0',
+		payload: { mimeType: 'text/plain', body: { size: 0 }, headers },
+	});
 	const thread = {
-		message() {
-			return replyMessage;
-		},
-		recipients() {
-			return [{ name: 'Me', email: 'me@example.com' }];
-		},
-		senders() {
-			return [{ name: 'Me', email: 'me@example.com' }];
-		},
+		message() { return replyMessage; },
+		recipients() { return replyMessage.recipients(); },
+		senders() { return [me]; },
+		subject() { return 'Test subject'; },
+	};
+	return createRfc2822Service({
+		threadRepository: { async readThread() { return thread; } },
+	});
+}
+
+function replyFromSelfService(headers) {
+	return buildSelfReplyService(headers).buildRfc2822Message({
+		threadId: 'thread-1',
+		body: 'Hello world',
+		inReplyTo: 'message-1',
+		myEmail: 'me@example.com',
+		logger: createLogger(),
+	});
+}
+
+test('buildRfc2822Message addresses the reply to myself when the message was sent only to me', async () => {
+	const encoded = await replyFromSelfService([
+		{ name: 'From', value: 'Me <me@example.com>' },
+		{ name: 'To', value: 'Me <ME@example.com>' },
+	]);
+	const mimeText = Buffer.from(encoded, 'base64url').toString('utf8');
+
+	assert.match(mimeText, /^To: Me <me@example\.com>\r?$/m);
+});
+
+for (const { name, headers } of [
+	{
+		name: 'everyone else was on Bcc',
+		headers: [
+			{ name: 'From', value: 'Me <me@example.com>' },
+			{ name: 'To', value: 'Me <me@example.com>' },
+			{ name: 'Bcc', value: 'Bob <bob@example.com>' },
+		],
+	},
+	{
+		name: 'To is an undisclosed-recipients group',
+		headers: [
+			{ name: 'From', value: 'Me <me@example.com>' },
+			{ name: 'To', value: 'undisclosed-recipients:;' },
+		],
+	},
+	{
+		name: 'there is no To header',
+		headers: [{ name: 'From', value: 'Me <me@example.com>' }],
+	},
+]) {
+	test(`buildRfc2822Message does not silently reply to myself when ${name}`, async () => {
+		await assert.rejects(() => replyFromSelfService(headers), {
+			status: 400,
+			message: /no recipients other than you are visible/,
+		});
+	});
+}
+
+test('buildRfc2822Message rejects replies when the thread has no participants', async () => {
+	const replyMessage = new Message({
+		id: 'message-1',
+		threadId: 'thread-1',
+		labelIds: [],
+		snippet: '',
+		internalDate: '0',
+		payload: { mimeType: 'text/plain', body: { size: 0 }, headers: [] },
+	});
+	const thread = {
+		message() { return replyMessage; },
+		recipients() { return []; },
+		senders() { return []; },
 	};
 	const service = createRfc2822Service({
-		threadRepository: {
-			async readThread() {
-				return thread;
-			},
-		},
+		threadRepository: { async readThread() { return thread; } },
 	});
 
 	await assert.rejects(() => service.buildRfc2822Message({
@@ -98,7 +158,7 @@ test('buildRfc2822Message rejects replies with no recipient other than myself', 
 		logger: createLogger(),
 	}), {
 		status: 400,
-		message: 'Could not determine recipients for reply.',
+		message: /Could not determine recipients for reply/,
 	});
 });
 
